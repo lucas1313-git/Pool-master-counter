@@ -4892,6 +4892,27 @@
     }
   }
 
+  // The rotation's games in order, the one being played lit, on the
+  // timeline (the board too - "8-Ball → 9-Ball → 10-Ball")
+  function renderRotationSequence() {
+    var el = document.getElementById("rotation-position-sequence");
+    if (!el) return;
+    el.innerHTML = "";
+    var order = state.rotation.order || [], current = rotationCurrentIndex();
+    order.forEach(function (entry, i) {
+      if (i) {
+        var arrow = document.createElement("span");
+        arrow.className = "rotation-sequence-arrow";
+        arrow.textContent = "→";
+        el.appendChild(arrow);
+      }
+      var step = document.createElement("span");
+      step.className = "rotation-sequence-step" + (i === current ? " is-now" : "");
+      step.textContent = GAME_TYPES[entry.gameType] ? GAME_TYPES[entry.gameType].label : entry.gameType;
+      el.appendChild(step);
+    });
+  }
+
   // Shows the current rotation step (with ◀/▶ hand-correction buttons)
   // right under the "Now Playing" banner - see moveRotationPosition.
   // Hidden whenever rotation isn't actually running (off, or fewer
@@ -4907,6 +4928,7 @@
     rotationPositionRow.classList.toggle("hidden", !info);
     if (!info) return;
     renderRotationPositionTrack(info);
+    renderRotationSequence();
 
     var marker = "\u0000";
     var templated = T("players.rotationPosition", { label: info.currentLabel, played: info.playedInLeg, every: marker });
@@ -4938,6 +4960,11 @@
       renderScoreboard();
     });
     rotationPositionText.appendChild(everyInput);
+    // (on the board the number as text instead - "Change game every" is the Game sheet's there)
+    var everyText = document.createElement("span");
+    everyText.className = "rotation-position-every-text";
+    everyText.textContent = String(info.every);
+    rotationPositionText.appendChild(everyText);
     rotationPositionText.appendChild(document.createTextNode(parts[1] || ""));
   }
 

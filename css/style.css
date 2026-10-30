@@ -5821,6 +5821,39 @@ button.stat-value:active {
   padding: 6px 12px;
 }
 
+/* the rotation's games in order, the one being played lit */
+.rotation-position-sequence {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.rotation-sequence-step.is-now {
+  color: var(--accent);
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.rotation-sequence-arrow { opacity: 0.6; }
+/* on the board: the game rotation's timeline, readable across the room */
+#app.focus-mode .rotation-position-row {
+  margin: 0 auto 10px;
+  max-width: 900px;
+  padding: 8px 18px;
+}
+#app.focus-mode .rotation-position-sequence { font-size: clamp(1.1rem, 2.4vw, 1.7rem); }
+#app.focus-mode .rotation-position-text { font-size: clamp(1rem, 2vw, 1.4rem); font-weight: 800; text-align: center; }
+#app.focus-mode .rotation-position-node { width: 12px; height: 12px; }
+#app.focus-mode .rotation-position-node.is-current { width: 22px; height: 22px; }
+#app.focus-mode .rotation-position-btn { min-width: 44px; min-height: 44px; font-size: 1.1rem; }
+.rotation-position-every-text { display: none; }
+#app.focus-mode .rotation-position-every-text { display: inline; }
+#app.focus-mode .rotation-position-every-input { display: none; }
+
 .rotation-position-label {
   color: var(--text);
   font-size: 0.8rem;
@@ -10833,7 +10866,6 @@ body.win-banner-up .page-toast {
    full page (🔍 Show All) still has its own. */
 #app.focus-mode .voice-toggle-row,
 #app.focus-mode #now-playing-banner,
-#app.focus-mode .rotation-position-row,
 #app.focus-mode .focus-players-wrap {
   display: none;
 }

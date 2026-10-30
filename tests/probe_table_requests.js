@@ -9,6 +9,8 @@
 // - 🔄 the game rotation (8-Ball, 9-Ball, every game): a rack won - no popup while the balls left
 //   are typed; Enter - then a big "9-Ball" popup, the rotation with 9-Ball lit; Enter closes it;
 //   a 9-Ball rack won (no balls left): the "8-Ball" popup at once;
+// - the game rotation's timeline on the board (8/9/10, every 3): the games in order with 8-Ball lit,
+//   the ◀ ● ▶ track, "8-Ball (1 of 3 games)" - no field on the board; ▶ moves it on;
 // - 🎱 Winner Stays on the board: shown with a third player on the roster, off; ticked - Winner
 //   Stays on (the Players section's switch too), "Next up: Lee"; a two-player roster: not shown;
 // - ☰ Menu, first page: 📋 Standings (opens the standings) and 🔍 See all (the full page);
@@ -169,6 +171,20 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
     b = await banner();
     check("a 9-Ball rack won (no balls left there): the \"" + (b.popup && b.popup.game) + "\" popup at once", b.popup && b.popup.game === "8-Ball" && b.balls === null, b);
     await key("Enter");
+
+    // ---- the game rotation's timeline on the board ----
+    await load(["Kim", "Jo"], { gameType: "8ball", target: 1, unit: "rack" }, { gamesPlayedCount: 1, rotation: { enabled: true, every: 3, order: [{ gameType: "8ball", target: 1, unit: "rack" }, { gameType: "9ball", target: 1, unit: "rack" }, { gameType: "10ball", target: 1, unit: "rack" }] } });
+    const tl = () => page.evaluate(() => { const row = document.getElementById("rotation-position-row"); return { shown: !!row.offsetParent, seq: [...row.querySelectorAll(".rotation-sequence-step")].map((x) => x.textContent + (x.classList.contains("is-now") ? "*" : "")).join(" "), text: document.getElementById("rotation-position-text").textContent, fields: [...row.querySelectorAll("input")].filter((x) => x.offsetParent).length, dots: row.querySelectorAll(".rotation-position-node").length }; });
+    let t1 = await tl();
+    if (OUT) await page.screenshot({ path: path.join(OUT, "rotation_timeline_board.png") });
+    check("the game rotation's timeline on the board: " + t1.seq + " · " + t1.text + " (" + t1.dots + " dots), no field", t1.shown && t1.seq === "8-Ball* 9-Ball 10-Ball" && t1.text === "8-Ball (1 of 3 games)" && t1.dots === 3 && t1.fields === 0, t1);
+    await page.click("#btn-rotation-position-next");
+    await sleep(300);
+    await page.click("#btn-rotation-position-next");
+    await sleep(300);
+    t1 = await tl();
+    check("...▶ ▶: on to 9-Ball (" + t1.seq + ")", t1.seq === "8-Ball 9-Ball* 10-Ball" && (await st()).currentGame.gameType === "9ball", t1);
+    await page.keyboard.press("Enter").catch(() => {});
 
     // ---- 🎱 Winner Stays on the board ----
     await load(["Kim", "Jo", "Lee"], { gameType: "8ball", target: 1, unit: "rack" });

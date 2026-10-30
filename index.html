@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261029za">
+<link rel="stylesheet" href="css/style.css?v=20261029zb">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -393,6 +393,7 @@
     <div id="now-playing-banner" class="now-playing-banner"></div>
     <div class="rotation-position-row hidden" id="rotation-position-row">
       <div class="rotation-position-label" data-i18n="players.rotationPositionLabel">Rotation Position</div>
+      <div class="rotation-position-sequence" id="rotation-position-sequence"></div>
       <div class="rotation-position-track-row">
         <button type="button" id="btn-rotation-position-prev" class="rotation-position-btn" data-i18n-aria-label="players.rotationPrevAria" aria-label="Move the rotation back by one game">◀</button>
         <div class="rotation-position-track" id="rotation-position-track"></div>
@@ -3134,27 +3135,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261029za"></script>
-<script src="js/big-store.js?v=20261029za"></script>
-<script src="js/mp4-clip.js?v=20261029za"></script>
-<script src="js/recording-consent.js?v=20261029za"></script>
-<script src="js/local-recorder.js?v=20261029za"></script>
-<script src="js/lib/pool-day.js?v=20261029za"></script>
-<script src="js/lib/race-math.js?v=20261029za"></script>
-<script src="js/lib/handicaps.js?v=20261029za"></script>
-<script src="js/lib/brackets.js?v=20261029za"></script>
-<script src="js/lib/league.js?v=20261029za"></script>
-<script src="js/lib/events.js?v=20261029za"></script>
-<script src="js/lib/chips.js?v=20261029za"></script>
-<script src="js/lib/highlights.js?v=20261029za"></script>
-<script src="js/lib/payouts.js?v=20261029za"></script>
-<script src="js/app.js?v=20261029za"></script>
-<script src="js/camera-client.js?v=20261029za"></script>
-<script src="js/voice.js?v=20261029za"></script>
+<script src="js/pairing.js?v=20261029zb"></script>
+<script src="js/big-store.js?v=20261029zb"></script>
+<script src="js/mp4-clip.js?v=20261029zb"></script>
+<script src="js/recording-consent.js?v=20261029zb"></script>
+<script src="js/local-recorder.js?v=20261029zb"></script>
+<script src="js/lib/pool-day.js?v=20261029zb"></script>
+<script src="js/lib/race-math.js?v=20261029zb"></script>
+<script src="js/lib/handicaps.js?v=20261029zb"></script>
+<script src="js/lib/brackets.js?v=20261029zb"></script>
+<script src="js/lib/league.js?v=20261029zb"></script>
+<script src="js/lib/events.js?v=20261029zb"></script>
+<script src="js/lib/chips.js?v=20261029zb"></script>
+<script src="js/lib/highlights.js?v=20261029zb"></script>
+<script src="js/lib/payouts.js?v=20261029zb"></script>
+<script src="js/app.js?v=20261029zb"></script>
+<script src="js/camera-client.js?v=20261029zb"></script>
+<script src="js/voice.js?v=20261029zb"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029za").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261029zb").catch(function () {}); });
   }
 </script>
 </body>
