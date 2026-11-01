@@ -354,12 +354,6 @@
       players: [],
       playerWins: {},
       teamWins: {},
-      // Rotating Teams only (see creditWin's isTeam branch) - the roster
-      // (teamComboKey) teamWins[teamId]'s count currently belongs to, so
-      // a sub (even just one player) is detectable as "now a different
-      // team" and resets that slot's count instead of letting the new
-      // lineup inherit whoever was in the slot before them.
-      teamRoster: {},
       teamMvpWins: {},
       raceToWinsTarget: 5,
       fairRaceEnabled: false,
@@ -455,7 +449,6 @@
           });
           if (!parsed.playerWins) parsed.playerWins = {};
           if (!parsed.teamWins) parsed.teamWins = {};
-          if (!parsed.teamRoster) parsed.teamRoster = {};
           if (!parsed.teamMvpWins) parsed.teamMvpWins = {};
           if (typeof parsed.raceToWinsTarget !== "number") parsed.raceToWinsTarget = 5;
           if (typeof parsed.fairRaceEnabled !== "boolean") parsed.fairRaceEnabled = false;
@@ -4974,13 +4967,11 @@
     }
 
     // The team-level score/session-win-count below is skipped entirely
-    // under Rotating Teams per explicit request - even though teamWins[teamId]
-    // is correctly scoped to whoever's currently on the team under Rotating
-    // Teams (see creditWin's teamRoster reset-on-lineup-change check), "Team
-    // A"/"Team B" as a slot still isn't a useful thing to label a running
-    // total with once who's on it changes game to game, and the current-game
-    // total is already visible as the sum of each member's own score on
-    // their own card just below.
+    // under Rotating Teams per explicit request - teamWins[teamId] is a
+    // running total for a persistent "Team A", which stops meaning much
+    // once whoever's actually on Team A changes game to game, and the
+    // current-game total is already visible as the sum of each member's
+    // own score on their own card just below.
     if (!state.rotatingTeamsEnabled) {
       var wins = state.teamWins[teamId] || 0;
 
@@ -5907,21 +5898,7 @@
       // sub joining/leaving mid-race (add player, standby toggle, team
       // reassignment) doesn't fragment the running win count into a "new"
       // pairing starting at 0 - see the session-reset bug this fixed.
-      //
-      // Rotating Teams is the deliberate exception: there, a slot is
-      // explicitly meant to be handed to a whole different lineup from
-      // game to game, so inheriting whatever win count the slot's
-      // previous occupants had reached is itself the bug (a brand new
-      // pair dropped into Team B shouldn't start one win away from
-      // "winning" a race the old Team B was actually most of the way
-      // through) - state.teamRoster tracks whose combo the slot's count
-      // currently belongs to, and any change at all resets it to 0
-      // before this win counts toward the new lineup's own tally.
       teamComboKeyValue = teamComboKey(key);
-      if (state.rotatingTeamsEnabled && state.teamRoster[key] !== teamComboKeyValue) {
-        state.teamWins[key] = 0;
-      }
-      state.teamRoster[key] = teamComboKeyValue;
       var newTeamWins = (state.teamWins[key] || 0) + 1;
       state.teamWins[key] = newTeamWins;
       members.forEach(function (p) {
@@ -6693,32 +6670,19 @@
   function recomputeLiveWinsFromGameHistory() {
     state.playerWins = {};
     state.teamWins = {};
-    state.teamRoster = {};
     state.teamMvpWins = {};
-    // Oldest to newest - gameHistory itself is newest-first (built via
-    // unshift in creditWin) - the teamRoster reset-on-lineup-change check
-    // below (mirroring creditWin's own, so a reset replay produces the
-    // exact same counts creditWin would have) only makes sense walked in
-    // the order the games actually happened.
-    state.gameHistory
-      .slice()
-      .reverse()
-      .forEach(function (entry) {
-        if (!entry || typeof entry === "string" || !entry.winnerIds) return;
-        entry.winnerIds.forEach(function (id) {
-          state.playerWins[id] = (state.playerWins[id] || 0) + 1;
-        });
-        if (entry.isTeam && entry.teamId) {
-          if (state.rotatingTeamsEnabled && entry.teamComboKey && state.teamRoster[entry.teamId] !== entry.teamComboKey) {
-            state.teamWins[entry.teamId] = 0;
-          }
-          if (entry.teamComboKey) state.teamRoster[entry.teamId] = entry.teamComboKey;
-          state.teamWins[entry.teamId] = (state.teamWins[entry.teamId] || 0) + 1;
-          if (entry.mvpId) {
-            state.teamMvpWins[entry.mvpId] = (state.teamMvpWins[entry.mvpId] || 0) + 1;
-          }
-        }
+    state.gameHistory.forEach(function (entry) {
+      if (!entry || typeof entry === "string" || !entry.winnerIds) return;
+      entry.winnerIds.forEach(function (id) {
+        state.playerWins[id] = (state.playerWins[id] || 0) + 1;
       });
+      if (entry.isTeam && entry.teamId) {
+        state.teamWins[entry.teamId] = (state.teamWins[entry.teamId] || 0) + 1;
+        if (entry.mvpId) {
+          state.teamMvpWins[entry.mvpId] = (state.teamMvpWins[entry.mvpId] || 0) + 1;
+        }
+      }
+    });
     state.gamesPlayedCount = state.gameHistory.length;
   }
 
@@ -7419,7 +7383,6 @@
     if (saveRoster) maybeSaveRosterOnNewSession();
     state.playerWins = {};
     state.teamWins = {};
-    state.teamRoster = {};
     state.teamMvpWins = {};
     state.gameHistory = [];
     state.gamesPlayedCount = 0;
@@ -15075,7 +15038,6 @@
       savePlayerStatsToStorage(PLAYER_STATS);
       state.playerWins = {};
       state.teamWins = {};
-      state.teamRoster = {};
       state.teamMvpWins = {};
       state.gameHistory = [];
       resetGameBalls();
