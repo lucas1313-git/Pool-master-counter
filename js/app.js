@@ -614,7 +614,7 @@
   function ensureFairRaceTargets() {
     var isTeamMode = !quickCounterMode && state.currentGame.mode === "teams";
     var sides = isTeamMode
-      ? ["A", "B"]
+      ? TEAM_IDS
           .filter(function (t) {
             return teamMembersLive(t).length > 0;
           })
@@ -918,10 +918,35 @@
     });
   }
 
+  // Every slot Team Mode can assign a player to - "C" is a third,
+  // optional slot: it only ever shows up anywhere (scoreboard panel,
+  // standings row, share text) once someone's actually on it, exactly
+  // like A and B already behave with zero members.
+  var TEAM_IDS = ["A", "B", "C"];
+  var TEAM_LABEL_KEYS = { A: "gameSetup.teamA", B: "gameSetup.teamB", C: "gameSetup.teamC" };
+
   function teamMembersLive(teamId) {
     return activePlayers().filter(function (p) {
       return p.teamId === teamId;
     });
+  }
+
+  // Every OTHER team slot that currently has at least one member - what
+  // a team actually plays against. With exactly two slots filled this is
+  // always a single other id, same as the old hardcoded "the other one
+  // of A/B" - the plural form is what lets a third, simultaneously-
+  // racing team join without anyone's "opponent" being just one fixed
+  // slot.
+  function otherActiveTeamIds(teamId) {
+    return TEAM_IDS.filter(function (id) {
+      return id !== teamId && teamMembersLive(id).length > 0;
+    });
+  }
+
+  function combinedTeamMembersLive(teamIds) {
+    return teamIds.reduce(function (members, id) {
+      return members.concat(teamMembersLive(id));
+    }, []);
   }
 
   function teamComboKey(teamId) {
@@ -939,7 +964,7 @@
         return p.name;
       })
       .join(" & ");
-    return T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB") + (names ? " (" + names + ")" : "");
+    return T(TEAM_LABEL_KEYS[teamId]) + (names ? " (" + names + ")" : "");
   }
 
   function sumTeamBalls(teamId) {
@@ -3784,10 +3809,11 @@
     if (isTeamsMode) {
       standingsTitle.textContent = T("standings.raceToTeams", { target: state.raceToWinsTarget });
 
-      // Teams are tracked per slot ("A"/"B"), not per exact roster combo, so
-      // this always shows exactly the two live team slots - a sub joining or
-      // leaving mid-race just relabels the row, it doesn't spawn a new one.
-      var teamRows = ["A", "B"].filter(function (teamId) {
+      // Teams are tracked per slot ("A"/"B"/"C"), not per exact roster
+      // combo, so this always shows exactly the live team slots - a sub
+      // joining or leaving mid-race just relabels the row, it doesn't
+      // spawn a new one.
+      var teamRows = TEAM_IDS.filter(function (teamId) {
         return (state.teamWins[teamId] || 0) > 0 || teamMembersLive(teamId).length > 0;
       });
 
@@ -3803,7 +3829,7 @@
             var namesList = teamMembersLive(teamId).map(function (p) {
               return p.name;
             });
-            var names = namesList.length ? namesList.join(" & ") : T(teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB");
+            var names = namesList.length ? namesList.join(" & ") : T(TEAM_LABEL_KEYS[teamId]);
             return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
           })
           .sort(function (a, b) {
@@ -4012,7 +4038,7 @@
       if (showTeamToggle && p.playing) {
         var toggle = document.createElement("div");
         toggle.className = "team-toggle";
-        ["A", "B"].forEach(function (teamId) {
+        TEAM_IDS.forEach(function (teamId) {
           var btn = document.createElement("button");
           btn.type = "button";
           btn.textContent = teamId;
@@ -4959,11 +4985,17 @@
     // applyMultiWayRatingResult's comment) - Rotating Teams is the one
     // explicit exception (see applyRotatingTeamsRatingResult), so this
     // preview only shows up then, same team-average math that result
-    // actually applies when the game ends.
+    // actually applies when the game ends. Only meaningful against a
+    // single well-defined opponent (same reasoning as
+    // ratingPronosticVsOpponent's own comment) - with a third team on
+    // the board there's no one fixed "the other side" to preview against,
+    // so this stays hidden rather than picking one arbitrarily.
     if (!quickCounterMode && state.rotatingTeamsEnabled && !opponentEmpty) {
-      var otherTeamId = teamId === "A" ? "B" : "A";
-      var pronostic = teamRatingPronostic(teamId, otherTeamId);
-      if (pronostic) panel.appendChild(buildRatingPronosticEl(pronostic));
+      var otherIds = otherActiveTeamIds(teamId);
+      if (otherIds.length === 1) {
+        var pronostic = teamRatingPronostic(teamId, otherIds[0]);
+        if (pronostic) panel.appendChild(buildRatingPronosticEl(pronostic));
+      }
     }
 
     // The team-level score/session-win-count below is skipped entirely
@@ -5361,16 +5393,14 @@
     var isTeams = state.currentGame.mode === "teams";
     var scores;
     if (isTeams) {
-      scores = ["A", "B"]
-        .filter(function (key) {
-          return teamMembersLive(key).length > 0;
-        })
-        .map(function (key) {
-          var names = teamMembersLive(key).map(function (p) {
-            return p.name;
-          });
-          return { name: names.length ? names.join(" & ") : "Team " + key, wins: state.teamWins[key] || 0, points: sumTeamBalls(key) };
+      scores = TEAM_IDS.filter(function (key) {
+        return teamMembersLive(key).length > 0;
+      }).map(function (key) {
+        var names = teamMembersLive(key).map(function (p) {
+          return p.name;
         });
+        return { name: names.length ? names.join(" & ") : "Team " + key, wins: state.teamWins[key] || 0, points: sumTeamBalls(key) };
+      });
     } else {
       scores = activePlayers().map(function (p) {
         return { name: p.name, wins: state.playerWins[p.id] || 0, points: p.balls || 0 };
@@ -5505,14 +5535,10 @@
 
     if (state.currentGame.mode === "teams") {
       scoreboard.className = "scoreboard scoreboard-teams";
-      var teamAMembers = teamMembersLive("A");
-      var teamBMembers = teamMembersLive("B");
-      [
-        { id: "A", members: teamAMembers, opponentEmpty: teamBMembers.length === 0 },
-        { id: "B", members: teamBMembers, opponentEmpty: teamAMembers.length === 0 }
-      ].forEach(function (team) {
-        if (!team.members.length) return;
-        scoreboard.appendChild(buildTeamPanel(team.id, team.members, team.opponentEmpty));
+      TEAM_IDS.forEach(function (teamId) {
+        var members = teamMembersLive(teamId);
+        if (!members.length) return;
+        scoreboard.appendChild(buildTeamPanel(teamId, members, otherActiveTeamIds(teamId).length === 0));
       });
     } else {
       scoreboard.className = "scoreboard";
@@ -5884,8 +5910,10 @@
     var mvpName = null;
     if (isTeam) {
       var members = teamMembersLive(key);
-      var otherTeamId = key === "A" ? "B" : "A";
-      opponentNames = teamMembersLive(otherTeamId).map(function (p) {
+      // Every OTHER active team's members combined, not just one fixed
+      // slot - with a third team on the board, "who did this team beat"
+      // is everyone else still racing when they crossed the target first.
+      opponentNames = combinedTeamMembersLive(otherActiveTeamIds(key)).map(function (p) {
         return p.name;
       });
       winnerNames = members.map(function (p) {
@@ -6020,18 +6048,22 @@
     // log, the leaderboard) would have displayed anyway.
     var ballsLeftConceptApplies = BALLS_LEFT_HIDDEN_GAME_TYPES.indexOf(state.currentGame.gameType) === -1;
     if (state.currentGame.unit !== "rack") {
-      if (isTeam) {
-        var opponentTeamBalls = sumTeamBalls(otherTeamId);
+      // Single-opponent scoping, same as the individual free-for-all
+      // case below - with a third team on the board there's no single
+      // well-defined "the opponent" to subtract/average against, so
+      // this (like skunk detection for a multi-opponent individual win)
+      // just stays unset rather than picking one of several other teams
+      // arbitrarily.
+      if (isTeam && otherActiveTeamIds(key).length === 1) {
+        var opponentTeamBalls = sumTeamBalls(otherActiveTeamIds(key)[0]);
         skunk = opponentTeamBalls === 0;
         if (ballsLeftConceptApplies && state.currentGame.gameType === "onepocket") {
           ballsLeftPrefill = Math.max(0, 15 - sumTeamBalls(key) - opponentTeamBalls);
         } else if (ballsLeftConceptApplies && state.currentGame.unit === "points") {
-          // Exactly 2 teams ever exist (see otherTeamId above), so
-          // there's only ever one "loser" to average here.
           pointsGapPrefill = Math.max(0, state.currentGame.target - opponentTeamBalls);
           ballsLeftPrefill = pointsGapToBallsLeft(pointsGapPrefill, state.currentGame.target);
         }
-      } else if (skunkOpponentBalls !== null) {
+      } else if (!isTeam && skunkOpponentBalls !== null) {
         skunk = skunkOpponentBalls === 0;
         if (ballsLeftConceptApplies && state.currentGame.gameType === "onepocket") {
           ballsLeftPrefill = Math.max(0, 15 - winnerBallsAtWin - skunkOpponentBalls);
@@ -7208,8 +7240,7 @@
     // (buildBallControls also disables the buttons for this, but this is
     // what actually stops the keypad shortcut too).
     if (!quickCounterMode && state.currentGame.mode === "teams" && player.teamId) {
-      var otherTeamId = player.teamId === "A" ? "B" : "A";
-      if (teamMembersLive(otherTeamId).length === 0) {
+      if (otherActiveTeamIds(player.teamId).length === 0) {
         showToast(T("toast.teamNeedsOpponent"));
         return;
       }
@@ -7288,7 +7319,7 @@
 
     if (delta > 0) {
       var target = state.currentGame.target;
-      var isTeamMode = state.currentGame.mode === "teams" && player.teamId;
+      var isTeamMode = !!(state.currentGame.mode === "teams" && player.teamId);
       var reached = isTeamMode ? sumTeamBalls(player.teamId) >= target : next >= target;
 
       if (reached) {
@@ -7320,16 +7351,26 @@
   function finishSnookerFrame() {
     var isTeamMode = !quickCounterMode && state.currentGame.mode === "teams";
     if (isTeamMode) {
-      var teamAMembers = teamMembersLive("A");
-      var teamBMembers = teamMembersLive("B");
-      if (!teamAMembers.length || !teamBMembers.length) return;
-      var scoreA = sumTeamBalls("A");
-      var scoreB = sumTeamBalls("B");
-      if (scoreA === scoreB) {
+      var activeTeamScores = TEAM_IDS.filter(function (id) {
+        return teamMembersLive(id).length > 0;
+      }).map(function (id) {
+        return { id: id, score: sumTeamBalls(id) };
+      });
+      if (activeTeamScores.length < 2) return;
+      var highScore = Math.max.apply(
+        null,
+        activeTeamScores.map(function (s) {
+          return s.score;
+        })
+      );
+      var leaders = activeTeamScores.filter(function (s) {
+        return s.score === highScore;
+      });
+      if (leaders.length > 1) {
         showToast(T("snooker.tie"));
         return;
       }
-      creditWin(true, scoreA > scoreB ? "A" : "B", null);
+      creditWin(true, leaders[0].id, null);
     } else {
       var active = activePlayers();
       if (active.length < 2) return;
@@ -7417,7 +7458,7 @@
     state.players.forEach(function (p) {
       lines.push("  " + p.name + ": " + (state.playerWins[p.id] || 0));
     });
-    var teamKeys = ["A", "B"].filter(function (teamId) {
+    var teamKeys = TEAM_IDS.filter(function (teamId) {
       return (state.teamWins[teamId] || 0) > 0;
     });
     if (teamKeys.length) {
@@ -9252,10 +9293,9 @@
         return b.wins - a.wins;
       });
 
-    var teamWins = ["A", "B"]
-      .filter(function (teamId) {
-        return (state.teamWins[teamId] || 0) > 0;
-      })
+    var teamWins = TEAM_IDS.filter(function (teamId) {
+      return (state.teamWins[teamId] || 0) > 0;
+    })
       .map(function (key) {
         var namesList = teamMembersLive(key).map(function (p) {
           return p.name;
@@ -24796,10 +24836,13 @@
   // "leading".
   function keypadScoreWouldLead(player, myScore) {
     if (!quickCounterMode && state.currentGame.mode === "teams" && player.teamId) {
-      var otherTeamId = player.teamId === "A" ? "B" : "A";
-      if (!teamMembersLive(otherTeamId).length) return false;
+      var otherIds = otherActiveTeamIds(player.teamId);
+      if (!otherIds.length) return false;
       var restOfMyTeam = sumTeamBalls(player.teamId) - (player.balls || 0);
-      return restOfMyTeam + myScore > sumTeamBalls(otherTeamId);
+      var myTotal = restOfMyTeam + myScore;
+      return otherIds.every(function (id) {
+        return myTotal > sumTeamBalls(id);
+      });
     }
     var others = activePlayers().filter(function (p) {
       return p.id !== player.id;
@@ -24894,7 +24937,7 @@
     if (wasOnHill || !willBeOnHill) return;
     var name =
       !quickCounterMode && state.currentGame.mode === "teams" && player.teamId
-        ? T(player.teamId === "A" ? "gameSetup.teamA" : "gameSetup.teamB")
+        ? T(TEAM_LABEL_KEYS[player.teamId])
         : shortDisplayNameForPlayer(player);
     speakKeypadText(T("keypad.speakOnHill", { name: name }));
   }

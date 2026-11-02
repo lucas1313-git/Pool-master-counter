@@ -332,6 +332,7 @@
   "gameSetup.targetNote": "Target {{target}} {{unit}}",
   "gameSetup.teamA": "Team A",
   "gameSetup.teamB": "Team B",
+  "gameSetup.teamC": "Team C",
   "gameSetup.teams": "Teams",
   "gameSetup.timedTournamentEnable": "⏰ Timed Tournament",
   "gameSetup.timedTournamentEndsAfter": "Ends after",
