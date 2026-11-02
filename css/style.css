@@ -2715,7 +2715,10 @@ input[type="number"] {
 }
 
 .scoreboard.scoreboard-teams {
-  grid-template-columns: 1fr 1fr;
+  /* auto-fit rather than a fixed 1fr 1fr - Team C means this can hold 2
+     or 3 panels, and a fixed two-column grid would strand a 3rd one
+     alone on its own full-width row instead of sharing space evenly. */
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
 @media (max-width: 620px) {
