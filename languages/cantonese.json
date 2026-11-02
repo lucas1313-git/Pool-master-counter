@@ -478,6 +478,7 @@
   "gameSetup.targetNote": "目標 {{target}} {{unit}}",
   "gameSetup.teamA": "A隊",
   "gameSetup.teamB": "B隊",
+  "gameSetup.teamC": "C隊",
   "gameSetup.teams": "隊制",
   "gameSetup.timedTournamentEnable": "⏰ 計時錦標賽",
   "gameSetup.timedTournamentEndsAfter": "幾耐之後完結",

@@ -478,6 +478,7 @@
   "gameSetup.targetNote": "Objectif {{target}} {{unit}}",
   "gameSetup.teamA": "Équipe A",
   "gameSetup.teamB": "Équipe B",
+  "gameSetup.teamC": "Équipe C",
   "gameSetup.teams": "Équipes",
   "gameSetup.timedTournamentEnable": "⏰ Tournoi Chronométré",
   "gameSetup.timedTournamentEndsAfter": "Se termine après",
