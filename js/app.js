@@ -396,7 +396,10 @@
       gameHistory: [],
       rotation: { enabled: false, order: [], every: 1 },
       gamesPlayedCount: 0,
-      queue: []
+      queue: [],
+      // Winner Stays for teams: the teams waiting, in order, and who each one benched
+      teamQueue: [],
+      teamBenched: {}
     };
   }
 
@@ -508,6 +511,8 @@
           if (typeof parsed.currentGame.timedTournamentEnabled !== "boolean") parsed.currentGame.timedTournamentEnabled = false;
           if (typeof parsed.currentGame.timedTournamentMinutes !== "number") parsed.currentGame.timedTournamentMinutes = 60;
           if (!Array.isArray(parsed.queue)) parsed.queue = [];
+          if (!Array.isArray(parsed.teamQueue)) parsed.teamQueue = [];
+          if (!parsed.teamBenched || typeof parsed.teamBenched !== "object") parsed.teamBenched = {};
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
@@ -907,6 +912,70 @@
   function winnerStaysOn() {
     return !quickCounterMode && state.currentGame.mode === "individual" && !!state.currentGame.queueEnabled;
   }
+
+  // Winner Stays for teams (2026-11-01 request): three teams or more - two
+  // at the table, the rest in line; the losing team goes to the back and the
+  // next team comes in - teams handled as Winner Stays handles players. A
+  // team waiting its turn has nobody playing (they keep their team) and is
+  // in state.teamQueue, in order; state.teamBenched has who it benched, so
+  // the same players come back (a sub sitting out stays out).
+  function seatedTeamIds() {
+    return TEAM_IDS.filter(function (id) {
+      return teamMembersLive(id).length > 0;
+    });
+  }
+  function effectiveTeamQueue() {
+    var seated = seatedTeamIds();
+    return (state.teamQueue || []).filter(function (id, i, list) {
+      return list.indexOf(id) === i && seated.indexOf(id) === -1 && teamMembersAll(id).length > 0;
+    });
+  }
+  // the teams in it tonight: at the table, or waiting their turn
+  function teamsInPlay() {
+    var waiting = effectiveTeamQueue();
+    return TEAM_IDS.filter(function (id) {
+      return teamMembersLive(id).length > 0 || waiting.indexOf(id) !== -1;
+    });
+  }
+  function teamWinnerStaysOn() {
+    return !quickCounterMode && state.currentGame.mode === "teams" && !!state.currentGame.queueEnabled && teamsInPlay().length >= 3;
+  }
+  // a team's players, seated or waiting with it
+  function teamMembersShown(teamId) {
+    var live = teamMembersLive(teamId);
+    if (live.length || effectiveTeamQueue().indexOf(teamId) === -1) return live;
+    var ids = (state.teamBenched || {})[teamId];
+    var all = teamMembersAll(teamId);
+    return ids ? all.filter(function (p) { return ids.indexOf(p.id) !== -1; }) : all;
+  }
+  function benchTeam(teamId) {
+    var live = teamMembersLive(teamId);
+    if (!state.teamBenched) state.teamBenched = {};
+    state.teamBenched[teamId] = live.map(function (p) { return p.id; });
+    live.forEach(function (p) { p.playing = false; p.balls = 0; });
+  }
+  function seatTeam(teamId) {
+    teamMembersShown(teamId).forEach(function (p) { p.playing = true; p.balls = 0; });
+    if (state.teamBenched) delete state.teamBenched[teamId];
+  }
+  // Two teams at the table, the rest in line (the team on a streak keeps its place)
+  function settleTeamSeats() {
+    if (!teamWinnerStaysOn()) return;
+    var line = effectiveTeamQueue();
+    var streak = state.currentGame.queueStreak;
+    var seated = seatedTeamIds().sort(function (a, b) {
+      return (streak && streak.team && streak.id === b ? 1 : 0) - (streak && streak.team && streak.id === a ? 1 : 0);
+    });
+    seated.slice(2).forEach(function (id) { benchTeam(id); line.push(id); });
+    for (var n = Math.min(seated.length, 2); n < 2 && line.length; n++) seatTeam(line.shift());
+    state.teamQueue = line;
+  }
+  // Winner Stays off: every team waiting comes back to the table
+  function everyTeamBackAtTheTable() {
+    effectiveTeamQueue().forEach(seatTeam);
+    state.teamQueue = [];
+    state.teamBenched = {};
+  }
   function raceReached(wins, key) {
     return isRacing() && wins > 0 && wins >= effectiveRaceTarget(key);
   }
@@ -915,7 +984,7 @@
   // seated or waiting; teams: A and B), most wins first.
   function racePassedSides() {
     // (Winner Stays races are per pairing - see creditWin - never the session's)
-    if (!isRacing() || winnerStaysOn()) return [];
+    if (!isRacing() || winnerStaysOn() || teamWinnerStaysOn()) return [];
     var sides = [];
     if (state.currentGame.mode === "teams") {
       TEAM_IDS.forEach(function (k) {
@@ -1567,12 +1636,30 @@
     });
   }
 
-  // Every slot Team Mode can assign a player to - "C" is a third,
-  // optional slot: it only ever shows up anywhere (scoreboard panel,
+  // Every slot Team Mode can assign a player to - "C" and on are
+  // optional slots: one only ever shows up anywhere (scoreboard panel,
   // standings row, share text) once someone's actually on it, exactly
-  // like A and B already behave with zero members.
-  var TEAM_IDS = ["A", "B", "C"];
+  // like A and B already behave with zero members. Up to 8 teams (16
+  // players in pairs - see splitPlayingIntoTeams).
+  var TEAM_IDS = ["A", "B", "C", "D", "E", "F", "G", "H"];
   var TEAM_LABEL_KEYS = { A: "gameSetup.teamA", B: "gameSetup.teamB", C: "gameSetup.teamC" };
+  // "Team A", "Team D" - the slot's own name
+  function teamSlotLabel(teamId) {
+    return TEAM_LABEL_KEYS[teamId] ? T(TEAM_LABEL_KEYS[teamId]) : T("gameSetup.teamLetter", { letter: teamId });
+  }
+  // Everyone on a team, at the table or not (a team waiting its turn in
+  // Winner Stays has nobody playing)
+  function teamMembersAll(teamId) {
+    return state.players.filter(function (p) {
+      return p.teamId === teamId;
+    });
+  }
+  // The teams with anyone on them, in letter order
+  function teamsFormed() {
+    return TEAM_IDS.filter(function (id) {
+      return teamMembersAll(id).length > 0;
+    });
+  }
 
   function teamMembersLive(teamId) {
     return activePlayers().filter(function (p) {
@@ -1611,7 +1698,7 @@
   // "Team A" while it has nobody
   function teamBoardNames(teamId, members) {
     var names = (members || []).map(function (p) { return shortDisplayNameForPlayer(p); }).join(" & ");
-    return names || T(TEAM_LABEL_KEYS[teamId]);
+    return names || teamSlotLabel(teamId);
   }
 
   function teamLabelLive(teamId) {
@@ -1620,7 +1707,7 @@
         return p.name;
       })
       .join(" & ");
-    return T(TEAM_LABEL_KEYS[teamId]) + (names ? " (" + names + ")" : "");
+    return teamSlotLabel(teamId) + (names ? " (" + names + ")" : "");
   }
 
   function sumTeamBalls(teamId) {
@@ -5031,8 +5118,9 @@
       // combo, so this always shows exactly the live team slots - a sub
       // joining or leaving mid-race just relabels the row, it doesn't
       // spawn a new one.
+      var inPlay = teamsInPlay();
       var teamRows = TEAM_IDS.filter(function (teamId) {
-        return (state.teamWins[teamId] || 0) > 0 || teamMembersLive(teamId).length > 0;
+        return (state.teamWins[teamId] || 0) > 0 || inPlay.indexOf(teamId) !== -1;
       });
 
       teamStandingsList.innerHTML = "";
@@ -5044,10 +5132,10 @@
       } else {
         teamRows
           .map(function (teamId) {
-            var namesList = teamMembersLive(teamId).map(function (p) {
+            var namesList = teamMembersShown(teamId).map(function (p) {
               return p.name;
             });
-            var names = namesList.length ? namesList.join(" & ") : T(TEAM_LABEL_KEYS[teamId]);
+            var names = namesList.length ? namesList.join(" & ") : teamSlotLabel(teamId);
             return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
           })
           .sort(function (a, b) {
@@ -5283,10 +5371,10 @@
       });
       row.appendChild(playBtn);
 
-      if (showTeamToggle && p.playing) {
+      if (showTeamToggle && (p.playing || (p.teamId && effectiveTeamQueue().indexOf(p.teamId) !== -1))) {
         var toggle = document.createElement("div");
         toggle.className = "team-toggle";
-        TEAM_IDS.forEach(function (teamId) {
+        TEAM_IDS.slice(0, teamLettersShown()).forEach(function (teamId) {
           var btn = document.createElement("button");
           btn.type = "button";
           btn.textContent = teamId;
@@ -6240,7 +6328,7 @@
     panel.appendChild(name);
     var who = document.createElement("div");
     who.className = "team-card-members";
-    who.textContent = T(TEAM_LABEL_KEYS[teamId]);
+    who.textContent = teamSlotLabel(teamId);
     panel.appendChild(who);
 
     if (opponentEmpty) {
@@ -7227,6 +7315,33 @@
     return !quickCounterMode && state.currentGame.mode === "individual" && !state.currentGame.queueEnabled &&
       TWO_PLAYER_GAME_TYPES.indexOf(state.currentGame.gameType) !== -1 && activePlayers().length > 2;
   }
+  // ...and teams the same: a two-sided game with three teams or more at the
+  // table (or Winner Stays on with more than two seated, or fewer than two
+  // and a team waiting) - two teams play, the rest wait their turn
+  function needsTwoTeamsAtTheTable() {
+    if (quickCounterMode || state.currentGame.mode !== "teams") return false;
+    var seated = seatedTeamIds().length;
+    if (seated > 2) return !!state.currentGame.queueEnabled || TWO_PLAYER_GAME_TYPES.indexOf(state.currentGame.gameType) !== -1;
+    return teamWinnerStaysOn() && seated < 2 && effectiveTeamQueue().length > 0;
+  }
+  function seatTwoTeamsAtTheTable() {
+    var wasOn = !!state.currentGame.queueEnabled;
+    if (!wasOn) {
+      queueModeCheckbox.checked = true;
+      fireChange(queueModeCheckbox); // (seats two teams - see its handler - and draws the board again)
+    } else {
+      settleTeamSeats();
+      saveState();
+      renderAll();
+    }
+    var seated = seatedTeamIds(), line = effectiveTeamQueue();
+    if (seated.length < 2 || !line.length) return;
+    showBannerNotice(T("winnerStays.teamsAutoOn", {
+      a: teamBoardNames(seated[0], teamMembersLive(seated[0])),
+      b: teamBoardNames(seated[1], teamMembersLive(seated[1])),
+      next: teamBoardNames(line[0], teamMembersShown(line[0]))
+    }));
+  }
   function seatTwoAtTheTable() {
     queueModeCheckbox.checked = true;
     fireChange(queueModeCheckbox); // (benches all but two - see its handler - and draws the board again)
@@ -7242,7 +7357,7 @@
   function renderBoardWinnerStays() {
     var row = document.getElementById("board-winner-stays");
     if (!row) return;
-    var show = !quickCounterMode && state.currentGame.mode === "individual" && state.players.length >= 3;
+    var show = !quickCounterMode && (state.currentGame.mode === "individual" ? state.players.length >= 3 : teamsInPlay().length >= 3);
     row.classList.toggle("hidden", !show);
     document.getElementById("board-winner-stays-checkbox").checked = !!state.currentGame.queueEnabled;
   }
@@ -7254,6 +7369,12 @@
     if (!el) return;
     var on = winnerStaysOn();
     var parts = [];
+    if (teamWinnerStaysOn()) {
+      var tStreak = state.currentGame.queueStreak;
+      if (tStreak && tStreak.team && tStreak.count > 0 && teamMembersLive(tStreak.id).length) parts.push(T("winnerStays.streak", { name: teamBoardNames(tStreak.id, teamMembersLive(tStreak.id)), count: tStreak.count }));
+      var teamLine = effectiveTeamQueue().map(function (id) { return teamBoardNames(id, teamMembersShown(id)); });
+      if (teamLine.length) parts.push(teamLine.length > 1 ? T("winnerStays.nextThen", { next: teamLine[0], then: teamLine.slice(1, 3).join(", ") }) : T("winnerStays.next", { next: teamLine[0] }));
+    }
     if (on) {
       var streak = state.currentGame.queueStreak, holder = streak && getPlayer(streak.id);
       if (holder && holder.playing && streak.count > 0) parts.push(T("winnerStays.streak", { name: holder.name, count: streak.count }));
@@ -7305,6 +7426,9 @@
     return Math.max(min, Math.min(max, v));
   }
 
+  // (Winner Stays as the sheet opened: changed only if its box was - it can
+  // go on by itself while the sheet's other changes apply, see needsTwoAtTheTable)
+  var gsOpenedWinnerStays = null;
   function openGameSheet() {
     var typeSelect = gsEl("gs-game-type");
     typeSelect.innerHTML = "";
@@ -7327,6 +7451,7 @@
     gsEl("gs-rotation-every").value = state.rotation.every || 1;
     gsRadio("gs-mode", state.currentGame.mode === "teams" ? "teams" : "individual");
     gsEl("gs-winner-stays").checked = !!state.currentGame.queueEnabled;
+    gsOpenedWinnerStays = !!state.currentGame.queueEnabled;
     gsEl("gs-max-streak").value = state.currentGame.queueMaxStreak || 0;
     gsEl("gs-timed").checked = !!state.currentGame.timedTournamentEnabled;
     gsEl("gs-timed-minutes").value = state.currentGame.timedTournamentMinutes || timedTournamentMinutesInput.value || 60;
@@ -7353,8 +7478,8 @@
     gsEl("gs-race-stepper").classList.toggle("is-off", gsRadioValue("gs-race") !== "race");
     var teams = gsRadioValue("gs-mode") === "teams";
     gsEl("gs-teams-note").classList.toggle("hidden", !teams || state.currentGame.mode === "teams");
-    gsEl("gs-winner-stays").disabled = teams;
-    var stays = !teams && gsEl("gs-winner-stays").checked;
+    gsEl("gs-winner-stays").disabled = false;
+    var stays = gsEl("gs-winner-stays").checked;
     gsEl("gs-max-streak-row").classList.toggle("hidden", !stays);
     gsEl("gs-pairing-note").classList.toggle("hidden", !(stays && gsRadioValue("gs-race") === "race"));
     gsEl("gs-timed-stepper").classList.toggle("is-off", !gsEl("gs-timed").checked);
@@ -7406,9 +7531,24 @@
     if (n > 1 && before !== n) checkRaceAfterTargetChange(function () { restoreRaceTarget(before); });
   }
 
-  // Teams from the sheet: whoever's playing, A and B in turn.
+  // Teams from the sheet: whoever's playing (with Winner Stays, the line
+  // too - they're all here), as many teams as there are pairs - A, B, C...
+  // in turn (four players: A B A B; six: A B C A B C; an odd one out joins
+  // a team of three). The players' own 🏷️ Team Names (clubTeam) don't
+  // pair anyone here - they only pre-fill a tournament's team field.
+  // Three teams or more at a two-sided game: Winner Stays for teams (see
+  // needsTwoTeamsAtTheTable).
   function splitPlayingIntoTeams() {
-    activePlayers().forEach(function (p, i) { p.teamId = i % 2 === 0 ? "A" : "B"; });
+    var people = winnerStaysOn() ? activePlayers().concat(effectiveQueue()) : activePlayers();
+    var count = Math.max(2, Math.min(TEAM_IDS.length, Math.floor(people.length / 2)));
+    state.players.forEach(function (p) { if (people.indexOf(p) === -1) p.teamId = null; });
+    people.forEach(function (p, i) {
+      p.teamId = TEAM_IDS[i % count];
+      if (!p.playing) { p.playing = true; p.balls = 0; }
+    });
+    state.teamQueue = [];
+    state.teamBenched = {};
+    state.currentGame.queueStreak = null;
     saveState();
   }
 
@@ -7508,7 +7648,7 @@
       changes.push(want.race > 1 ? T("board.statusRace", { n: want.race }) : T("gameSheet.single"));
     }
 
-    if (state.currentGame.mode !== "teams" && want.winnerStays !== !!state.currentGame.queueEnabled) {
+    if (want.winnerStays !== gsOpenedWinnerStays && want.winnerStays !== !!state.currentGame.queueEnabled) {
       queueModeCheckbox.checked = want.winnerStays;
       fireChange(queueModeCheckbox);
       changes.push(T(want.winnerStays ? "gameSheet.chWinnerOn" : "gameSheet.chWinnerOff"));
@@ -8132,6 +8272,10 @@
       seatTwoAtTheTable();
       return;
     }
+    if (needsTwoTeamsAtTheTable()) {
+      seatTwoTeamsAtTheTable();
+      return;
+    }
     renderBoardStatus();
     renderWinnerStaysLine();
     scheduleFitScoreDigits();
@@ -8727,6 +8871,15 @@
     renderAll();
   }
 
+  // the team buttons beside each player: the letters in use and one more (at least A B C)
+  function teamLettersShown() {
+    var last = -1;
+    state.players.forEach(function (p) {
+      if (p.teamId && (p.playing || effectiveTeamQueue().indexOf(p.teamId) !== -1)) last = Math.max(last, TEAM_IDS.indexOf(p.teamId));
+    });
+    return Math.min(TEAM_IDS.length, Math.max(3, last + 2));
+  }
+
   function setPlayerTeam(id, teamId) {
     var p = getPlayer(id);
     if (!p) return;
@@ -8839,6 +8992,7 @@
     var milestoneCount = 0;
     var onHillNames = null;
     var queueSwapInfo = null;
+    var teamSwap = null; // Winner Stays for teams: { loser } - done after the skunk's look below
     var target = effectiveRaceTarget(key);
     var mvpId = null;
     var mvpName = null;
@@ -8894,9 +9048,13 @@
       }
       summary = teamLabelLive(key) + " won " + typeLabel + targetSuffix;
       takeRaceTally();
+      // Winner Stays for teams: each rack decides who stays - or each
+      // pairing's race (the session's race never ends here)
+      var teamStays = teamWinnerStaysOn();
+      if (teamStays && (!isRacing() || newTeamWins >= effectiveRaceTarget(key))) teamSwap = { loser: otherActiveTeamIds(key)[0] || null };
       // (reaching OR passing the race ends it - a race left open by a
       // reload, or a target lowered under someone's wins, still closes)
-      if (raceReached(newTeamWins, key)) {
+      if (!teamStays && raceReached(newTeamWins, key)) {
         milestoneNames = winnerNames.join(" & ");
         milestoneCount = newTeamWins;
       } else if (isRacing() && target > 1 && newTeamWins === target - 1) {
@@ -9078,6 +9236,37 @@
       }
     }
 
+    // Winner Stays for teams: the losing team to the back of the line, the
+    // next team in (the winner's streak; "max N in a row" - the winner too)
+    if (teamSwap) {
+      var tStreak = state.currentGame.queueStreak;
+      tStreak = tStreak && tStreak.team && tStreak.id === key ? { id: key, team: true, count: tStreak.count + 1 } : { id: key, team: true, count: 1 };
+      state.currentGame.queueStreak = tStreak;
+      lastWinStreak = { ts: null, count: tStreak.count };
+      var teamLine = effectiveTeamQueue();
+      if (teamSwap.loser && teamLine.length) {
+        var nextTeam = teamLine.shift();
+        var benchedTeamNames = teamBoardNames(teamSwap.loser, teamMembersLive(teamSwap.loser));
+        benchTeam(teamSwap.loser);
+        seatTeam(nextTeam);
+        teamLine.push(teamSwap.loser);
+        queueSwapInfo = { team: true, newName: teamBoardNames(nextTeam, teamMembersLive(nextTeam)), benchedName: benchedTeamNames };
+        var maxTeamStreak = state.currentGame.queueMaxStreak || 0;
+        if (maxTeamStreak > 0 && tStreak.count >= maxTeamStreak && teamLine.length) {
+          var winnerTeamNames = teamBoardNames(key, teamMembersLive(key));
+          benchTeam(key);
+          var nextAfterTeam = teamLine.shift();
+          seatTeam(nextAfterTeam);
+          teamLine.push(key);
+          queueSwapInfo.maxed = { name: winnerTeamNames, count: tStreak.count, next: teamBoardNames(nextAfterTeam, teamMembersLive(nextAfterTeam)) };
+          state.currentGame.queueStreak = null;
+        }
+        state.teamQueue = teamLine;
+        // a race each pairing: the new pairing starts at 0 - 0
+        if (isRacing()) seatedTeamIds().forEach(function (id) { state.teamWins[id] = 0; });
+      }
+    }
+
     var startedAt = state.currentGame.startedAt ? new Date(state.currentGame.startedAt).getTime() : null;
     var durationMs = startedAt ? Math.max(0, Date.now() - startedAt) : null;
     // (no shot before the winning point itself - no real duration to keep)
@@ -9176,7 +9365,7 @@
     if (gameTypeChanged) {
       notices.push({ text: T("gamechange.nowPlaying", { label: GAME_TYPES[state.currentGame.gameType].label + " (" + state.currentGame.target + " " + unitLabel(state.currentGame.unit) + ")" }) });
     }
-    if (queueSwapInfo) notices.push({ text: T("queueswap.message", { newName: queueSwapInfo.newName, benchedName: queueSwapInfo.benchedName }), sticky: loadQueueSwapSticky() });
+    if (queueSwapInfo) notices.push({ text: T(queueSwapInfo.team ? "winnerStays.teamSwap" : "queueswap.message", { newName: queueSwapInfo.newName, benchedName: queueSwapInfo.benchedName }), sticky: loadQueueSwapSticky() });
     if (queueSwapInfo && queueSwapInfo.maxed) notices.push({ text: T("winnerStays.maxed", queueSwapInfo.maxed) });
     if (onHillNames) playOnHillSound();
     else if (gameTypeChanged || queueSwapInfo) playPositiveSound(null);
@@ -9288,6 +9477,9 @@
         gameHistory: state.gameHistory,
         gamesPlayedCount: state.gamesPlayedCount,
         queue: state.queue || [],
+        teamQueue: state.teamQueue || [],
+        teamBenched: state.teamBenched || {},
+        queueStreak: state.currentGame.queueStreak || null,
         raceClosedPending: state.raceClosedPending || null,
         turns: state.turns || null,
         breakerName: state.currentGame.breakerName || null,
@@ -9317,6 +9509,8 @@
     state.gameHistory = b.gameHistory;
     state.gamesPlayedCount = b.gamesPlayedCount;
     state.queue = b.queue;
+    if ("teamQueue" in b) { state.teamQueue = b.teamQueue; state.teamBenched = b.teamBenched || {}; }
+    if ("queueStreak" in b) state.currentGame.queueStreak = b.queueStreak;
     state.raceClosedPending = b.raceClosedPending;
     if ("turns" in b) state.turns = b.turns;
     if ("breakerName" in b) state.currentGame.breakerName = b.breakerName;
@@ -9738,9 +9932,9 @@
       var n = entry.gameNumber || state.gamesPlayedCount;
       // (Winner Stays, a rack each: the tally is against several players -
       // the winner's streak says more)
-      var streakHere = winnerStaysOn() && !isRacing() && lastWinStreak && lastWinStreak.ts === entry.ts ? lastWinStreak.count : 0;
+      var streakHere = (winnerStaysOn() || teamWinnerStaysOn()) && !isRacing() && lastWinStreak && lastWinStreak.ts === entry.ts ? lastWinStreak.count : 0;
       main.textContent = T(entry.target > 1 && entry.unit === "rack" ? "banner.wonGame" : "banner.wonRack", { name: (entry.winnerNames || []).join(" & "), n: n }) +
-        (winnerStaysOn() && !isRacing() ? (streakHere > 1 ? " · " + T("winnerStays.streakTag", { count: streakHere }) : "") : winBannerScore(entry) ? " · " + winBannerScore(entry) : "");
+        ((winnerStaysOn() || teamWinnerStaysOn()) && !isRacing() ? (streakHere > 1 ? " · " + T("winnerStays.streakTag", { count: streakHere }) : "") : winBannerScore(entry) ? " · " + winBannerScore(entry) : "");
       winBannerEl.appendChild(main);
       var actions = document.createElement("div");
       actions.className = "win-banner-actions";
@@ -30224,7 +30418,7 @@
     if (wasOnHill || !willBeOnHill) return;
     var name =
       !quickCounterMode && state.currentGame.mode === "teams" && player.teamId
-        ? T(TEAM_LABEL_KEYS[player.teamId])
+        ? teamSlotLabel(player.teamId)
         : shortDisplayNameForPlayer(player);
     speakKeypadText(T("keypad.speakOnHill", { name: name }));
   }
@@ -30385,7 +30579,9 @@
       if (p.playing !== on) p.balls = 0;
       p.playing = on;
       if (on) p.teamId = teamsById ? teamsById[p.id] : p.teamId || "A";
+      else if (teamsById) p.teamId = null;
     });
+    if (teamsById) { state.teamQueue = []; state.teamBenched = {}; }
     state.currentGame.mode = teamsById ? "teams" : "individual";
     Array.prototype.forEach.call(modeRadios, function (r) {
       r.checked = r.value === state.currentGame.mode;
@@ -38596,7 +38792,11 @@
       renderRaceMode();
     }
     if (!queueModeCheckbox.checked) state.currentGame.queueRaceChosen = false;
-    if (queueModeCheckbox.checked) {
+    if (!quickCounterMode && state.currentGame.mode === "teams") {
+      // (Winner Stays for teams: two teams seated, the rest in line - off: everyone back)
+      if (queueModeCheckbox.checked) settleTeamSeats();
+      else everyTeamBackAtTheTable();
+    } else if (queueModeCheckbox.checked) {
       var seated = activePlayers();
       seated.slice(2).forEach(function (p) {
         p.playing = false;

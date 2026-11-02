@@ -152,7 +152,8 @@ function board(opts) {
   await sleep(800);
   s = await st();
   const teams = s.players.filter((p) => p.playing).map((p) => p.teamId).sort().join("");
-  check("...Teams A and B: whoever's playing split 1/1 (Kim A, Jo B), rotation off, timed and shot clock on, practice off", s.currentGame.mode === "teams" && teams === "AB" && !s.rotation.enabled && s.currentGame.timedTournamentEnabled === true && s.currentGame.shotCounterEnabled === true && !(await page.evaluate(() => document.getElementById("no-stats-checkbox").checked)), { mode: s.currentGame.mode, teams, rot: s.rotation.enabled, timed: s.currentGame.timedTournamentEnabled, shot: s.currentGame.shotCounterEnabled });
+  // (Winner Stays was on: the two seated and the two in line are all here - two teams of two, 2026-11-01)
+  check("...Teams A and B: everyone here (the two seated and the line) split 2/2, rotation off, timed and shot clock on, practice off", s.currentGame.mode === "teams" && teams === "AABB" && !s.rotation.enabled && s.currentGame.timedTournamentEnabled === true && s.currentGame.shotCounterEnabled === true && !(await page.evaluate(() => document.getElementById("no-stats-checkbox").checked)), { mode: s.currentGame.mode, teams, rot: s.rotation.enabled, timed: s.currentGame.timedTournamentEnabled, shot: s.currentGame.shotCounterEnabled });
   await open(board({ four: true }));
   await page.click("#btn-board-game");
   await sleep(300);

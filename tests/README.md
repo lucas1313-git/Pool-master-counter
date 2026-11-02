@@ -622,6 +622,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   scoreboard says "paused"), Resume in the same recording (the pause a gap, a click in it plays from
   where it went on), Stop while paused ends at the pause, left-open recordings closed at the next start.
   `node tests/probe_record_pause.js [shots]`.
+- **probe_team_rotation.js** — Winner Stays for teams (2026-11-01), its own file server on 4306: six
+  playing, Teams - three teams of two in turn (the 🏷️ team names don't pair anyone; someone away
+  keeps no old team); at 8-Ball Winner Stays on by itself, two teams at the table and the third in
+  line; a rack won - the losing team out, the next in, the streak and "Next up" on the board; ↩ Undo;
+  15 Ball Rotation with Winner Stays off - all three at the table; ten players - five teams (A-E);
+  four - two teams as before. `node tests/probe_team_rotation.js [shots]`.
 - **probe_real_detector.js on a real clip** (P25, 2026-10-30) — 18 s of the user's own recording of
   29 Oct (one player at the near rail walking up and shooting, sound left out), used with the players'
   agreement; it stays on the Mac, never in the repo: `~/Documents/Pool Master Counter Test Clips/
