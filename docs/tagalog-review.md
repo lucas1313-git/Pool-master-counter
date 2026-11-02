@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (221)
+## Identical to English (223)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -195,6 +195,8 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `teams.credit` | Credit: |
 | `stop.standingRace` | · race to |
 | `endNight.standings` | Standings |
+| `race2.statusOne` | 🏁 Race 1 · race 2: |
+| `race2.statusTwo` | 🏁 Race 2 · race 1: |
 | `report.colRating` | Rating |
 | `report.playerLine` | — , , rating () |
 | `report.highlights` | Highlights |
@@ -232,7 +234,7 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `shotClock.extended` | : extension, +25 s |
 | `voice.section.shotClock` | Shot clock |
 
-## Mostly English words (15)
+## Mostly English words (16)
 
 | Key | English | Tagalog now |
 |---|---|---|
@@ -249,5 +251,6 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `gameSheet.chWinnerOn` | Winner Stays on | Winner Stays: naka-on |
 | `gameSheet.chWinnerOff` | Winner Stays off | Winner Stays: naka-off |
 | `tournament.newHeadingRoundRobin` | New Round Robin Tournament | Bagong Round Robin Tournament |
+| `race2.nowTwo` | 🏁 Race 2 now: (race to ) | 🏁 Race 2 ngayon: (race to ) |
 | `common.logoAria` | Pool Master Counter logo | Logo ng Pool Master Counter |
 | `tournament.bracketTvButton` | 📺 Full-screen bracket | 📺 Full-screen na bracket |

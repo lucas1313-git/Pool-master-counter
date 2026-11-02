@@ -399,7 +399,10 @@
       queue: [],
       // Winner Stays for teams: the teams waiting, in order, and who each one benched
       teamQueue: [],
-      teamBenched: {}
+      teamBenched: {},
+      // 🏁 two races at once: { pivotId, active: "first"|"second", parked: { playerWins, target, seats } }
+      secondRace: null,
+      raceAsked: {}
     };
   }
 
@@ -513,6 +516,8 @@
           if (!Array.isArray(parsed.queue)) parsed.queue = [];
           if (!Array.isArray(parsed.teamQueue)) parsed.teamQueue = [];
           if (!parsed.teamBenched || typeof parsed.teamBenched !== "object") parsed.teamBenched = {};
+          if (!parsed.secondRace || typeof parsed.secondRace !== "object") parsed.secondRace = null;
+          if (!parsed.raceAsked || typeof parsed.raceAsked !== "object") parsed.raceAsked = {};
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
@@ -970,6 +975,124 @@
     for (var n = Math.min(seated.length, 2); n < 2 && line.length; n++) seatTeam(line.shift());
     state.teamQueue = line;
   }
+  // ---- 🏁 Two races at once (2026-11-01 request) ----
+  // Someone new arrives in the middle of a race: race 1 waits, its score
+  // kept, and a race 2 with them starts. From then on whether they're at the
+  // table decides which race the board scores - race 2 while they play,
+  // race 1 while they don't - each race its own wins and race-to. The first
+  // one won ends as any race does (the race-won screen, the stats, a new
+  // session), and the other goes on as the race, its players back at the
+  // table. (Individual play, Winner Stays off; two races at most.)
+  var secondRaceAsking = false;
+  // who was at the table in the race before anyone new sat down (⇄ swaps
+  // someone out as the newcomer comes in - race 1 keeps them)
+  var lastRaceSeats = [];
+  // who has played in this race (the session's games of the last 12 hours -
+  // a session never reset can hold games from days ago)
+  function raceParticipantKeys() {
+    var keys = {}, since = Date.now() - 12 * 3600000;
+    (state.gameHistory || []).forEach(function (g) {
+      if (!g || typeof g !== "object" || !(Date.parse(g.ts) >= since)) return;
+      (g.winnerNames || []).concat(g.opponentNames || []).forEach(function (n) { if (n) keys[normalizeNameKey(n)] = true; });
+    });
+    return keys;
+  }
+  // a race's score from its wins: "Kim 3 – 2 Jo" (its players: those seated)
+  function raceScoreText(wins, ids) {
+    var players = (ids || []).map(getPlayer).filter(Boolean);
+    if (players.length === 2) return players[0].name + " " + (wins[players[0].id] || 0) + " – " + (wins[players[1].id] || 0) + " " + players[1].name;
+    return players.map(function (p) { return p.name + " " + (wins[p.id] || 0); }).join(", ");
+  }
+  // p, just sat down at the table (⇄, or Playing in the roster - not a
+  // lineup set by voice, the game sheet or the wizard), hasn't played in the
+  // race under way
+  function isRaceNewcomer(p) {
+    if (!p || secondRaceAsking || state.secondRace || quickCounterMode || state.currentGame.mode !== "individual" || state.currentGame.queueEnabled || !isRacing()) return false;
+    // (the race under way: someone has a win in it)
+    var wins = state.playerWins || {};
+    if (!Object.keys(wins).some(function (id) { return wins[id] > 0; })) return false;
+    var keys = raceParticipantKeys();
+    if (keys[normalizeNameKey(p.name)] || (state.raceAsked || {})[p.id]) return false;
+    return activePlayers().some(function (q) { return q.id !== p.id && keys[normalizeNameKey(q.name)]; });
+  }
+  function askAboutNewcomer(p) {
+    secondRaceAsking = true;
+    var keys = raceParticipantKeys();
+    var racers = activePlayers().filter(function (q) { return q.id !== p.id && keys[normalizeNameKey(q.name)]; });
+    var done = function () { secondRaceAsking = false; if (!state.raceAsked) state.raceAsked = {}; state.raceAsked[p.id] = true; };
+    var choices = racers.map(function (o, i) {
+      return { id: "btn-race2-with-" + i, primary: i === 0, label: T("race2.startWith", { name: p.name, other: o.name }), run: function () { done(); startSecondRace(p, o); } };
+    });
+    choices.push({ id: "btn-race2-waits", label: T("race2.waits", { name: p.name }), run: function () { done(); startSecondRace(p, null); } });
+    choices.push({ id: "btn-race2-join", label: T("race2.join", { name: p.name }), run: function () { done(); saveState(); renderAll(); } });
+    var race1 = lastRaceSeats.filter(function (id) { return id !== p.id && getPlayer(id); });
+    if (race1.length < 2) race1 = racers.map(function (q) { return q.id; });
+    tournamentChooser(T("race2.ask", { name: p.name, score: raceScoreText(state.playerWins, race1), n: state.raceToWinsTarget }), choices, { noCancel: true });
+  }
+  // race 2 with p - now, against `other` (race 1's others wait), or once p sits down
+  function startSecondRace(p, other) {
+    var race1Seats = lastRaceSeats.filter(function (id) { return id !== p.id && getPlayer(id); });
+    if (race1Seats.length < 2) race1Seats = activePlayers().filter(function (q) { return q.id !== p.id; }).map(function (q) { return q.id; });
+    var score1 = raceScoreText(state.playerWins, race1Seats);
+    // (seatsNow: who's at the table in the race being scored - kept when it waits)
+    state.secondRace = { pivotId: p.id, active: "first", seatsNow: race1Seats, parked: { playerWins: {}, target: state.raceToWinsTarget, seats: [] } };
+    // race 2 now: the newcomer and `other` at the table; or race 1's players back
+    var seats = other ? [p.id, other.id] : race1Seats;
+    state.players.forEach(function (q) {
+      var on = seats.indexOf(q.id) !== -1;
+      if (q.playing !== on) q.balls = 0;
+      q.playing = on;
+    });
+    syncParallelRace(true);
+    saveState();
+    renderAll();
+    showBannerNotice(other ? T("race2.started", { name: p.name, other: other.name, n: state.raceToWinsTarget, score: score1 }) : T("race2.waiting", { name: p.name, score: score1 }));
+  }
+  // The race on the board follows the newcomer's seat: true when it changed
+  function syncParallelRace(quiet) {
+    var r = state.secondRace;
+    if (!r) return false;
+    var pivot = getPlayer(r.pivotId);
+    if (!pivot || quickCounterMode || state.currentGame.mode !== "individual") return false;
+    var want = pivot.playing ? "second" : "first";
+    var seatedIds = activePlayers().map(function (q) { return q.id; });
+    if (r.active === want) {
+      r.seatsNow = seatedIds;
+      return false;
+    }
+    var parked = r.parked || {};
+    r.parked = { playerWins: state.playerWins, target: state.raceToWinsTarget, seats: r.seatsNow || [] };
+    state.playerWins = parked.playerWins || {};
+    if (parked.target) state.raceToWinsTarget = parked.target;
+    state.fairRaceTargets = null;
+    r.active = want;
+    r.seatsNow = seatedIds;
+    if (!quiet) showBannerNotice(T(want === "second" ? "race2.nowTwo" : "race2.nowOne", { score: raceScoreText(state.playerWins, seatedIds), n: state.raceToWinsTarget }));
+    return true;
+  }
+  // A race is over (won, or stopped): the other one goes on as the race,
+  // its players back at the table. `r`: the two races as they were.
+  function resumeOtherRace(r) {
+    if (!r || !r.parked) return;
+    var seats = (r.parked.seats || []).filter(function (id) { return getPlayer(id); });
+    // (race 2 never under way - the newcomer never sat down: nothing to go on with)
+    if (!seats.length) return;
+    state.playerWins = r.parked.playerWins || {};
+    if (r.parked.target) state.raceToWinsTarget = r.parked.target;
+    state.fairRaceTargets = null;
+    state.players.forEach(function (q) {
+      var on = seats.indexOf(q.id) !== -1;
+      if (q.playing !== on) q.balls = 0;
+      q.playing = on;
+    });
+    // (everyone in either race has played - nobody to ask about)
+    state.raceAsked = {};
+    [].concat(r.parked.seats || [], r.seatsNow || [], [r.pivotId]).forEach(function (id) { state.raceAsked[id] = true; });
+    saveState();
+    renderAll();
+    showBannerNotice(T("race2.goesOn", { race: T(r.active === "first" ? "race2.labelTwo" : "race2.labelOne"), score: raceScoreText(state.playerWins, seats) }), true);
+  }
+
   // Winner Stays off: every team waiting comes back to the table
   function everyTeamBackAtTheTable() {
     effectiveTeamQueue().forEach(seatTeam);
@@ -1194,11 +1317,13 @@
       last.raceTarget = target;
     }
     saveState();
+    var otherRace = state.secondRace ? JSON.parse(JSON.stringify(state.secondRace)) : null;
     exportAllPlayerStats();
     startNewSession(true);
     saveState();
     renderAll();
     showBannerNotice(T("stop.raceStoppedNoWinner", { by: stopByText(interrupted.by) }), true);
+    if (otherRace) resumeOtherRace(otherRace);
   }
 
   // A tournament: its champion(s) the ones picked - recorded as any
@@ -7252,6 +7377,13 @@
     var rot = rotationStatusInfo();
     if (rot) parts.push({ text: T(rot.untilSwitch === 1 ? "board.statusRotationNext" : "board.statusRotationIn", { next: GAME_TYPES[state.rotation.order[(rotationCurrentIndex() + 1) % state.rotation.order.length].gameType].label, count: rot.untilSwitch }) });
     if (isRacing()) parts.push({ text: T("board.statusRace", { n: state.raceToWinsTarget }) });
+    if (state.secondRace && state.secondRace.parked) {
+      var r2 = state.secondRace, pivot = getPlayer(r2.pivotId);
+      var otherScore = raceScoreText(r2.parked.playerWins || {}, r2.parked.seats || []);
+      parts.push({ text: r2.active === "second"
+        ? T("race2.statusTwo", { score: otherScore })
+        : otherScore ? T("race2.statusOne", { score: otherScore }) : T("race2.statusOnePending", { name: pivot ? pivot.name : "" }) });
+    }
     if (isRacing() && state.fairRaceEnabled) parts.push({ text: T(fairRaceSource() === "fargo" ? "board.statusFargoFairMatch" : "board.statusBalanced") });
     if (state.currentGame.mode === "teams") parts.push({ text: T("board.statusTeams") });
     else if (state.currentGame.queueEnabled) parts.push({ text: T("board.statusWinnerStays") });
@@ -7313,6 +7445,7 @@
   var TWO_PLAYER_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "10ball", "straight", "onepocket", "snooker"];
   function needsTwoAtTheTable() {
     return !quickCounterMode && state.currentGame.mode === "individual" && !state.currentGame.queueEnabled &&
+      !state.secondRace && !secondRaceAsking && // (🏁 two races: who sits down is the players' call)
       TWO_PLAYER_GAME_TYPES.indexOf(state.currentGame.gameType) !== -1 && activePlayers().length > 2;
   }
   // ...and teams the same: a two-sided game with three teams or more at the
@@ -7958,6 +8091,9 @@
     into.teamId = out.teamId;
     out.playing = false;
     out.balls = 0;
+    // (someone new mid-race: asked about a 🏁 second race - see askAboutNewcomer)
+    var newcomer = isRaceNewcomer(into);
+    if (newcomer) secondRaceAsking = true;
     if (state.currentGame.queueEnabled) {
       var line = effectiveQueue().filter(function (q) { return q.id !== into.id && q.id !== out.id; });
       line.push(out);
@@ -7967,6 +8103,7 @@
     saveState();
     renderAll();
     showBannerNotice(T("bench.swapped", { into: into.name, out: out.name }));
+    if (newcomer) askAboutNewcomer(into);
   }
 
   function benchAddByName(raw) {
@@ -8267,6 +8404,8 @@
     noteBoardScoreLine();
     renderEventBar();
     postRecorderContext(); // (the recording page names its cues from what's shown)
+    if (syncParallelRace()) saveState();
+    if (!state.secondRace && !secondRaceAsking) lastRaceSeats = activePlayers().map(function (q) { return q.id; });
     var active = activePlayers();
     if (needsTwoAtTheTable()) {
       seatTwoAtTheTable();
@@ -8866,9 +9005,14 @@
       p.balls = 0;
       if (!p.teamId) p.teamId = "A";
       if (queueActive) saveQueue(effectiveQueue());
+      // (someone new mid-race: asked about a 🏁 second race, before Winner
+      // Stays can come on by itself - see askAboutNewcomer)
+      var newcomer = isRaceNewcomer(p);
+      if (newcomer) secondRaceAsking = true;
     }
     saveState();
     renderAll();
+    if (newcomer) askAboutNewcomer(p);
   }
 
   // the team buttons beside each player: the letters in use and one more (at least A B C)
@@ -8980,6 +9124,7 @@
   }
 
   function creditWin(isTeam, key, winnerVoice) {
+    syncParallelRace(); // (🏁 two races: the one whose players are at the table)
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     // ("won 8-Ball" - a one-rack game's "(target 1)" says nothing)
     var targetSuffix = state.currentGame.unit === "rack" && state.currentGame.target <= 1 ? "" : " (target " + state.currentGame.target + ")";
@@ -9480,6 +9625,8 @@
         teamQueue: state.teamQueue || [],
         teamBenched: state.teamBenched || {},
         queueStreak: state.currentGame.queueStreak || null,
+        secondRace: state.secondRace || null,
+        raceToWinsTarget: state.raceToWinsTarget,
         raceClosedPending: state.raceClosedPending || null,
         turns: state.turns || null,
         breakerName: state.currentGame.breakerName || null,
@@ -9511,6 +9658,7 @@
     state.queue = b.queue;
     if ("teamQueue" in b) { state.teamQueue = b.teamQueue; state.teamBenched = b.teamBenched || {}; }
     if ("queueStreak" in b) state.currentGame.queueStreak = b.queueStreak;
+    if ("secondRace" in b) { state.secondRace = b.secondRace; state.raceToWinsTarget = b.raceToWinsTarget; }
     state.raceClosedPending = b.raceClosedPending;
     if ("turns" in b) state.turns = b.turns;
     if ("breakerName" in b) state.currentGame.breakerName = b.breakerName;
@@ -10430,7 +10578,12 @@
     // snapshot first so "Undo this win" can restore the tournament exactly
     // as it stood right after the winning game was credited, then retrograde
     // that one game on top of the restored state to land one game earlier.
+    // (🏁 two races: the other one goes on once this one's saved - see resumeOtherRace)
+    var otherRace = state.secondRace ? JSON.parse(JSON.stringify(state.secondRace)) : null;
     lastTournamentWinSnapshot = {
+      secondRace: otherRace,
+      raceToWinsTarget: state.raceToWinsTarget,
+      seats: state.players.map(function (p) { return { id: p.id, playing: p.playing }; }),
       gameHistory: JSON.parse(JSON.stringify(state.gameHistory)),
       playerWins: JSON.parse(JSON.stringify(state.playerWins)),
       teamWins: JSON.parse(JSON.stringify(state.teamWins)),
@@ -10484,6 +10637,7 @@
     milestoneBalls.typed = "";
     renderMilestoneBalls();
     showMilestoneMoment(T("banner.raceWon", { names: names, target: target }));
+    if (otherRace) resumeOtherRace(otherRace);
   }
 
   // A race or tournament won: its full-screen moment - once the finger
@@ -10546,6 +10700,12 @@
   // before its last rack (the snapshot), then that rack undone too.
   function restoreTournamentWinSnapshot() {
     var snapshot = lastTournamentWinSnapshot;
+    // (🏁 two races: both back as they were, the winners' race on the board)
+    if ("secondRace" in snapshot) {
+      state.secondRace = snapshot.secondRace;
+      state.raceToWinsTarget = snapshot.raceToWinsTarget;
+      (snapshot.seats || []).forEach(function (was) { var p = getPlayer(was.id); if (p) p.playing = was.playing; });
+    }
     state.gameHistory = snapshot.gameHistory;
     state.playerWins = snapshot.playerWins;
     state.teamWins = snapshot.teamWins;
@@ -11313,6 +11473,8 @@
   function startNewSession(saveRoster) {
     if (saveRoster) maybeSaveRosterOnNewSession();
     state.raceClosedPending = null;
+    state.secondRace = null;
+    state.raceAsked = {};
     clearUndo();
     state.playerWins = {};
     state.teamWins = {};

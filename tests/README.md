@@ -628,6 +628,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   line; a rack won - the losing team out, the next in, the streak and "Next up" on the board; ↩ Undo;
   15 Ball Rotation with Winner Stays off - all three at the table; ten players - five teams (A-E);
   four - two teams as before. `node tests/probe_team_rotation.js [shots]`.
+- **probe_two_races.js** — 🏁 two races at once (2026-11-01), its own file server on 4307: Kim 2 – 1 Jo
+  (race to 3), Luc takes Jo's seat - asked (race 2 v Kim / waits / joins); race 2 scored while Luc's
+  at the table, race 1 when Jo's back (each its own score, the top bar shows the other); Kim wins
+  race 1 - the race-won screen, race 2 goes on (Kim v Luc); ↩ Undo this win - both back; "Luc
+  waits"; Luc set Playing in the roster (v Kim or v Jo). `node tests/probe_two_races.js [shots]`.
 - **probe_real_detector.js on a real clip** (P25, 2026-10-30) — 18 s of the user's own recording of
   29 Oct (one player at the near rail walking up and shooting, sound left out), used with the players'
   agreement; it stays on the Mac, never in the repo: `~/Documents/Pool Master Counter Test Clips/
