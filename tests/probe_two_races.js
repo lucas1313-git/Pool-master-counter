@@ -8,7 +8,9 @@
 //   1 Jo"; Luc wins a rack: race 2 Luc 1, race 1 untouched;
 // - Jo back for Luc (⇄): "🏁 Back to race 1: Kim 2 – 1 Jo", the board Kim 2, Jo 1, the top bar
 //   "🏁 Race 1 · race 2: Kim 0 – 1 Luc"; ↩ Undo of nothing new keeps it;
-// - Kim wins race 1 (3 – 1): the race-won screen for Kim; race 2 goes on - Kim v Luc at the table,
+// - Kim wins race 1 (3 – 1): the race-won screen for Kim; race 2 for everyone with Winner Stays
+//   (2026-11-02): Kim stays, Luc (next in line) in, Jo to the back, race 2's score kept - then every
+//   rack the winner stays and the wins add up (never back to 0 - 0) till Luc wins race 2;
 //   Luc 1 – 0 Kim, "🏁 Race 2 goes on: …", one race again (the top bar has no 🏁);
 // - ↩ Undo this win: both races back - race 1 Kim 2 – 1 Jo on the board, race 2 waiting (Luc 1);
 // - "Luc waits": race 1 goes on with Kim v Jo, "🏁 Race 1 · race 2 when Luc plays";
@@ -86,7 +88,8 @@ const STATE = JSON.stringify({
     Object.keys(s.playerWins || {}).forEach((id) => { if (s.playerWins[id]) wins[name(id)] = s.playerWins[id]; });
     const chooser = document.getElementById("tournament-chooser-overlay");
     return {
-      seated: s.players.filter((p) => p.playing).map((p) => p.name), wins, queue: s.currentGame.queueEnabled, race: s.raceToWinsTarget,
+      seated: s.players.filter((p) => p.playing).map((p) => p.name), wins, queue: s.currentGame.queueEnabled, race: s.raceToWinsTarget, kind: s.currentGame.queueRaceKind || null,
+      line: (s.queue || []).map(name).filter(Boolean),
       second: s.secondRace ? { active: s.secondRace.active, parked: Object.keys(s.secondRace.parked.playerWins || {}).filter((id) => s.secondRace.parked.playerWins[id]).map((id) => name(id) + " " + s.secondRace.parked.playerWins[id]).join(", ") } : null,
       status: document.getElementById("board-status").textContent,
       chooser: chooser ? { title: chooser.querySelector(".confirm-modal-message").textContent, choices: [...chooser.querySelectorAll("button")].map((b) => b.textContent) } : null,
@@ -119,16 +122,29 @@ const STATE = JSON.stringify({
   const won = await win("Kim", true);
   await sleep(800);
   let e = await look();
-  check("Kim wins race 1 (3 – 1): the race-won screen (\"" + e.milestone.slice(0, 40) + "\"); race 2 goes on - " + e.seated.join(" v ") + ", " + JSON.stringify(e.wins) + ", one race again (\"" + e.status + "\")", /Kim/.test(e.milestone) && e.seated.join() === "Kim,Luc" && JSON.stringify(e.wins) === '{"Luc":1}' && !e.second && !/🏁/.test(e.status) && e.race === 3, { e, won });
+  check("Kim wins race 1 (3 – 1): the race-won screen (\"" + e.milestone.slice(0, 40) + "\"); race 2 for everyone, Winner Stays - Kim stays, Luc (next in line) in: " + e.seated.join(" v ") + ", line " + e.line.join(", ") + ", race 2's score kept " + JSON.stringify(e.wins) + " (\"" + e.status + "\")", /Kim/.test(e.milestone) && e.seated.join() === "Kim,Luc" && e.line[0] === "Jo" && JSON.stringify(e.wins) === '{"Luc":1}' && !e.second && e.queue === true && e.kind === "line" && e.race === 3 && /Winner stays/.test(e.status) && !/🏁/.test(e.status), { e, won });
   const goesOn = await page.evaluate(() => document.getElementById("win-banner").textContent);
-  check("...the banner: \"" + (goesOn.match(/🏁 Race 2 goes on[^🏁✕]*/) || [""])[0].trim() + "\"", /🏁 Race 2 goes on: Kim 0 – 1 Luc/.test(goesOn), goesOn);
+  check("...the banner: \"" + (goesOn.match(/🏁 Race 2 for everyone[^🏁✕]*/) || [""])[0].trim() + "\"", /🏁 Race 2 for everyone now, Winner Stays: Kim v Luc, Jo next \(Kim 0 – 1 Luc, race to 3\)/.test(goesOn), goesOn);
 
   await page.evaluate(() => document.getElementById("btn-milestone-undo").click());
   await sleep(300);
   await page.evaluate(() => document.getElementById("btn-confirm-modal-ok").click()); // (it asks first)
   await sleep(1200);
   let f = await look();
-  check("↩ Undo this win: both races back - at the table " + f.seated.join(" v ") + ", race 1 " + JSON.stringify(f.wins) + ", race 2 waiting (" + (f.second && f.second.parked) + ")", f.seated.join() === "Kim,Jo" && JSON.stringify(f.wins) === '{"Kim":2,"Jo":1}' && f.second && f.second.active === "first" && f.second.parked === "Luc 1", f);
+  check("↩ Undo this win: both races back - at the table " + f.seated.join(" v ") + ", race 1 " + JSON.stringify(f.wins) + ", race 2 waiting (" + (f.second && f.second.parked) + "), Winner Stays off", f.seated.join() === "Kim,Jo" && JSON.stringify(f.wins) === '{"Kim":2,"Jo":1}' && f.second && f.second.active === "first" && f.second.parked === "Luc 1" && !f.queue, f);
+
+  // race 1 won again, then race 2 for everyone: every rack the winner stays, the wins add up
+  await win("Kim", true);
+  await sleep(800);
+  await page.evaluate(() => document.getElementById("btn-milestone-close").click());
+  await sleep(400);
+  await win("Luc");
+  let h2 = await look();
+  check("race 2, Winner Stays: Luc beats Kim - Kim to the back, Jo in (" + h2.seated.join(" v ") + ", line " + h2.line.join(", ") + "); the wins add up - " + JSON.stringify(h2.wins) + ", not 0 - 0", h2.seated.join() === "Jo,Luc" && h2.line[0] === "Kim" && JSON.stringify(h2.wins) === '{"Luc":2}' && !h2.milestone, h2);
+  await win("Luc", true);
+  await sleep(800);
+  let h3 = await look();
+  check("...Luc beats Jo: 3 - race 2 won (\"" + h3.milestone.slice(0, 40) + "\"), a new race (" + JSON.stringify(h3.wins) + "), Winner Stays on: " + h3.seated.join(" v ") + ", line " + h3.line.join(", "), /Luc/.test(h3.milestone) && JSON.stringify(h3.wins) === "{}" && h3.queue === true && h3.seated.join() === "Kim,Luc" && h3.line[0] === "Jo" && !h3.second, h3);
 
   // "Luc waits": race 1 goes on
   await open();
@@ -138,6 +154,11 @@ const STATE = JSON.stringify({
   await sleep(900);
   let g = await look();
   check("Luc waits: race 1 goes on - " + g.seated.join(" v ") + " " + JSON.stringify(g.wins) + ", \"" + g.status + "\"", g.seated.join() === "Kim,Jo" && JSON.stringify(g.wins) === '{"Kim":1}' && g.second && g.second.active === "first" && /🏁 Race 1 · race 2 when Luc plays/.test(g.status), g);
+  await win("Kim");
+  await win("Kim", true);
+  await sleep(800);
+  let w2 = await look();
+  check("...Kim wins race 1: not a fresh 0 - 0 with Kim v Jo - race 2 for everyone: Kim stays, Luc (next in line) in (" + w2.seated.join(" v ") + ", line " + w2.line.join(", ") + "), Winner Stays", /Kim/.test(w2.milestone) && w2.seated.join() === "Kim,Luc" && w2.line[0] === "Jo" && w2.queue === true && w2.kind === "line" && !w2.second, w2);
 
   // Luc set Playing in the roster (three at the table): a race 2 against either
   await open();

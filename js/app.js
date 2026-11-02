@@ -917,6 +917,15 @@
   function winnerStaysOn() {
     return !quickCounterMode && state.currentGame.mode === "individual" && !!state.currentGame.queueEnabled;
   }
+  // Winner Stays with one race for the whole line (queueRaceKind "line" -
+  // 🏁 the race everyone plays once the other's over, see resumeOtherRace):
+  // every rack the winner stays and the loser goes to the back, the wins add
+  // up for everyone (never back to 0 - 0 for a new pairing), and the first
+  // to the race wins it, as any race. (Otherwise a race with Winner Stays is
+  // each pairing's own.)
+  function lineRaceOn() {
+    return winnerStaysOn() && isRacing() && state.currentGame.queueRaceKind === "line";
+  }
 
   // Winner Stays for teams (2026-11-01 request): three teams or more - two
   // at the table, the rest in line; the losing team goes to the back and the
@@ -1070,27 +1079,53 @@
     if (!quiet) showBannerNotice(T(want === "second" ? "race2.nowTwo" : "race2.nowOne", { score: raceScoreText(state.playerWins, seatedIds), n: state.raceToWinsTarget }));
     return true;
   }
-  // A race is over (won, or stopped): the other one goes on as the race,
-  // its players back at the table. `r`: the two races as they were.
-  function resumeOtherRace(r) {
+  // A race is over (won, or stopped): the other one goes on - for everyone
+  // now, with Winner Stays (2026-11-02 request): the winner of the one just
+  // over stays at the table, the next in line comes in (the newcomer first),
+  // the loser goes to the back; its score kept, never back to 0 - 0 - one
+  // race for the whole line until someone reaches it (see lineRaceOn).
+  // `r`: the two races as they were; winnerIds: who won the one just over.
+  function resumeOtherRace(r, winnerIds) {
     if (!r || !r.parked) return;
-    var seats = (r.parked.seats || []).filter(function (id) { return getPlayer(id); });
-    // (race 2 never under way - the newcomer never sat down: nothing to go on with)
-    if (!seats.length) return;
     state.playerWins = r.parked.playerWins || {};
     if (r.parked.target) state.raceToWinsTarget = r.parked.target;
     state.fairRaceTargets = null;
+    var seated = activePlayers();
+    var stay = seated.filter(function (p) { return (winnerIds || []).indexOf(p.id) !== -1; }).slice(0, 1);
+    var losers = seated.filter(function (p) { return stay.indexOf(p) === -1; });
+    // everyone in either race not at the table, the newcomer first; then the losers
+    var everyone = [];
+    [r.pivotId].concat(r.parked.seats || [], r.seatsNow || []).forEach(function (id) {
+      var p = getPlayer(id);
+      if (p && everyone.indexOf(p) === -1) everyone.push(p);
+    });
+    seated.forEach(function (p) { if (everyone.indexOf(p) === -1) everyone.push(p); });
+    var line = everyone.filter(function (p) { return seated.indexOf(p) === -1; }).concat(losers);
+    var table = stay.slice();
+    while (table.length < 2 && line.length) table.push(line.shift());
     state.players.forEach(function (q) {
-      var on = seats.indexOf(q.id) !== -1;
+      var on = table.indexOf(q) !== -1;
       if (q.playing !== on) q.balls = 0;
       q.playing = on;
     });
+    if (line.length) {
+      state.currentGame.queueEnabled = true;
+      state.currentGame.queueRaceChosen = true;
+      state.currentGame.queueRaceKind = "line";
+      state.currentGame.queueStreak = null;
+      queueModeCheckbox.checked = true;
+      saveQueue(line);
+    }
     // (everyone in either race has played - nobody to ask about)
     state.raceAsked = {};
-    [].concat(r.parked.seats || [], r.seatsNow || [], [r.pivotId]).forEach(function (id) { state.raceAsked[id] = true; });
+    everyone.forEach(function (p) { state.raceAsked[p.id] = true; });
     saveState();
     renderAll();
-    showBannerNotice(T("race2.goesOn", { race: T(r.active === "first" ? "race2.labelTwo" : "race2.labelOne"), score: raceScoreText(state.playerWins, seats) }), true);
+    var race = T(r.active === "first" ? "race2.labelTwo" : "race2.labelOne");
+    var score = raceScoreText(state.playerWins, table.map(function (p) { return p.id; }));
+    showBannerNotice(line.length && table.length === 2
+      ? T("race2.allIn", { race: race, a: table[0].name, b: table[1].name, next: line[0].name, score: score, n: state.raceToWinsTarget })
+      : T("race2.goesOn", { race: race, score: score }), true);
   }
 
   // Winner Stays off: every team waiting comes back to the table
@@ -1107,7 +1142,7 @@
   // seated or waiting; teams: A and B), most wins first.
   function racePassedSides() {
     // (Winner Stays races are per pairing - see creditWin - never the session's)
-    if (!isRacing() || winnerStaysOn() || teamWinnerStaysOn()) return [];
+    if (!isRacing() || (winnerStaysOn() && !lineRaceOn()) || teamWinnerStaysOn()) return [];
     var sides = [];
     if (state.currentGame.mode === "teams") {
       TEAM_IDS.forEach(function (k) {
@@ -1145,7 +1180,7 @@
     });
     saveState();
     var names = top.map(function (s) { return s.names.join(" & "); }).join(" & ");
-    celebrateTournamentWin(names, top[0].wins, effectiveRaceTarget(top[0].key));
+    celebrateTournamentWin(names, top[0].wins, effectiveRaceTarget(top[0].key), top.filter(function (s) { return !s.isTeam; }).map(function (s) { return s.key; }));
   }
 
   // ---- ⏹ Stop a race or a tournament early, a winner picked (2026-10-30 request) ----
@@ -1307,7 +1342,7 @@
         entry.raceInterrupted = interrupted;
       });
       saveState();
-      celebrateTournamentWin(stopSideNames(winners), winners[0].wins, target);
+      celebrateTournamentWin(stopSideNames(winners), winners[0].wins, target, winners.filter(function (w) { return !w.isTeam; }).map(function (w) { return w.key; }));
       milestoneDetails.appendChild(playerStatsRow(T("stop.interruptedRow"), T("stop.interruptedDetail", { by: stopByText(interrupted.by), how: stopHowText(interrupted.how) })));
       return;
     }
@@ -1323,7 +1358,7 @@
     saveState();
     renderAll();
     showBannerNotice(T("stop.raceStoppedNoWinner", { by: stopByText(interrupted.by) }), true);
-    if (otherRace) resumeOtherRace(otherRace);
+    if (otherRace) resumeOtherRace(otherRace, []);
   }
 
   // A tournament: its champion(s) the ones picked - recorded as any
@@ -9223,8 +9258,9 @@
       // Winner Stays: each rack decides who stays - or, with a race chosen
       // for it, each pairing's race (the session's race never ends here)
       var winnerStays = winnerStaysOn();
-      var pairingWon = winnerStays && (!isRacing() || newPlayerWins >= effectiveRaceTarget(key));
-      if (!winnerStays && raceReached(newPlayerWins, key)) {
+      var lineRace = lineRaceOn();
+      var pairingWon = winnerStays && (!isRacing() || lineRace || newPlayerWins >= effectiveRaceTarget(key));
+      if ((!winnerStays || lineRace) && raceReached(newPlayerWins, key)) {
         milestoneNames = getPlayer(key).name;
         milestoneCount = newPlayerWins;
       } else if (isRacing() && target > 1 && newPlayerWins === target - 1) {
@@ -9291,8 +9327,9 @@
               state.currentGame.queueStreak = null;
             }
             saveQueue(waitingQueue);
-            // a race each pairing: the new pairing starts at 0 - 0
-            if (isRacing()) {
+            // a race each pairing: the new pairing starts at 0 - 0 (one race
+            // for the whole line: everyone's wins kept)
+            if (isRacing() && !lineRace) {
               activePlayers().forEach(function (p) { state.playerWins[p.id] = 0; });
             }
           }
@@ -9521,7 +9558,7 @@
     // A race won closes at once (archived, a new session - nothing more
     // can be scored into it); only its big moment waits for the finger to
     // lift (see celebrateTournamentWin). Same for a timed session's end.
-    if (milestoneNames) celebrateTournamentWin(milestoneNames, milestoneCount, target);
+    if (milestoneNames) celebrateTournamentWin(milestoneNames, milestoneCount, target, isTeam ? null : winnerIds);
     else timedTournamentSessionOver(key, isTeam);
     return summary;
   }
@@ -10563,7 +10600,7 @@
   // never be applied after that overlay has closed.
   var lastTournamentWinSnapshot = null;
 
-  function celebrateTournamentWin(names, count, raceTarget) {
+  function celebrateTournamentWin(names, count, raceTarget, winnerIds) {
     // count is the win tally that just triggered this exact milestone;
     // raceTarget the race it reached (count itself when not given - the
     // same number unless a race was passed, see closeRaceNow).
@@ -10580,6 +10617,7 @@
     // that one game on top of the restored state to land one game earlier.
     // (🏁 two races: the other one goes on once this one's saved - see resumeOtherRace)
     var otherRace = state.secondRace ? JSON.parse(JSON.stringify(state.secondRace)) : null;
+    if (!winnerIds) winnerIds = ((state.gameHistory || [])[0] || {}).winnerIds || [];
     lastTournamentWinSnapshot = {
       secondRace: otherRace,
       raceToWinsTarget: state.raceToWinsTarget,
@@ -10637,7 +10675,7 @@
     milestoneBalls.typed = "";
     renderMilestoneBalls();
     showMilestoneMoment(T("banner.raceWon", { names: names, target: target }));
-    if (otherRace) resumeOtherRace(otherRace);
+    if (otherRace) resumeOtherRace(otherRace, winnerIds);
   }
 
   // A race or tournament won: its full-screen moment - once the finger
@@ -38953,7 +38991,7 @@
       syncRaceModeRadios();
       renderRaceMode();
     }
-    if (!queueModeCheckbox.checked) state.currentGame.queueRaceChosen = false;
+    if (!queueModeCheckbox.checked) { state.currentGame.queueRaceChosen = false; state.currentGame.queueRaceKind = null; }
     if (!quickCounterMode && state.currentGame.mode === "teams") {
       // (Winner Stays for teams: two teams seated, the rest in line - off: everyone back)
       if (queueModeCheckbox.checked) settleTeamSeats();
