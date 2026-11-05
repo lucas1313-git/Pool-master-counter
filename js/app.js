@@ -8498,7 +8498,9 @@
     }
 
     if (state.currentGame.mode === "teams") {
-      scoreboard.className = "scoreboard scoreboard-teams";
+      // two teams: half the board each, as before Team C; three or more share it
+      var teamCount = TEAM_IDS.filter(function (teamId) { return teamMembersLive(teamId).length; }).length;
+      scoreboard.className = "scoreboard scoreboard-teams" + (teamCount > 2 ? " scoreboard-teams-many" : "");
       scoreboard.appendChild(buildTeamsHeader());
       TEAM_IDS.forEach(function (teamId) {
         var members = teamMembersLive(teamId);
@@ -9050,13 +9052,18 @@
     if (newcomer) askAboutNewcomer(p);
   }
 
-  // the team buttons beside each player: the letters in use and one more (at least A B C)
+  // the team buttons beside each player: the letters in use (at least A B),
+  // and one more only when there are enough players for another pair - four
+  // players in two teams get A B, not an empty C
   function teamLettersShown() {
-    var last = -1;
+    var last = -1, people = 0;
     state.players.forEach(function (p) {
-      if (p.teamId && (p.playing || effectiveTeamQueue().indexOf(p.teamId) !== -1)) last = Math.max(last, TEAM_IDS.indexOf(p.teamId));
+      if (!(p.playing || (p.teamId && effectiveTeamQueue().indexOf(p.teamId) !== -1))) return;
+      people++;
+      if (p.teamId) last = Math.max(last, TEAM_IDS.indexOf(p.teamId));
     });
-    return Math.min(TEAM_IDS.length, Math.max(3, last + 2));
+    var inUse = Math.max(2, last + 1);
+    return Math.min(TEAM_IDS.length, people >= 2 * (inUse + 1) ? inUse + 1 : inUse);
   }
 
   function setPlayerTeam(id, teamId) {

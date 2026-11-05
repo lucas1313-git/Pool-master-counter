@@ -2715,14 +2715,19 @@ input[type="number"] {
 }
 
 .scoreboard.scoreboard-teams {
-  /* auto-fit rather than a fixed 1fr 1fr - Team C means this can hold 2
-     or 3 panels, and a fixed two-column grid would strand a 3rd one
-     alone on its own full-width row instead of sharing space evenly. */
+  grid-template-columns: 1fr 1fr;
+}
+
+/* Three teams or more at the table: auto-fit, so a 3rd panel shares the
+   width evenly instead of sitting alone on its own full-width row. Two
+   teams keep the fixed halves above. */
+.scoreboard.scoreboard-teams.scoreboard-teams-many {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
 @media (max-width: 620px) {
-  .scoreboard.scoreboard-teams {
+  .scoreboard.scoreboard-teams,
+  .scoreboard.scoreboard-teams.scoreboard-teams-many {
     grid-template-columns: 1fr;
   }
 }

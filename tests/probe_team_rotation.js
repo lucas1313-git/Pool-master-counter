@@ -135,14 +135,17 @@ function board(names, extra) {
   await sheet("teams", "9ball");
   let t = await look();
   const letters = await page.evaluate(() => { const row = document.querySelector("#roster-list .team-toggle"); return row ? [...row.querySelectorAll("button")].map((x) => x.textContent) : []; });
-  check("ten players, Teams: five teams of two (" + Object.keys(t.teams).sort().map((k) => k + " " + t.teams[k].join("&")).join(", ") + "), A v B, \"" + t.line + "\", team buttons " + letters.join(" "), Object.keys(t.teams).sort().join() === "A,B,C,D,E" && Object.values(t.teams).every((m) => m.length === 2) && (t.teams.A || []).join() === "P1,P6" && t.cards.join() === "A,B" && t.line === "Next up: P3 & P8 (then P4 & P9, P5 & P10)" && letters.join("") === "ABCDEF", { t, letters });
+  check("ten players, Teams: five teams of two (" + Object.keys(t.teams).sort().map((k) => k + " " + t.teams[k].join("&")).join(", ") + "), A v B, \"" + t.line + "\", team buttons " + letters.join(" "), Object.keys(t.teams).sort().join() === "A,B,C,D,E" && Object.values(t.teams).every((m) => m.length === 2) && (t.teams.A || []).join() === "P1,P6" && t.cards.join() === "A,B" && t.line === "Next up: P3 & P8 (then P4 & P9, P5 & P10)" && letters.join("") === "ABCDE", { t, letters });
   if (OUT) await page.screenshot({ path: path.join(OUT, "team_rotation_ten.png") });
 
   // ---- four players: two teams, as before ----
   await open(board(["Kim", "Jo", "Ann", "Bob"]));
   await sheet("teams", "8ball");
   let four = await look();
+  const fourLetters = await page.evaluate(() => { const row = document.querySelector("#roster-list .team-toggle"); return row ? [...row.querySelectorAll("button")].map((x) => x.textContent) : []; });
+  const fourColumns = await page.evaluate(() => getComputedStyle(document.getElementById("scoreboard")).gridTemplateColumns.split(" ").length);
   check("four players, Teams: two teams A B A B as before (Kim & Ann - Jo & Bob), no Winner Stays line", (four.teams.A || []).join() === "Kim,Ann" && (four.teams.B || []).join() === "Jo,Bob" && four.cards.join() === "A,B" && !four.line && !four.switchShown, four);
+  check("...team buttons A B only, no C (" + fourLetters.join(" ") + "), the board in two halves (" + fourColumns + " columns)", fourLetters.join("") === "AB" && fourColumns === 2, { fourLetters, fourColumns });
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();
