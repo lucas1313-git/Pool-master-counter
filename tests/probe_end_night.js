@@ -11,6 +11,9 @@
 // - the next afternoon (a fake clock, Los Angeles), 🌙 End night and the report shared are last
 //   night's: the team games saved when the race ended as well as Kim v Jo still on the board,
 //   all four named, the team matchup "Ann & Kim 2 – 1 Bob & Jo";
+// - 📅 the report's calendar: November with Thursday picked (4 games), October 29 marked (1 game);
+//   picking it makes Copy Report that day's (Jo beats Kim, its note, none of Thursday's), the notes
+//   box that day's (and typing saves there); ↩ Latest night goes back to Thursday;
 // - no page errors.
 // Its own file server on 4271.
 // usage: node tests/probe_end_night.js [screenshot dir]
@@ -166,6 +169,8 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
     window.__shares = [];
     navigator.canShare = () => true;
     navigator.share = (data) => { window.__shares.push({ text: data.text || "" }); return Promise.resolve(); };
+    window.__copied = [];
+    try { Object.defineProperty(navigator, "clipboard", { value: { writeText: (t) => { window.__copied.push(t); return Promise.resolve(); } } }); } catch (e) {}
     const RealDate = Date, offset = fake - RealDate.now();
     class FakeDate extends RealDate {
       constructor(...a) { if (a.length === 0) super(RealDate.now() + offset); else super(...a); }
@@ -190,6 +195,11 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
         log.sessions[0].games.push({ ts, gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", result: won ? "won" : "lost", winnerNames: winners, opponentNames: won ? losers : winners, teammateNames: (won ? winners : losers).filter((n) => n !== name), isTeam: true, teamRated: true });
       });
     });
+    // a week before, Thursday 29 October: Jo beats Kim, with a note
+    const oct = { ts: "2026-10-30T02:00:00.000Z", gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", winnerNames: ["Jo"], opponentNames: ["Kim"], teammateNames: [], isTeam: false };
+    logs.Jo.sessions.unshift({ date: "2026-10-29", wins: 1, gamesWon: ["8-Ball"], opponents: ["Kim"], games: [Object.assign({ result: "won" }, oct)] });
+    logs.Kim.sessions.unshift({ date: "2026-10-29", wins: 0, gamesWon: [], opponents: ["Jo"], games: [Object.assign({ result: "lost" }, oct, { opponentNames: ["Jo"] })] });
+    localStorage.setItem("poolMasterCounter.dayNotes.v1", JSON.stringify({ "2026-10-29": "Jo on fire" }));
     localStorage.setItem("poolMasterCounter.playerStats.v1", JSON.stringify(logs));
     // Thursday 7 PM, still on the board: Kim beats Jo
     localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify({
@@ -214,6 +224,46 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
   const nightReport = (await next.evaluate(() => (window.__shares[window.__shares.length - 1] || {}).text)) || "";
   check("the next afternoon, 🌙 End night is last night: 4 games, all four named (" + night.rows.join(", ") + "), \"Ann & Kim 2 – 1 Bob & Jo\" and \"Kim 1 – 0 Jo\"", /4 games tonight/.test(night.text) && night.rows.join() === "Kim 3–1,Ann 2–1,Bob 1–2,Jo 1–3" && /Ann & Kim 2 – 1 Bob & Jo/.test(night.text) && /Kim 1 – 0 Jo/.test(night.text), night);
   check("...and the report shared is Thursday's, with the team games", /2026-11-05/.test(nightReport) && /Kim and Ann|Ann and Kim/.test(nightReport) && /Jo and Bob|Bob and Jo/.test(nightReport), nightReport.slice(0, 700));
+
+  // ---- 📅 the report's calendar ----
+  await next.click("#btn-end-night-done");
+  await sleep(300);
+  await next.click("#btn-board-menu");
+  await sleep(250);
+  await next.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.dayReport").click());
+  await sleep(250);
+  await next.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.todaysReport").click());
+  await sleep(600);
+  const cal = () => next.evaluate(() => ({
+    month: document.getElementById("report-calendar-month").textContent,
+    marked: [...document.querySelectorAll(".report-calendar-day.has-games")].map((b) => b.dataset.date + ":" + b.querySelector(".report-calendar-count").textContent),
+    picked: (document.querySelector(".report-calendar-day.is-selected") || { dataset: {} }).dataset.date || null,
+    pickedText: document.getElementById("report-calendar-picked-text").textContent,
+    notes: document.getElementById("day-notes-textarea").value,
+    latest: !document.getElementById("btn-report-calendar-latest").classList.contains("hidden")
+  }));
+  const copied = async () => { await next.evaluate(() => { window.__copied = []; document.getElementById("btn-day-report-copy").click(); }); await sleep(600); return next.evaluate(() => window.__copied.join("\n")); };
+  const nov = await cal();
+  check("📅 the report's calendar: " + nov.month + ", Thursday picked (" + nov.pickedText + ")", nov.month === "November 2026" && nov.picked === "2026-11-05" && nov.marked.join() === "2026-11-05:4" && /Thursday, November 5, 2026 · 4 games/.test(nov.pickedText) && !nov.latest, nov);
+  await next.click("#btn-report-calendar-prev");
+  await sleep(300);
+  const octCal = await cal();
+  await next.evaluate(() => document.querySelector('.report-calendar-day[data-date="2026-10-29"]').click());
+  await sleep(400);
+  const oct29 = await cal();
+  const octReport = await copied();
+  check("...◀ October: the 29th marked (1 game); picked, the notes box holds its note", octCal.month === "October 2026" && octCal.marked.join() === "2026-10-29:1" && oct29.picked === "2026-10-29" && oct29.notes === "Jo on fire" && oct29.latest, { octCal, oct29 });
+  check("...📋 Copy Report is October 29's: Jo beats Kim, its note - none of Thursday's", /2026-10-29/.test(octReport) && /Jo on fire/.test(octReport) && /Jo/.test(octReport) && !/Ann|Bob/.test(octReport), octReport.slice(0, 600));
+  await next.evaluate(() => { const t = document.getElementById("day-notes-textarea"); t.value = "Jo on fire, again"; t.dispatchEvent(new Event("input", { bubbles: true })); });
+  await sleep(800);
+  const notesSaved = await next.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.dayNotes.v1") || "{}"));
+  check("...typing in the notes box saves to October 29, nowhere else", notesSaved["2026-10-29"] === "Jo on fire, again" && Object.keys(notesSaved).length === 1, notesSaved);
+  await next.click("#btn-report-calendar-latest");
+  await sleep(300);
+  const back = await cal();
+  const backReport = await copied();
+  check("...↩ Latest night: Thursday again (" + back.month + "), its own empty notes, its report", back.picked === "2026-11-05" && back.month === "November 2026" && back.notes === "" && !back.latest && /2026-11-05/.test(backReport) && /Ann/.test(backReport), { back, backReport: backReport.slice(0, 300) });
+  if (OUT) await (await next.$("#report-calendar")).screenshot({ path: path.join(OUT, "report_calendar.png") });
   await next.close();
 
   check("no file downloaded at any point", downloads.length === 0, downloads);

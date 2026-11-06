@@ -3575,6 +3575,9 @@
   var leagueCurrentMatchPanel = document.getElementById("league-current-match-panel");
 
   var dayNotesTextarea = document.getElementById("day-notes-textarea");
+  var dayNotesDay = null; // the day the notes box holds (the report's day - see pickReportDay)
+  var dayNotesSaveTimer = null;
+  var reportCalendarGrid = document.getElementById("report-calendar-grid");
   var runRecordsSummary = document.getElementById("run-records-summary");
   var dayReportFormatSelect = document.getElementById("day-report-format-select");
   var btnDayReportCopy = document.getElementById("btn-day-report-copy");
@@ -4816,6 +4819,7 @@
     renderRotation();
     renderWizardIfOpen();
     renderWhenShown(document.getElementById("day-notes-panel"), "dayNotes", updateDayNotesSummary);
+    renderWhenShown(reportCalendarGrid, "reportCalendar", renderReportCalendar);
     updateRunRecordsSummary();
     updateDayReportRecipientsLine();
     renderWhenShown(recoverDataList, "recoverData", renderRecoverDataList);
@@ -11696,7 +11700,8 @@
     function inRange(ts) {
       if (skipTs && skipTs[ts]) return false;
       if (localDateStrFromTs(ts) === dateStr) return true;
-      return !exactDate && !!liveTsSet[ts] && ts >= cutoffTs;
+      // (today's only - a day picked on the calendar is just that day)
+      return !exactDate && dateStr === todayDateStr() && !!liveTsSet[ts] && ts >= cutoffTs;
     }
     var gamesByTs = {};
     var players = [];
@@ -12025,7 +12030,7 @@
   function buildDayReportTextTable(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 " + T("report.title").toLocaleUpperCase(reportLocale()), formatReportDateHeading(dateStr), ""];
-    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    var leaderboardChangeLines = dateStr === reportDayStr() ? computeLeaderboardChangesLines() : null; // (not on an older day's)
     if (leaderboardChangeLines) {
       lines = lines.concat(leaderboardChangeLines);
       lines.push("");
@@ -12111,7 +12116,7 @@
   function buildDayReportTextCompact(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 " + formatReportDateHeading(dateStr) + " — " + T("report.dayReport"), ""];
-    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    var leaderboardChangeLines = dateStr === reportDayStr() ? computeLeaderboardChangesLines() : null; // (not on an older day's)
     if (leaderboardChangeLines) {
       lines = lines.concat(leaderboardChangeLines);
       lines.push("");
@@ -12171,7 +12176,7 @@
       longDate = formatReportDateHeading(dateStr);
     }
     var lines = ["🎱 " + T("report.title"), longDate, "══════════════════════════", ""];
-    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    var leaderboardChangeLines = dateStr === reportDayStr() ? computeLeaderboardChangesLines() : null; // (not on an older day's)
     if (leaderboardChangeLines) {
       lines = lines.concat(leaderboardChangeLines);
       lines.push("");
@@ -12241,7 +12246,7 @@
   function buildDayReportTextPlain(dateStr) {
     var data = computeDayReportData(dateStr);
     var lines = ["🎱 " + T("report.title").toLocaleUpperCase(reportLocale()), formatReportDateHeading(dateStr), ""];
-    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    var leaderboardChangeLines = dateStr === reportDayStr() ? computeLeaderboardChangesLines() : null; // (not on an older day's)
     if (leaderboardChangeLines) {
       lines = lines.concat(leaderboardChangeLines);
       lines.push("");
@@ -12323,7 +12328,7 @@
     dateHeading.textContent = formatReportDateHeading(dateStr);
     dayReportPrintView.appendChild(dateHeading);
 
-    var leaderboardChangeLines = computeLeaderboardChangesLines();
+    var leaderboardChangeLines = dateStr === reportDayStr() ? computeLeaderboardChangesLines() : null; // (not on an older day's)
     if (leaderboardChangeLines) {
       dayReportPrintView.appendChild(printReportSectionHeading(leaderboardChangeLines[0]));
       var leaderboardChangeList = document.createElement("ul");
@@ -12400,7 +12405,7 @@
       }
     }
 
-    var notes = dayNotesTextarea.value;
+    var notes = dateStr === dayNotesDay ? dayNotesTextarea.value : getDayNotes(dateStr);
     if (notes) {
       dayReportPrintView.appendChild(printReportSectionHeading(T("report.notes")));
       var notesP = document.createElement("p");
@@ -12545,7 +12550,7 @@
       players: players,
       highlights: highlights,
       games: games,
-      notes: (dateStr !== todayDateStr() ? getDayNotes(dateStr) : dayNotesTextarea.value) || null,
+      notes: (dateStr === dayNotesDay ? dayNotesTextarea.value : getDayNotes(dateStr)) || null,
       // every game's own time, so a later rebuild of a missed day (see
       // backfillReportArchive) can tell which games this report already has
       gameTs: data.games.map(function (g) { return g.ts; })
@@ -13190,7 +13195,7 @@
   // view it first; from there the browser's own Save/Print/Share affords
   // everything "share" needs, on a real self-contained HTML document.
   function openDayReportColorful() {
-    openDayReportColorfulFromData(computeReportImageData(reportDayStr()));
+    openDayReportColorfulFromData(computeReportImageData(reportDayChosen()));
   }
 
   // Shared by the live "today" button and the Report Archive's View
@@ -13410,6 +13415,113 @@
     parts.push(data.players.length + " player" + (data.players.length === 1 ? "" : "s"));
     parts.push(notes ? notes.length + " character note" : "no notes yet");
     setPanelSummary("day-notes-panel", parts.join(" · "));
+  }
+
+  // ---- 📅 The report's calendar ----
+  // Every day with games is marked with how many; tapping one makes the
+  // panel's report - Copy, Email, Text, Share, CSV, Print, the picture
+  // card - that day's, its notes in the box above the buttons. Nothing
+  // picked: the latest night (reportDayStr).
+  var pickedReportDay = null;
+  var reportCalendarMonth = null; // ("YYYY-MM" on show)
+  function reportDayChosen() {
+    return pickedReportDay || reportDayStr();
+  }
+  // How many games each pool day has, saved or still on the board
+  var reportGameDaysCache = { key: null, days: {} };
+  function reportGameDays() {
+    var gh = state.gameHistory || [];
+    var key = dataVersion + "|" + gh.length + "|" + (gh[0] && gh[0].ts);
+    if (reportGameDaysCache.key === key) return reportGameDaysCache.days;
+    var seen = {}, days = {};
+    getAllKnownPlayerNames().forEach(function (name) {
+      allGamesForPlayerName(name).forEach(function (g) {
+        if (!g.ts || seen[g.ts]) return;
+        seen[g.ts] = true;
+        var d = localDateStrFromTs(g.ts);
+        days[d] = (days[d] || 0) + 1;
+      });
+    });
+    reportGameDaysCache = { key: key, days: days };
+    return days;
+  }
+  function reportCalendarLongDate(dateStr) {
+    try {
+      return new Date(dateStr + "T12:00:00").toLocaleDateString(reportLocale(), { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    } catch (e) {
+      return dateStr;
+    }
+  }
+  function renderReportCalendar() {
+    var chosen = reportDayChosen(), today = todayDateStr(), locale = reportLocale();
+    if (!reportCalendarMonth) reportCalendarMonth = chosen.slice(0, 7);
+    var y = +reportCalendarMonth.slice(0, 4), m = +reportCalendarMonth.slice(5, 7) - 1;
+    var first = new Date(y, m, 1);
+    document.getElementById("report-calendar-month").textContent = first.toLocaleDateString(locale, { month: "long", year: "numeric" });
+    document.getElementById("btn-report-calendar-next").disabled = reportCalendarMonth >= today.slice(0, 7);
+    var days = reportGameDays();
+    reportCalendarGrid.innerHTML = "";
+    // the weekdays' letters, Sunday first (1 November 2026 was a Sunday)
+    for (var w = 0; w < 7; w++) {
+      var head = document.createElement("span");
+      head.className = "report-calendar-weekday";
+      head.setAttribute("aria-hidden", "true");
+      head.textContent = new Date(2026, 10, 1 + w).toLocaleDateString(locale, { weekday: "narrow" });
+      reportCalendarGrid.appendChild(head);
+    }
+    for (var blank = 0; blank < first.getDay(); blank++) reportCalendarGrid.appendChild(document.createElement("span"));
+    var count = new Date(y, m + 1, 0).getDate();
+    for (var d = 1; d <= count; d++) {
+      var dateStr = reportCalendarMonth + "-" + (d < 10 ? "0" + d : d);
+      var games = days[dateStr] || 0;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "report-calendar-day" + (games ? " has-games" : "") + (dateStr === chosen ? " is-selected" : "") + (dateStr === today ? " is-today" : "");
+      btn.dataset.date = dateStr;
+      // (a day with no games has no report - only today, for its notes)
+      btn.disabled = dateStr > today || (!games && dateStr !== today && dateStr !== chosen);
+      btn.setAttribute("aria-pressed", dateStr === chosen ? "true" : "false");
+      btn.setAttribute("aria-label", reportCalendarLongDate(dateStr) + (games ? " · " + countPhrase("games", games) : ""));
+      var num = document.createElement("span");
+      num.className = "report-calendar-num";
+      num.textContent = d;
+      btn.appendChild(num);
+      if (games) {
+        var dot = document.createElement("span");
+        dot.className = "report-calendar-count";
+        dot.textContent = games;
+        btn.appendChild(dot);
+      }
+      reportCalendarGrid.appendChild(btn);
+    }
+    var chosenGames = days[chosen] || 0;
+    document.getElementById("report-calendar-picked-text").textContent = T("dayNotes.reportFor", { date: reportCalendarLongDate(chosen) }) + (chosenGames ? " · " + countPhrase("games", chosenGames) : "");
+    document.getElementById("btn-report-calendar-latest").classList.toggle("hidden", !pickedReportDay);
+  }
+  function moveReportCalendar(step) {
+    var y = +reportCalendarMonth.slice(0, 4), m = +reportCalendarMonth.slice(5, 7) - 1 + step;
+    var d = new Date(y, m, 1);
+    reportCalendarMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    renderReportCalendar();
+  }
+  function pickReportDay(dateStr) {
+    saveDayNotesNow();
+    pickedReportDay = dateStr === reportDayStr() ? null : dateStr;
+    reportCalendarMonth = reportDayChosen().slice(0, 7);
+    showDayNotesFor(reportDayChosen());
+    renderReportCalendar();
+  }
+  // The notes box holds the report's day's notes, saved to that day
+  function showDayNotesFor(dateStr) {
+    dayNotesDay = dateStr;
+    dayNotesTextarea.value = getDayNotes(dateStr);
+  }
+  function saveDayNotesNow() {
+    if (!dayNotesSaveTimer) return;
+    clearTimeout(dayNotesSaveTimer);
+    dayNotesSaveTimer = null;
+    setDayNotes(dayNotesDay || todayDateStr(), dayNotesTextarea.value);
+    updateDayNotesSummary();
   }
 
   // Live "🔥 best run today / 🏆 all-time record" line in the Publish
@@ -21710,7 +21822,7 @@
   // a file handed to whoever's on the other end of Mail/Messages/AirDrop.
   function collectDayReportAttachmentsNow() {
     var files = [];
-    var day = reportDayStr();
+    var day = reportDayChosen();
     if (dayReportAttachBackupCheckbox.checked) {
       files.push(new File([JSON.stringify(buildShareableBackupPayload(), null, 2)], defaultBackupFilename(), { type: "application/json" }));
     }
@@ -21822,7 +21934,7 @@
   }
 
   function shareReport() {
-    var text = buildDayReportTextForSharing(reportDayStr());
+    var text = buildDayReportTextForSharing(reportDayChosen());
     commitLeaderboardSnapshot();
     if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
       shareReportWithAttachments(text, function () {
@@ -41871,14 +41983,17 @@
   wirePlayerPageDetailChip("player-page-current-chip", "player-page-current-detail");
   wirePlayerPageDetailChip("player-page-history-chip", "player-page-history-detail");
 
-  var dayNotesSaveTimer = null;
   dayNotesTextarea.addEventListener("input", function () {
     clearTimeout(dayNotesSaveTimer);
-    dayNotesSaveTimer = setTimeout(function () {
-      setDayNotes(todayDateStr(), dayNotesTextarea.value);
-      updateDayNotesSummary();
-    }, 500);
+    dayNotesSaveTimer = setTimeout(saveDayNotesNow, 500);
   });
+  reportCalendarGrid.addEventListener("click", function (e) {
+    var day = e.target.closest(".report-calendar-day");
+    if (day && !day.disabled) pickReportDay(day.dataset.date);
+  });
+  document.getElementById("btn-report-calendar-prev").addEventListener("click", function () { moveReportCalendar(-1); });
+  document.getElementById("btn-report-calendar-next").addEventListener("click", function () { moveReportCalendar(1); });
+  document.getElementById("btn-report-calendar-latest").addEventListener("click", function () { pickReportDay(reportDayStr()); });
 
   dayReportFormatSelect.value = dayReportFormat;
   dayReportFormatSelect.addEventListener("change", function () {
@@ -41887,12 +42002,12 @@
   });
 
   btnDayReportCopy.addEventListener("click", function () {
-    copyReportToClipboard(buildDayReportText(reportDayStr()));
+    copyReportToClipboard(buildDayReportText(reportDayChosen()));
     commitLeaderboardSnapshot();
   });
 
   btnDayReportEmail.addEventListener("click", function () {
-    var text = buildDayReportTextForSharing(reportDayStr());
+    var text = buildDayReportTextForSharing(reportDayChosen());
     commitLeaderboardSnapshot();
     function openEmailCompose() {
       var to = reportOptedInContacts("email")
@@ -41914,7 +42029,7 @@
   });
 
   btnDayReportSms.addEventListener("click", function () {
-    var text = buildDayReportTextForSharing(reportDayStr());
+    var text = buildDayReportTextForSharing(reportDayChosen());
     commitLeaderboardSnapshot();
     function openSmsCompose() {
       var to = reportOptedInContacts("sms")
@@ -41955,13 +42070,13 @@
   btnDayReportShareBackup.addEventListener("click", shareReport);
 
   btnDayReportCsv.addEventListener("click", function () {
-    var day = reportDayStr();
+    var day = reportDayChosen();
     var filename = "pool-master-counter-day-report-" + day + ".csv";
     downloadTextFile(filename, buildDayReportCsv(day), "text/csv;charset=utf-8");
   });
 
   btnDayReportPrint.addEventListener("click", function () {
-    renderDayReportPrintView(reportDayStr());
+    renderDayReportPrintView(reportDayChosen());
     commitLeaderboardSnapshot();
     dayReportPrintView.classList.remove("hidden");
     window.print();
@@ -42571,7 +42686,7 @@
   closeRaceLeftOpen();
   updateCurrentGameSummary();
 
-  dayNotesTextarea.value = getDayNotes(todayDateStr());
+  showDayNotesFor(reportDayChosen());
   updateDayNotesSummary();
   updateDayReportRecipientsLine();
 

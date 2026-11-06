@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261106a">
+<link rel="stylesheet" href="css/style.css?v=20261106b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -752,6 +752,18 @@
     <div class="panel-body" id="day-notes-panel-body">
       <p class="player-stats-note" data-i18n="dayNotes.note">Jot down anything worth remembering about today's live play — who's on fire, funny moments, anything at all. It's saved automatically and folded into the day report below.</p>
       <p class="player-stats-note run-records-summary hidden" id="run-records-summary"></p>
+      <div class="report-calendar" id="report-calendar">
+        <div class="report-calendar-head">
+          <button type="button" class="btn btn-ghost report-calendar-nav" id="btn-report-calendar-prev" data-i18n-aria-label="dayNotes.calendarPrev" aria-label="Previous month">◀</button>
+          <span class="report-calendar-month" id="report-calendar-month"></span>
+          <button type="button" class="btn btn-ghost report-calendar-nav" id="btn-report-calendar-next" data-i18n-aria-label="dayNotes.calendarNext" aria-label="Next month">▶</button>
+        </div>
+        <div class="report-calendar-grid" id="report-calendar-grid"></div>
+        <div class="report-calendar-picked">
+          <span id="report-calendar-picked-text"></span>
+          <button type="button" class="btn btn-ghost hidden" id="btn-report-calendar-latest" data-i18n="dayNotes.calendarLatest">↩ Latest night</button>
+        </div>
+      </div>
       <textarea id="day-notes-textarea" class="day-notes-textarea" data-i18n-placeholder="dayNotes.placeholder" placeholder="Notes about today's play..." rows="4"></textarea>
       <div class="row">
         <label for="day-report-format-select" data-i18n="dayNotes.reportFormat">Report format</label>
@@ -3182,27 +3194,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261106a"></script>
-<script src="js/big-store.js?v=20261106a"></script>
-<script src="js/mp4-clip.js?v=20261106a"></script>
-<script src="js/recording-consent.js?v=20261106a"></script>
-<script src="js/local-recorder.js?v=20261106a"></script>
-<script src="js/lib/pool-day.js?v=20261106a"></script>
-<script src="js/lib/race-math.js?v=20261106a"></script>
-<script src="js/lib/handicaps.js?v=20261106a"></script>
-<script src="js/lib/brackets.js?v=20261106a"></script>
-<script src="js/lib/league.js?v=20261106a"></script>
-<script src="js/lib/events.js?v=20261106a"></script>
-<script src="js/lib/chips.js?v=20261106a"></script>
-<script src="js/lib/highlights.js?v=20261106a"></script>
-<script src="js/lib/payouts.js?v=20261106a"></script>
-<script src="js/app.js?v=20261106a"></script>
-<script src="js/camera-client.js?v=20261106a"></script>
-<script src="js/voice.js?v=20261106a"></script>
+<script src="js/pairing.js?v=20261106b"></script>
+<script src="js/big-store.js?v=20261106b"></script>
+<script src="js/mp4-clip.js?v=20261106b"></script>
+<script src="js/recording-consent.js?v=20261106b"></script>
+<script src="js/local-recorder.js?v=20261106b"></script>
+<script src="js/lib/pool-day.js?v=20261106b"></script>
+<script src="js/lib/race-math.js?v=20261106b"></script>
+<script src="js/lib/handicaps.js?v=20261106b"></script>
+<script src="js/lib/brackets.js?v=20261106b"></script>
+<script src="js/lib/league.js?v=20261106b"></script>
+<script src="js/lib/events.js?v=20261106b"></script>
+<script src="js/lib/chips.js?v=20261106b"></script>
+<script src="js/lib/highlights.js?v=20261106b"></script>
+<script src="js/lib/payouts.js?v=20261106b"></script>
+<script src="js/app.js?v=20261106b"></script>
+<script src="js/camera-client.js?v=20261106b"></script>
+<script src="js/voice.js?v=20261106b"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261106a").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261106b").catch(function () {}); });
   }
 </script>
 </body>
