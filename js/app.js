@@ -9052,18 +9052,16 @@
     if (newcomer) askAboutNewcomer(p);
   }
 
-  // the team buttons beside each player: the letters in use (at least A B),
-  // and one more only when there are enough players for another pair - four
-  // players in two teams get A B, not an empty C
+  // the team buttons beside each player: only the letters in use (at least
+  // A B) - two teams get A B and never an empty C, even six players in two
+  // threes. More teams come from the 🎱 Game sheet's split into pairs (six
+  // players: A B C, see splitPlayingIntoTeams).
   function teamLettersShown() {
-    var last = -1, people = 0;
+    var last = -1;
     state.players.forEach(function (p) {
-      if (!(p.playing || (p.teamId && effectiveTeamQueue().indexOf(p.teamId) !== -1))) return;
-      people++;
-      if (p.teamId) last = Math.max(last, TEAM_IDS.indexOf(p.teamId));
+      if (p.teamId && (p.playing || effectiveTeamQueue().indexOf(p.teamId) !== -1)) last = Math.max(last, TEAM_IDS.indexOf(p.teamId));
     });
-    var inUse = Math.max(2, last + 1);
-    return Math.min(TEAM_IDS.length, people >= 2 * (inUse + 1) ? inUse + 1 : inUse);
+    return Math.min(TEAM_IDS.length, Math.max(2, last + 1));
   }
 
   function setPlayerTeam(id, teamId) {

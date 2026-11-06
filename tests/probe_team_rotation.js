@@ -147,6 +147,17 @@ function board(names, extra) {
   check("four players, Teams: two teams A B A B as before (Kim & Ann - Jo & Bob), no Winner Stays line", (four.teams.A || []).join() === "Kim,Ann" && (four.teams.B || []).join() === "Jo,Bob" && four.cards.join() === "A,B" && !four.line && !four.switchShown, four);
   check("...team buttons A B only, no C (" + fourLetters.join(" ") + "), the board in two halves (" + fourColumns + " columns)", fourLetters.join("") === "AB" && fourColumns === 2, { fourLetters, fourColumns });
 
+  // ---- six players in two threes: still only A B ----
+  const threes = JSON.parse(board(["Kim", "Jo", "Ann", "Bob", "Cat", "Dan"]));
+  threes.currentGame.mode = "teams";
+  threes.players.forEach((p, i) => { p.teamId = i % 2 ? "B" : "A"; });
+  await open(JSON.stringify(threes));
+  const six = await look();
+  const sixLetters = await page.evaluate(() => [...document.querySelectorAll("#roster-list .team-toggle")].map((row) => [...row.querySelectorAll("button")].map((x) => x.textContent).join("")));
+  const sixColumns = await page.evaluate(() => getComputedStyle(document.getElementById("scoreboard")).gridTemplateColumns.split(" ").length);
+  check("six players in two teams of three (A " + (six.teams.A || []).join(" & ") + ", B " + (six.teams.B || []).join(" & ") + "): team buttons " + sixLetters.join(" ") + " - no C, the board in two halves (" + sixColumns + " columns)", six.cards.join() === "A,B" && sixLetters.length === 6 && sixLetters.every((l) => l === "AB") && sixColumns === 2, { six, sixLetters, sixColumns });
+  if (OUT) await page.screenshot({ path: path.join(OUT, "team_two_threes.png") });
+
   check("no page errors", errors.length === 0, errors);
   await browser.close();
   site.close();
