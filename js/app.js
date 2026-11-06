@@ -7988,7 +7988,7 @@
   var endNightOverlay = document.getElementById("end-night-overlay");
   function openEndNight() {
     closeBoardMenu();
-    var day = todayDateStr();
+    var day = reportDayStr();
     var data = computeDayReportData(day);
     if (data.players.length) computeReportImageData(day);
     var body = document.getElementById("end-night-body");
@@ -8040,7 +8040,7 @@
   }
   // one Share: the report's text, and the picture card if ticked
   function shareEndNight() {
-    var day = todayDateStr();
+    var day = reportDayStr();
     var text = buildDayReportTextForSharing(day);
     commitLeaderboardSnapshot();
     var files = [];
@@ -9469,8 +9469,10 @@
       winnerIds: winnerIds,
       isTeam: isTeam,
       unit: state.currentGame.unit,
-      // (a team game rated the team way - see applyRotatingTeamsRatingResult)
+      // (a team game rated the team way - see applyTeamGameRatingResult)
       teamRated: !!isTeam,
+      // (🔁 Rotating Teams on: each player's own rating speed, not shared)
+      rotatingTeams: !!(isTeam && state.rotatingTeamsEnabled),
       teamId: isTeam ? key : null,
       teamComboKey: teamComboKeyValue,
       opponentNames: opponentNames,
@@ -9524,9 +9526,9 @@
       }
       saveRatingsToStorage(PLAYER_RATINGS);
     } else if (!noStatsMode && isTeam) {
-      // Team games are rated too: each side by its average rating (see
-      // applyRotatingTeamsRatingResult).
-      applyRotatingTeamsRatingResult(winnerNames, opponentNames, ts, currentGameRatingWeight());
+      // Team games are rated too: the team wins and loses together (see
+      // applyTeamGameRatingResult).
+      applyTeamGameRatingResult(state.rotatingTeamsEnabled, winnerNames, opponentNames, ts, currentGameRatingWeight());
       saveRatingsToStorage(PLAYER_RATINGS);
     }
     state.gamesPlayedCount += 1;
@@ -11667,6 +11669,19 @@
     }
     return computeDayReportDataNow(dateStr, exactDate, skipTs);
   }
+  // The day the report is about: today's pool day - or, with nothing played
+  // yet today, last night's while it's less than 24 hours old. A night
+  // published the next afternoon is that whole night - its games saved when
+  // a race ended too - not a "today" of just the games still on the board.
+  function reportDayStr() {
+    var today = todayDateStr();
+    if (computeDayReportData(today, true).players.length) return today;
+    var dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    var lastNight = localDateStrFromTs(dayAgo);
+    if (lastNight === today) return today;
+    var cutoff = new Date(dayAgo).toISOString();
+    return computeDayReportData(lastNight, true).games.some(function (g) { return g.ts >= cutoff; }) ? lastNight : today;
+  }
   function computeDayReportDataNow(dateStr, exactDate, skipTs) {
     var names = getAllKnownPlayerNames();
     var cutoffTs = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -11704,7 +11719,7 @@
         wins: wins,
         losses: games.length - wins,
         rating: getPlayerRating(name),
-        ratingDelta: exactDate ? computeRatingDeltaForDate(name, dateStr) : computeRatingPeriodDelta(name, "today")
+        ratingDelta: exactDate || dateStr !== todayDateStr() ? computeRatingDeltaForDate(name, dateStr) : computeRatingPeriodDelta(name, "today")
       });
     });
     players.sort(function (a, b) {
@@ -11737,12 +11752,17 @@
     // Only the live "today" record is tracked (see checkRunRecords) -
     // there's no historical per-day archive, so a report for a past
     // date has nothing to show here.
-    var bestRunToday = dateStr === todayDateStr() ? getTodaysBestRun() : null;
-    // each one-on-one pairing's tally ("Kim 3 – 2 Jo"), the more games first
+    // (last night's, for a night published the next day - see reportDayStr)
+    var dailyBest = RUN_RECORDS.dailyBest;
+    var bestRunToday = dateStr === todayDateStr() ? getTodaysBestRun() : dailyBest && localDateStrFromTs(dailyBest.ts) === dateStr ? dailyBest : null;
+    // each pairing's tally, one-on-one or team against team ("Kim 3 – 2 Jo",
+    // "Kim & Ann 7 – 5 Jo & Bob"), the more games first - a free-for-all
+    // has no one pairing
     var pairs = {};
     games.forEach(function (g) {
-      if (g.isTeam || (g.winnerNames || []).length !== 1 || (g.opponentNames || []).length !== 1) return;
-      var a = g.winnerNames[0], b = g.opponentNames[0], key = [a, b].sort().join("|");
+      var winners = (g.winnerNames || []).slice().sort(), losers = (g.opponentNames || []).slice().sort();
+      if (!winners.length || !losers.length || (!g.isTeam && (winners.length !== 1 || losers.length !== 1))) return;
+      var a = winners.join(" & "), b = losers.join(" & "), key = [a, b].sort().join("|");
       if (!pairs[key]) pairs[key] = { names: [a, b].sort(), wins: {} };
       pairs[key].wins[a] = (pairs[key].wins[a] || 0) + 1;
     });
@@ -11838,10 +11858,11 @@
   // game credits a win against every other active player as "opponents",
   // so a 5+ player free-for-all can otherwise blow a single table cell
   // (and the whole column) out to 60+ characters. Table cells stay
-  // readable; prose sentences (Detailed) can afford the full list.
-  function joinNamesCapped(names, cap) {
+  // readable; prose sentences (Detailed) can afford the full list. A
+  // team is always named in full - everyone on it played.
+  function joinNamesCapped(names, cap, isTeam) {
     names = names || [];
-    if (names.length <= cap) return joinNamesForReport(names);
+    if (isTeam || names.length <= cap) return joinNamesForReport(names);
     return T("report.andMore", { names: names.slice(0, cap).join(", "), n: names.length - cap });
   }
 
@@ -11866,7 +11887,7 @@
       var key =
         (g.winnerNames || []).slice().sort().join(",") + "|" + (g.opponentNames || []).slice().sort().join(",") + "|" + g.gameLabel;
       if (!byKey[key]) {
-        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, gameLabel: g.gameLabel, ts: g.ts, count: 0, skunkCount: 0, scores: [] };
+        byKey[key] = { winnerNames: g.winnerNames, opponentNames: g.opponentNames, isTeam: !!g.isTeam, gameLabel: g.gameLabel, ts: g.ts, count: 0, skunkCount: 0, scores: [] };
         order.push(key);
       }
       byKey[key].count += 1;
@@ -11979,8 +12000,8 @@
   // of three separate columns - keeps the table's width bounded no
   // matter how many players were on either side of the game.
   function gameLogTableRow(group) {
-    var winners = joinNamesCapped(group.winnerNames || [], 2);
-    var losers = joinNamesCapped(group.opponentNames || [], 2);
+    var winners = joinNamesCapped(group.winnerNames || [], 2, group.isTeam);
+    var losers = joinNamesCapped(group.opponentNames || [], 2, group.isTeam);
     var label = group.gameLabel + (group.count > 1 ? " ×" + group.count : "") + formatSkunkSuffix(group.skunkCount);
     return [formatReportGameTime(group.ts), formatReportResult(winners, losers, group.scores), label];
   }
@@ -12266,8 +12287,8 @@
         lines.push("");
         lines.push(T("report.gameLog"));
         groupReportGames(data.games).forEach(function (g) {
-          var winners = joinNamesCapped(g.winnerNames || [], 2);
-          var losers = joinNamesCapped(g.opponentNames || [], 2);
+          var winners = joinNamesCapped(g.winnerNames || [], 2, g.isTeam);
+          var losers = joinNamesCapped(g.opponentNames || [], 2, g.isTeam);
           var label = g.gameLabel + (g.count > 1 ? " ×" + g.count : "") + formatSkunkSuffix(g.skunkCount);
           lines.push(formatReportGameTime(g.ts) + " · " + formatReportResult(winners, losers, g.scores) + " · " + label);
         });
@@ -12524,7 +12545,7 @@
       players: players,
       highlights: highlights,
       games: games,
-      notes: (exactDate && dateStr !== todayDateStr() ? getDayNotes(dateStr) : dayNotesTextarea.value) || null,
+      notes: (dateStr !== todayDateStr() ? getDayNotes(dateStr) : dayNotesTextarea.value) || null,
       // every game's own time, so a later rebuild of a missed day (see
       // backfillReportArchive) can tell which games this report already has
       gameTs: data.games.map(function (g) { return g.ts; })
@@ -13169,7 +13190,7 @@
   // view it first; from there the browser's own Save/Print/Share affords
   // everything "share" needs, on a real self-contained HTML document.
   function openDayReportColorful() {
-    openDayReportColorfulFromData(computeReportImageData(todayDateStr()));
+    openDayReportColorfulFromData(computeReportImageData(reportDayStr()));
   }
 
   // Shared by the live "today" button and the Report Archive's View
@@ -19024,7 +19045,7 @@
     getAllKnownPlayerNames().forEach(function (name) {
       allGamesForPlayerName(name).forEach(function (g) {
         if (g.result !== "won" || !g.ts || byTs[g.ts]) return;
-        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, weight: ratingWeightFor(g.gameType, g.target, g.unit), winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, rotatingTeams: !!g.rotatingTeams, weight: ratingWeightFor(g.gameType, g.target, g.unit), winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
       });
     });
     (LEAGUES || []).forEach(function (league) {
@@ -19056,7 +19077,7 @@
         return;
       }
       if (!g.winnerNames.length || !g.loserNames.length) return;
-      if (g.isTeam) applyRotatingTeamsRatingResult(g.winnerNames, g.loserNames, g.ts, g.weight);
+      if (g.isTeam) applyTeamGameRatingResult(g.rotatingTeams, g.winnerNames, g.loserNames, g.ts, g.weight);
       else if (g.winnerNames.length > 1 || g.loserNames.length > 1) applyMultiWayRatingResult(g.winnerNames, g.loserNames, g.ts, g.weight);
       else applyPairwiseRatingResult(g.winnerNames[0], g.loserNames[0], g.ts, g.weight);
     });
@@ -19366,8 +19387,11 @@
   // still picks their own K-factor, same as every other rating path,
   // so a provisional teammate still moves faster than an established
   // one even off the identical expected-score term.
-  // Now every team game (Teams mode, a doubles entrant in a tournament),
-  // not only Rotating Teams.
+  // Rotating Teams only (a game recorded with rotatingTeams) - every other
+  // team game is shared alike, see applyTeamRatingResult. The losers lose
+  // what the winners' side was expected to miss (1 - expectedWinner), the
+  // same stake the winners win - they used to lose expectedWinner, so a
+  // favourite's win took more from the losers than it gave.
   function applyRotatingTeamsRatingResult(winnerNames, loserNames, ts, weight) {
     var winnerAvg = averageRating(winnerNames);
     var loserAvg = averageRating(loserNames);
@@ -19383,8 +19407,35 @@
       bumpPlayerRating(n, Math.round(winnerK[i] * (1 - expectedWinner)), ts);
     });
     loserNames.forEach(function (n, i) {
-      bumpPlayerRating(n, -Math.round(loserK[i] * expectedWinner), ts);
+      bumpPlayerRating(n, -Math.round(loserK[i] * (1 - expectedWinner)), ts);
     });
+  }
+
+  // A team game (Teams mode, a doubles entrant in a tournament): the team
+  // wins and loses together. Each side is rated by its average, and the
+  // whole game moves at one speed (every player's own speed averaged, like
+  // pairRatingK), so each winner gains exactly what each loser gives up -
+  // whoever potted the winning ball. Rotating Teams keeps each player's own
+  // speed (applyRotatingTeamsRatingResult).
+  function applyTeamRatingResult(winnerNames, loserNames, ts, weight) {
+    var everyone = winnerNames.concat(loserNames);
+    var k = everyone.reduce(function (sum, n) {
+      var entry = getPlayerRatingEntry(n);
+      return sum + ratingKFor(entry ? entry.gamesPlayed : 0);
+    }, 0) / everyone.length;
+    var expectedWinner = eloExpectedScore(averageRating(winnerNames), averageRating(loserNames));
+    var delta = Math.round(k * (weight || 1) * (1 - expectedWinner));
+    winnerNames.forEach(function (n) {
+      bumpPlayerRating(n, delta, ts);
+    });
+    loserNames.forEach(function (n) {
+      bumpPlayerRating(n, -delta, ts);
+    });
+  }
+  // The team way a game is rated: Rotating Teams' own speeds, or shared
+  function applyTeamGameRatingResult(rotating, winnerNames, loserNames, ts, weight) {
+    if (rotating) applyRotatingTeamsRatingResult(winnerNames, loserNames, ts, weight);
+    else applyTeamRatingResult(winnerNames, loserNames, ts, weight);
   }
 
   // Live "+X/-Y" preview of applyRotatingTeamsRatingResult above, same
@@ -19452,6 +19503,33 @@
     });
   }
 
+  // 2026-11-06: a team wins and loses together (applyTeamRatingResult) -
+  // every device with team games recalculates its ratings once, from all
+  // its games, under that rule. The ratings from before stay in Recover
+  // Data (an "allRatings" snapshot), like the Recompute button's.
+  var TEAM_RATING_RULES_KEY = "poolMasterCounter.teamRatingRules.v1";
+  function recomputeRatingsForTeamRulesOnce() {
+    try {
+      if (localStorage.getItem(TEAM_RATING_RULES_KEY) === "1") return;
+    } catch (e) {
+      return;
+    }
+    if (noStatsMode) return; // (practice on - next time)
+    var hasTeamGames = getAllKnownPlayerNames().some(function (name) {
+      return allGamesForPlayerName(name).some(function (g) { return g.isTeam; });
+    });
+    if (hasTeamGames) {
+      saveResetSnapshot("allRatings", T("resetSnapshot.teamRatingRulesLabel"), {
+        ratings: JSON.parse(JSON.stringify(PLAYER_RATINGS))
+      });
+      recomputeAllRatingsFromGameHistory(true);
+      showToast(T("toast.teamRatingRulesRecomputed"));
+    }
+    try {
+      localStorage.setItem(TEAM_RATING_RULES_KEY, "1");
+    } catch (e) {}
+  }
+
   function backfillMissingRatingsFromHistory() {
     var recompute = false;
     try {
@@ -19474,7 +19552,7 @@
     getAllKnownPlayerNames().forEach(function (name) {
       allGamesForPlayerName(name).forEach(function (g) {
         if (g.result !== "won" || !g.ts || alreadyRated[g.ts] || byTs[g.ts]) return;
-        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, teamRated: !!(g.teamRated || g.rotatingTeams), weight: ratingWeightFor(g.gameType, g.target, g.unit), winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
+        byTs[g.ts] = { ts: g.ts, isTeam: !!g.isTeam, teamRated: !!(g.teamRated || g.rotatingTeams), rotatingTeams: !!g.rotatingTeams, weight: ratingWeightFor(g.gameType, g.target, g.unit), winnerNames: g.winnerNames || [], loserNames: g.opponentNames || [] };
       });
     });
 
@@ -19492,7 +19570,7 @@
       // (an old team game from before team games were rated stays unrated
       // here - a full recompute rates it under today's rules)
       if (g.isTeam) {
-        if (g.teamRated) applyRotatingTeamsRatingResult(g.winnerNames, g.loserNames, g.ts, g.weight);
+        if (g.teamRated) applyTeamGameRatingResult(g.rotatingTeams, g.winnerNames, g.loserNames, g.ts, g.weight);
         return;
       }
       if (g.winnerNames.length > 1 || g.loserNames.length > 1) {
@@ -21632,13 +21710,14 @@
   // a file handed to whoever's on the other end of Mail/Messages/AirDrop.
   function collectDayReportAttachmentsNow() {
     var files = [];
+    var day = reportDayStr();
     if (dayReportAttachBackupCheckbox.checked) {
       files.push(new File([JSON.stringify(buildShareableBackupPayload(), null, 2)], defaultBackupFilename(), { type: "application/json" }));
     }
     if (dayReportAttachColorfulCheckbox.checked) {
       try {
-        var blob = dataUrlToBlob(buildReportCanvasFromData(computeReportImageData(todayDateStr())).toDataURL("image/png"));
-        if (blob) files.push(new File([blob], "pool-master-counter-report-" + todayDateStr() + ".png", { type: "image/png" }));
+        var blob = dataUrlToBlob(buildReportCanvasFromData(computeReportImageData(day)).toDataURL("image/png"));
+        if (blob) files.push(new File([blob], "pool-master-counter-report-" + day + ".png", { type: "image/png" }));
       } catch (e) {
         console.warn("Could not build colorful report image.", e);
       }
@@ -21743,7 +21822,7 @@
   }
 
   function shareReport() {
-    var text = buildDayReportTextForSharing(todayDateStr());
+    var text = buildDayReportTextForSharing(reportDayStr());
     commitLeaderboardSnapshot();
     if (dayReportAttachBackupCheckbox.checked || dayReportAttachColorfulCheckbox.checked) {
       shareReportWithAttachments(text, function () {
@@ -25133,6 +25212,7 @@
         isTeam: entry.isTeam,
         unit: entry.unit,
         teamRated: !!(entry.teamRated || entry.rotatingTeams),
+        rotatingTeams: !!entry.rotatingTeams,
         scores: entry.scores || null,
         raceTally: entry.raceTally || null,
         mvpName: entry.mvpName,
@@ -35267,7 +35347,7 @@
     });
     trimGameHistory();
     var rackWeight = ratingWeightFor(TOURNAMENT.gameType, TOURNAMENT.target);
-    if (isTeam) applyRotatingTeamsRatingResult(winnerMembers, loserMembers, ts, rackWeight);
+    if (isTeam) applyTeamRatingResult(winnerMembers, loserMembers, ts, rackWeight);
     else applyPairwiseRatingResult(winnerMembers[0], loserMembers[0], ts, rackWeight);
     saveRatingsToStorage(PLAYER_RATINGS);
     saveState();
@@ -37943,6 +38023,7 @@
   // off. See the comment block by the same-device camera overlay code.
   var sameDeviceCameraRunning = false;
   backfillMissingRatingsFromHistory();
+  recomputeRatingsForTeamRulesOnce();
   backfillMissingAddedDates();
   fixCorruptedRunRecords();
   resumeSameDeviceCameraIfNeeded();
@@ -41806,12 +41887,12 @@
   });
 
   btnDayReportCopy.addEventListener("click", function () {
-    copyReportToClipboard(buildDayReportText(todayDateStr()));
+    copyReportToClipboard(buildDayReportText(reportDayStr()));
     commitLeaderboardSnapshot();
   });
 
   btnDayReportEmail.addEventListener("click", function () {
-    var text = buildDayReportTextForSharing(todayDateStr());
+    var text = buildDayReportTextForSharing(reportDayStr());
     commitLeaderboardSnapshot();
     function openEmailCompose() {
       var to = reportOptedInContacts("email")
@@ -41833,7 +41914,7 @@
   });
 
   btnDayReportSms.addEventListener("click", function () {
-    var text = buildDayReportTextForSharing(todayDateStr());
+    var text = buildDayReportTextForSharing(reportDayStr());
     commitLeaderboardSnapshot();
     function openSmsCompose() {
       var to = reportOptedInContacts("sms")
@@ -41874,12 +41955,13 @@
   btnDayReportShareBackup.addEventListener("click", shareReport);
 
   btnDayReportCsv.addEventListener("click", function () {
-    var filename = "pool-master-counter-day-report-" + todayDateStr() + ".csv";
-    downloadTextFile(filename, buildDayReportCsv(todayDateStr()), "text/csv;charset=utf-8");
+    var day = reportDayStr();
+    var filename = "pool-master-counter-day-report-" + day + ".csv";
+    downloadTextFile(filename, buildDayReportCsv(day), "text/csv;charset=utf-8");
   });
 
   btnDayReportPrint.addEventListener("click", function () {
-    renderDayReportPrintView(todayDateStr());
+    renderDayReportPrintView(reportDayStr());
     commitLeaderboardSnapshot();
     dayReportPrintView.classList.remove("hidden");
     window.print();

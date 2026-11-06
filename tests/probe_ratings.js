@@ -7,8 +7,12 @@
 //   one player, in the stats and in the ratings;
 // - "reset all ratings" stays reset after a restart;
 // - the rules: both players of a game move by the same amount (ratings always add up), team games
-//   are rated (each side by its average), a longer game counts more (a Straight Pool game to 100
-//   about 2.7 times a rack), and an old team game from before stays unrated until a recompute.
+//   are rated (each side by its average) and a team wins and loses together - all four move by the
+//   same amount, a regular among newcomers too (🔁 Rotating Teams: each player's own speed, the losers'
+//   stake the winners'), a longer game counts more (a Straight Pool game to 100 about 2.7 times a
+//   rack), and an old team game from before stays unrated until a recompute;
+// - the first start with the team rule recalculates every rating once (an old team game rated),
+//   the ratings from before kept in Recover Data - and only once.
 // Its own file server on 4247; players' game logs are seeded straight into storage.
 // usage: node tests/probe_ratings.js
 const puppeteer = require("puppeteer-core");
@@ -92,7 +96,9 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   }
   const ratings = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.ratings.v1") || "{}"));
   const brief = (r) => { const o = {}; Object.keys(r).sort().forEach((k) => { o[k] = { rating: r[k].rating, games: r[k].gamesPlayed }; }); return o; };
-  const STATS = "poolMasterCounter.playerStats.v1", RATINGS = "poolMasterCounter.ratings.v1";
+  const STATS = "poolMasterCounter.playerStats.v1", RATINGS = "poolMasterCounter.ratings.v1", RULES = "poolMasterCounter.teamRatingRules.v1";
+  // one player's move at one game's time
+  const moved = (r, name, at) => { const h = r[name] && r[name].history.find((x) => x.ts === at); return h ? h.delta : null; };
 
   // ---- 1. 600 games: the same after every start ----
   const many = [];
@@ -156,14 +162,43 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   const seedGame = (g) => { g.winnerNames.forEach((n) => put(n, g, true)); g.opponentNames.forEach((n) => put(n, g, false)); };
   seedGame(game(["Kai"], ["Lin"], ts(5, 0)));
   seedGame(game(["Mo"], ["Ned"], ts(5, 5), { gameType: "straight", gameLabel: "Straight Pool", target: 100, unit: "points" }));
+  // Ola is a regular (25 games: speed 8), Pia, Quin and Rex newcomers (24) - the team still moves alike
+  for (let i = 0; i < 25; i++) seedGame(game([i % 2 ? "Ola" : "Old"], [i % 2 ? "Old" : "Ola"], ts(4, i)));
   seedGame(game(["Ola", "Pia"], ["Quin", "Rex"], ts(5, 10), { teamRated: true }));
-  seedGame(game(["Sol", "Tam"], ["Uma", "Vic"], ts(5, 15))); // (an old team game: no teamRated)
-  page = await open({ [STATS]: logs });
-  const rr = brief(await ratings(page));
+  // 🔁 Rotating Teams: Ola again, with three newcomers - each at their own speed
+  seedGame(game(["Ola", "Tam"], ["Uma", "Vic"], ts(5, 12), { teamRated: true, rotatingTeams: true }));
+  seedGame(game(["Sol", "Wes"], ["Xia", "Yan"], ts(5, 15))); // (an old team game: no teamRated)
+  page = await open({ [STATS]: logs, [RULES]: 1 }); // (a device already on the team rule - see 2d)
+  const full = await ratings(page);
+  const rr = brief(full);
+  const team = ["Ola", "Pia", "Quin", "Rex"].map((n) => moved(full, n, ts(5, 10)));
+  const rot = ["Ola", "Tam", "Uma", "Vic"].map((n) => moved(full, n, ts(5, 12)));
   check("an 8-Ball rack between two new players: +12 / -12", rr.Kai && rr.Kai.rating === 412 && rr.Lin.rating === 388, { Kai: rr.Kai, Lin: rr.Lin });
   check("...a Straight Pool game to 100 counts about 2.7 racks: +32 / -32", rr.Mo && rr.Mo.rating === 432 && rr.Ned.rating === 368, { Mo: rr.Mo, Ned: rr.Ned });
-  check("...a team game moves all four players (each side by its average)", rr.Ola && rr.Ola.rating > 400 && rr.Pia.rating > 400 && rr.Quin.rating < 400 && rr.Rex.rating < 400, { Ola: rr.Ola, Quin: rr.Quin });
-  check("...an old team game from before team games were rated stays unrated", !rr.Sol && !rr.Uma, { Sol: rr.Sol, Uma: rr.Uma });
+  check("...a team game: the team wins and loses together - Ola (a regular) and Pia +" + team[0] + " / +" + team[1] + ", Quin and Rex " + team[2] + " / " + team[3], team[0] > 0 && team.every((d, i) => d === (i < 2 ? team[0] : -team[0])), { team });
+  check("...🔁 Rotating Teams: each player's own speed - Ola (regular) +" + rot[0] + ", Tam (new) +" + rot[1] + ", Uma and Vic (new) " + rot[2] + " / " + rot[3] + ": a newcomer loses what a newcomer wins", rot[0] > 0 && rot[1] > rot[0] && rot[2] === rot[3] && rot[2] === -rot[1], { rot });
+  check("...an old team game from before team games were rated stays unrated", !rr.Sol && !rr.Xia, { Sol: rr.Sol, Xia: rr.Xia });
+  await page.close();
+
+  // ---- 2d. The first start with the team rule: every rating recalculated once, the old ones kept ----
+  const oldLogs = {};
+  const putOld = (name, g, won) => { (oldLogs[name] = oldLogs[name] || { name, sessions: [{ date: g.ts.slice(0, 10), wins: 0, gamesWon: [], opponents: [], games: [] }] }).sessions[0].games.push(Object.assign({}, g, { result: won ? "won" : "lost" })); };
+  const seedOld = (g) => { g.winnerNames.forEach((n) => putOld(n, g, true)); g.opponentNames.forEach((n) => putOld(n, g, false)); };
+  seedOld(game(["Ann", "Bea"], ["Cid", "Dee"], ts(7, 0))); // (an old team game, never rated)
+  seedOld(game(["Ann"], ["Cid"], ts(7, 5)));
+  const oldRatings = { Ann: { name: "Ann", rating: 412, gamesPlayed: 1, history: [{ ts: ts(7, 5), rating: 412, delta: 12, fromGame: true }] }, Cid: { name: "Cid", rating: 388, gamesPlayed: 1, history: [{ ts: ts(7, 5), rating: 388, delta: -12, fromGame: true }] } };
+  page = await open({ [STATS]: oldLogs, [RATINGS]: oldRatings, "poolMasterCounter.ratedGames.v1": { [ts(7, 5)]: true } });
+  const re = await ratings(page);
+  const toast = await page.evaluate(() => document.body.innerText.indexOf("Ratings recalculated from every game") !== -1);
+  const snaps = (await readBig(page, "resetSnapshots")) || [];
+  const kept = snaps.filter((x) => x.type === "allRatings" && /team games were shared alike/.test(x.label || ""));
+  const recalc = ["Ann", "Bea", "Cid", "Dee"].map((n) => moved(re, n, ts(7, 0)));
+  check("first start with the team rule: every rating recalculated - the old team game rated, all four alike (" + recalc.join(", ") + "), then Ann beats Cid: Ann " + (re.Ann && re.Ann.rating) + ", Bea " + (re.Bea && re.Bea.rating), recalc[0] === 12 && recalc.every((d, i) => d === (i < 2 ? 12 : -12)) && re.Bea.rating === 412 && re.Dee.rating === 388 && re.Ann.rating > 412 && re.Ann.rating + re.Cid.rating === 800, { recalc, re: brief(re) });
+  check("...the ratings from before kept in Recover Data (Ann 412), said on screen", kept.length === 1 && kept[0].data.ratings.Ann.rating === 412 && toast, { kept: kept.length, toast });
+  await page.reload({ waitUntil: "networkidle2" }); await sleep(900); await showAll(page);
+  const again = await ratings(page);
+  const snapsAgain = ((await readBig(page, "resetSnapshots")) || []).filter((x) => x.type === "allRatings");
+  check("...only once: a restart changes nothing, no second copy kept", JSON.stringify(brief(again)) === JSON.stringify(brief(re)) && snapsAgain.length === 1, { again: brief(again), snaps: snapsAgain.length });
   await page.close();
 
   // ---- 2c. Live: a regular beats a newcomer - the card's preview is what happens, both move the same ----
@@ -177,6 +212,20 @@ const ts = (dayOffset, minute) => new Date(Date.UTC(2026, 8, 1 + dayOffset, 18, 
   const after2 = await ratings(page);
   const regGain = after2.Reg.rating - before.Reg.rating, newbLoss = after2.Newb.rating - 400;
   check("a regular (8 a game) beats a newcomer (24): both move the same, " + regGain + " / " + newbLoss + ", as the card said (" + preview + ")", regGain > 0 && regGain === -newbLoss && preview && preview.replace(/\s/g, "").indexOf("+" + regGain + "/") === 0, { regGain, newbLoss, preview });
+  await page.close();
+
+  // ---- 2e. Live, in Teams: Kim (a regular, 480) and Ann beat Jo and Bob - all four alike, whoever potted it ----
+  const regular = { name: "Kim", rating: 480, gamesPlayed: 30, history: [{ ts: ts(8, 0), rating: 480, delta: 0, fromGame: true }] };
+  const teams = { players: [["Kim", "A"], ["Jo", "B"], ["Ann", "A"], ["Bob", "B"]].map((x, i) => ({ id: "t" + i, name: x[0], playing: true, balls: 0, teamId: x[1] })), playerWins: {}, teamWins: {}, teamMvpWins: {}, gameHistory: [], gamesPlayedCount: 0, currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "teams" }, raceToWinsTarget: 5, rotation: { enabled: false, order: [], every: 1 } };
+  page = await open({ [RATINGS]: { Kim: regular }, [RULES]: 1, "poolMasterCounter.state.v2": teams });
+  await page.evaluate(() => document.getElementById("btn-toggle-focus").click()); // (back on the board)
+  await sleep(500);
+  await page.evaluate(() => document.querySelector('#scoreboard .team-card[data-team-id="A"] .btn-ball.plus').click());
+  await sleep(800);
+  const live = await ratings(page);
+  const liveTs = await page.evaluate(() => JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).gameHistory[0].ts);
+  const liveMoves = ["Kim", "Ann", "Jo", "Bob"].map((n) => moved(live, n, liveTs));
+  check("live team rack: Kim (480, regular) & Ann beat Jo & Bob - " + liveMoves.join(", ") + ": the team wins and loses together", liveMoves[0] > 0 && liveMoves.every((d, i) => d === (i < 2 ? liveMoves[0] : -liveMoves[0])), { liveMoves });
   await page.close();
 
   // ---- 3. One player, however the name was typed ----

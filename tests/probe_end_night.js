@@ -8,6 +8,9 @@
 //   won isn't an 11th);
 // - resets are in Backup & Restore only (not in the menu);
 // - a Straight Pool game's final score: "100–87" in Recent Games and in the Day Report;
+// - the next afternoon (a fake clock, Los Angeles), 🌙 End night and the report shared are last
+//   night's: the team games saved when the race ended as well as Kim v Jo still on the board,
+//   all four named, the team matchup "Ann & Kim 2 – 1 Bob & Jo";
 // - no page errors.
 // Its own file server on 4271.
 // usage: node tests/probe_end_night.js [screenshot dir]
@@ -152,6 +155,66 @@ const readBig = (page, name) => page.evaluate((name) => new Promise((resolve) =>
   await sleep(600);
   const report = (await page.evaluate(() => window.__shares[window.__shares.length - 1].text)) || "";
   check("a Straight Pool game's score: \"100–87\" in Recent Games and in the Day Report", /Straight Pool/.test(recent) && /100–87/.test(recent) && /100–87/.test(report), { recent, report: report.slice(0, 600) });
+
+  // ---- The next afternoon: last night is the report - the team games saved when the race
+  // ended too, not just Kim v Jo still on the board (Friday 12:30 PM in Los Angeles) ----
+  const next = await browser.newPage();
+  next.on("pageerror", (e) => errors.push(e.message));
+  await next.setViewport({ width: 1180, height: 820, hasTouch: true });
+  await next.emulateTimezone("America/Los_Angeles");
+  await next.evaluateOnNewDocument((fake) => {
+    window.__shares = [];
+    navigator.canShare = () => true;
+    navigator.share = (data) => { window.__shares.push({ text: data.text || "" }); return Promise.resolve(); };
+    const RealDate = Date, offset = fake - RealDate.now();
+    class FakeDate extends RealDate {
+      constructor(...a) { if (a.length === 0) super(RealDate.now() + offset); else super(...a); }
+      static now() { return RealDate.now() + offset; }
+    }
+    window.Date = FakeDate;
+  }, Date.parse("2026-11-06T20:30:00Z"));
+  await next.goto(BASE + "manifest.json");
+  await next.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem("poolMasterCounter.onboardingSeen.v1", "1");
+    localStorage.setItem("poolMasterCounter.migratedFromRepo.v1", "1");
+    // Thursday afternoon, Kim & Ann v Jo & Bob, race over (saved): 2 - 1
+    const team = [["Kim", "Ann"], ["Jo", "Bob"]];
+    const racks = [[0, "2026-11-05T23:00:00.000Z"], [1, "2026-11-05T23:10:00.000Z"], [0, "2026-11-05T23:20:00.000Z"]];
+    const logs = {};
+    racks.forEach(([w, ts]) => {
+      const winners = team[w], losers = team[1 - w];
+      winners.concat(losers).forEach((name) => {
+        const won = winners.indexOf(name) !== -1;
+        const log = (logs[name] = logs[name] || { name, sessions: [{ date: "2026-11-05", wins: 0, gamesWon: [], opponents: [], games: [] }] });
+        log.sessions[0].games.push({ ts, gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", result: won ? "won" : "lost", winnerNames: winners, opponentNames: won ? losers : winners, teammateNames: (won ? winners : losers).filter((n) => n !== name), isTeam: true, teamRated: true });
+      });
+    });
+    localStorage.setItem("poolMasterCounter.playerStats.v1", JSON.stringify(logs));
+    // Thursday 7 PM, still on the board: Kim beats Jo
+    localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify({
+      players: [{ id: "k", name: "Kim", playing: true, balls: 0 }, { id: "j", name: "Jo", playing: true, balls: 0 }, { id: "a", name: "Ann", playing: false, balls: 0 }, { id: "b", name: "Bob", playing: false, balls: 0 }],
+      playerWins: {}, teamWins: {}, teamMvpWins: {}, gamesPlayedCount: 1,
+      gameHistory: [{ ts: "2026-11-06T03:00:00.000Z", gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", winnerNames: ["Kim"], winnerIds: ["k"], opponentNames: ["Jo"], isTeam: false, summary: "Kim won 8-Ball" }],
+      currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual" }, raceToWinsTarget: 5, rotation: { enabled: false, order: [], every: 1 }
+    }));
+  });
+  await next.goto(BASE, { waitUntil: "networkidle2" });
+  await sleep(900);
+  await next.click("#btn-board-menu");
+  await sleep(250);
+  await next.evaluate(() => [...document.querySelectorAll("#board-menu-list .board-menu-row")].find((b) => b.dataset.menuKey === "menu.endNight").click());
+  await sleep(600);
+  const night = await next.evaluate(() => {
+    const body = document.getElementById("end-night-body");
+    return { text: body.textContent, rows: [...body.querySelectorAll(".end-night-table tr")].map((tr) => tr.children[0].textContent + " " + tr.children[1].textContent) };
+  });
+  await next.click("#btn-end-night-share");
+  await sleep(600);
+  const nightReport = (await next.evaluate(() => (window.__shares[window.__shares.length - 1] || {}).text)) || "";
+  check("the next afternoon, 🌙 End night is last night: 4 games, all four named (" + night.rows.join(", ") + "), \"Ann & Kim 2 – 1 Bob & Jo\" and \"Kim 1 – 0 Jo\"", /4 games tonight/.test(night.text) && night.rows.join() === "Kim 3–1,Ann 2–1,Bob 1–2,Jo 1–3" && /Ann & Kim 2 – 1 Bob & Jo/.test(night.text) && /Kim 1 – 0 Jo/.test(night.text), night);
+  check("...and the report shared is Thursday's, with the team games", /2026-11-05/.test(nightReport) && /Kim and Ann|Ann and Kim/.test(nightReport) && /Jo and Bob|Bob and Jo/.test(nightReport), nightReport.slice(0, 700));
+  await next.close();
 
   check("no file downloaded at any point", downloads.length === 0, downloads);
   check("no page errors", errors.length === 0, errors);
