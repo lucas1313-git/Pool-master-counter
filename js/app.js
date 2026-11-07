@@ -12518,35 +12518,12 @@
       };
     });
 
-    var result = {
+    var generatedAt = formatTimestamp(new Date().toISOString(), true);
+    var result = Object.assign(reportImageWords(dateStr, generatedAt), {
       dateStr: dateStr,
       longDate: longDate,
-      generatedAt: formatTimestamp(new Date().toISOString(), true),
+      generatedAt: generatedAt,
       tokens: tokens,
-      // The next six fields are what let a completely different report
-      // (see computeLeagueReportImageData) reuse buildDayReportColorfulHtmlFromData/
-      // buildReportCanvasFromData/buildColorfulReportShareScript unchanged
-      // below instead of forking ~500 lines of HTML/canvas drawing code -
-      // every hardcoded string those three builders used to have is now
-      // read from here, with the day report's own original copy as the
-      // default so this call site's behavior is unchanged.
-      appTitle: "🎱 Pool Master Counter",
-      tagline: T("report.tagline"),
-      emptyText: T("report.noGames"),
-      leaderboardLabel: T("leaderboard.heading"),
-      gamesLabel: T("report.gameLog"),
-      // (the rest of the card's words, in the app's language - an archived
-      // card from before has none, and its builders fall back to English)
-      highlightsLabel: T("report.highlights"),
-      notesLabel: T("report.notes"),
-      generatedText: T("report.generated", { when: formatTimestamp(new Date().toISOString(), true) }),
-      winLetter: T("report.colW"),
-      lossLetter: T("report.colL"),
-      defeatedWord: T("report.defeatedWord"),
-      wonWord: T("report.wonWord"),
-      shareLabel: T("endNight.share"),
-      pageTitle: "Pool Master Counter — " + formatReportDateHeading(dateStr),
-      imageFilename: "pool-master-counter-report-" + dateStr + ".png",
       players: players,
       highlights: highlights,
       games: games,
@@ -12554,9 +12531,35 @@
       // every game's own time, so a later rebuild of a missed day (see
       // backfillReportArchive) can tell which games this report already has
       gameTs: data.games.map(function (g) { return g.ts; })
-    };
+    });
     archiveDayReport(result);
     return result;
+  }
+
+  // The words on a day's colourful card, in the app's language. These fields
+  // are what let a completely different report (see computeLeagueReportImageData)
+  // reuse buildDayReportColorfulHtmlFromData/buildColorfulReportShareScript
+  // unchanged instead of forking ~500 lines of HTML/canvas drawing code. An
+  // archived day keeps only its numbers, so hydrateArchivedReportImageData
+  // gets its words here too - without them its 📤 Share drew nothing.
+  function reportImageWords(dateStr, generatedAt) {
+    return {
+      appTitle: "🎱 Pool Master Counter",
+      tagline: T("report.tagline"),
+      emptyText: T("report.noGames"),
+      leaderboardLabel: T("leaderboard.heading"),
+      gamesLabel: T("report.gameLog"),
+      highlightsLabel: T("report.highlights"),
+      notesLabel: T("report.notes"),
+      generatedText: T("report.generated", { when: generatedAt }),
+      winLetter: T("report.colW"),
+      lossLetter: T("report.colL"),
+      defeatedWord: T("report.defeatedWord"),
+      wonWord: T("report.wonWord"),
+      shareLabel: T("endNight.share"),
+      pageTitle: "Pool Master Counter — " + formatReportDateHeading(dateStr),
+      imageFilename: "pool-master-counter-report-" + dateStr + ".png"
+    };
   }
 
   function buildDayReportColorfulHtml(dateStr) {
@@ -17724,16 +17727,16 @@
   // at the cost of not being a pixel-exact record of how it looked when
   // it was first generated.
   function hydrateArchivedReportImageData(entry) {
-    return {
+    return Object.assign(reportImageWords(entry.dateStr, entry.generatedAt), {
       dateStr: entry.dateStr,
       longDate: entry.longDate,
       generatedAt: entry.generatedAt,
       tokens: readReportThemeTokens(),
-      players: entry.players,
-      highlights: entry.highlights,
-      games: entry.games,
+      players: entry.players || [],
+      highlights: entry.highlights || [],
+      games: entry.games || [],
       notes: entry.notes
-    };
+    });
   }
 
   function openArchivedReport(dateStr) {

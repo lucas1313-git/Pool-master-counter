@@ -92,6 +92,29 @@ const localDate = (ms) => { const d = new Date(ms); return d.getFullYear() + "-"
   check("...and the 3-days-ago note on that day only", a[0].notes === "Sam on fire" && !a[1].notes && !a[2].notes, a.map((e) => e.notes));
   const rows = await page.evaluate(() => document.querySelectorAll("#report-archive-list li").length);
   check("the archive list shows them", rows === 3, rows);
+  // View an archived day, then its 📤 Share: the picture of that day is shared (it used to do nothing -
+  // an archived day had no headings, and drawing the first one threw)
+  const popupP = new Promise((resolve) => browser.once("targetcreated", (t) => resolve(t.page())));
+  await page.evaluate(() => document.querySelectorAll("#report-archive-list li")[0].querySelectorAll("button")[0].click());
+  const popup = await popupP;
+  await sleep(800);
+  const card = await popup.evaluate(() => ({
+    title: document.title,
+    hero: document.querySelector(".hero h1").textContent,
+    headings: [...document.querySelectorAll(".section h2")].map((h) => h.textContent),
+    button: document.getElementById("shareReportBtn").textContent
+  }));
+  check("the archived day's card has its title and headings", /Pool Master Counter/.test(card.title) && /Pool Master Counter/.test(card.hero) && card.headings.length >= 2 && card.headings.every(Boolean), card);
+  const shared = await popup.evaluate(async () => {
+    let got = null;
+    navigator.canShare = () => true;
+    navigator.share = (d) => { got = d.files.map((f) => ({ name: f.name, type: f.type, size: f.size })); return Promise.resolve(); };
+    document.getElementById("shareReportBtn").click();
+    await new Promise((r) => setTimeout(r, 300));
+    return got;
+  });
+  check("its 📤 Share shares that day's picture", shared && shared.length === 1 && shared[0].name === "pool-master-counter-report-" + localDate(d3) + ".png" && shared[0].type === "image/png" && shared[0].size > 5000, shared);
+  await popup.close();
   // delete one: it stays deleted
   await page.evaluate(() => { const b = document.getElementById("btn-toggle-report-archive-panel"); if (document.getElementById("report-archive-panel").classList.contains("collapsed")) b.click(); });
   await sleep(300);
