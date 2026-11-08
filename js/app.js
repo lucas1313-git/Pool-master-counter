@@ -402,7 +402,11 @@
       teamBenched: {},
       // 🏁 two races at once: { pivotId, active: "first"|"second", parked: { playerWins, target, seats } }
       secondRace: null,
-      raceAsked: {}
+      raceAsked: {},
+      // each pair is a team of its own: its wins by its players (teamComboKey), and
+      // which pair's wins each team letter holds now (see syncTeamCombos)
+      comboWins: {},
+      teamSlotCombo: {}
     };
   }
 
@@ -518,6 +522,8 @@
           if (!parsed.teamBenched || typeof parsed.teamBenched !== "object") parsed.teamBenched = {};
           if (!parsed.secondRace || typeof parsed.secondRace !== "object") parsed.secondRace = null;
           if (!parsed.raceAsked || typeof parsed.raceAsked !== "object") parsed.raceAsked = {};
+          if (!parsed.comboWins || typeof parsed.comboWins !== "object") parsed.comboWins = {};
+          if (!parsed.teamSlotCombo || typeof parsed.teamSlotCombo !== "object") parsed.teamSlotCombo = {};
           var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
@@ -874,7 +880,7 @@
     var source = !isTeamMode && sides.length > 1 && sides.every(function (s) { return s.fargo; }) ? "fargo" : "app";
     var rosterKey = sides
       .map(function (s) {
-        return s.key;
+        return s.key + (isTeamMode ? ":" + teamComboKey(s.key) : "");
       })
       .sort()
       .join(",") + (source === "fargo" ? "|fargo" : "");
@@ -1852,6 +1858,56 @@
       })
       .sort()
       .join("|");
+  }
+
+  // Each pair (or three) is a team of its own (2026-11-08 request): its wins
+  // are kept under its players (state.comboWins, by teamComboKey) and a team
+  // letter's card shows the wins of the players on it now. Partners changed
+  // (Rotating Teams, a sub, Winner Stays' line): that pair's own score - 0 if
+  // they haven't won together yet, theirs again if they have. Run before the
+  // board is drawn and before a win is counted; true when a letter changed pair.
+  function syncTeamCombos() {
+    if (quickCounterMode || state.currentGame.mode !== "teams") return false;
+    if (!state.comboWins) state.comboWins = {};
+    if (!state.teamSlotCombo) state.teamSlotCombo = {};
+    var changed = false;
+    TEAM_IDS.forEach(function (id) {
+      var now = teamComboKey(id), was = state.teamSlotCombo[id];
+      if (was === now) {
+        if (now) state.comboWins[now] = state.teamWins[id] || 0;
+        return;
+      }
+      // (from before pairs were kept: the letter's wins are its players')
+      if (was === undefined) {
+        if (now && !(now in state.comboWins)) state.comboWins[now] = state.teamWins[id] || 0;
+      } else if (was) {
+        state.comboWins[was] = state.teamWins[id] || 0;
+      }
+      state.teamWins[id] = now ? state.comboWins[now] || 0 : 0;
+      state.teamSlotCombo[id] = now;
+      changed = true;
+    });
+    return changed;
+  }
+  // a game's team win added or taken back - its own pair's (the letter's when
+  // the game doesn't say which pair)
+  function adjustTeamWin(entry, delta) {
+    var k = entry.teamComboKey;
+    if (!k) {
+      state.teamWins[entry.teamId] = Math.max(0, (state.teamWins[entry.teamId] || 0) + delta);
+      return;
+    }
+    if (!state.comboWins) state.comboWins = {};
+    var slot = TEAM_IDS.filter(function (id) { return (state.teamSlotCombo || {})[id] === k; })[0];
+    var v = Math.max(0, (slot ? state.teamWins[slot] || 0 : state.comboWins[k] || 0) + delta);
+    state.comboWins[k] = v;
+    if (slot) state.teamWins[slot] = v;
+  }
+  // a team letter's wins as shown: its pair at the table, or waiting its turn (Winner Stays)
+  function teamWinsShown(teamId) {
+    if (teamMembersLive(teamId).length) return state.teamWins[teamId] || 0;
+    var k = teamMembersShown(teamId).map(function (p) { return p.id; }).sort().join("|");
+    return k ? (state.comboWins || {})[k] || 0 : state.teamWins[teamId] || 0;
   }
 
   // "Bob & Luc" - a team on the board by its players (short names), or
@@ -5287,21 +5343,33 @@
         return (state.teamWins[teamId] || 0) > 0 || inPlay.indexOf(teamId) !== -1;
       });
 
+      // (each pair its own team: the pairs on the board, then every other pair
+      // that has won together this session - see syncTeamCombos)
+      var rows = teamRows.map(function (teamId) {
+        var members = teamMembersShown(teamId);
+        var namesList = members.map(function (p) {
+          return p.name;
+        });
+        var names = namesList.length ? namesList.join(" & ") : teamSlotLabel(teamId);
+        return { teamId: teamId, combo: members.map(function (p) { return p.id; }).sort().join("|"), names: names, namesList: namesList, wins: teamWinsShown(teamId) };
+      });
+      Object.keys(state.comboWins || {}).forEach(function (k) {
+        if (!state.comboWins[k] || rows.some(function (r) { return r.combo === k; })) return;
+        var ids = k.split("|");
+        var members = state.players.filter(function (p) { return ids.indexOf(p.id) !== -1; }); // (in the roster's order, as on the board)
+        if (!members.length) return;
+        var namesList = members.map(function (p) { return p.name; });
+        rows.push({ teamId: "~" + k, combo: k, names: namesList.join(" & "), namesList: namesList, wins: state.comboWins[k] });
+      });
+
       teamStandingsList.innerHTML = "";
-      if (teamRows.length === 0) {
+      if (rows.length === 0) {
         var teamHint = document.createElement("li");
         teamHint.className = "empty-hint";
         teamHint.textContent = T("standings.noTeamPairings");
         teamStandingsList.appendChild(teamHint);
       } else {
-        teamRows
-          .map(function (teamId) {
-            var namesList = teamMembersShown(teamId).map(function (p) {
-              return p.name;
-            });
-            var names = namesList.length ? namesList.join(" & ") : teamSlotLabel(teamId);
-            return { teamId: teamId, names: names, namesList: namesList, wins: state.teamWins[teamId] || 0 };
-          })
+        rows
           .sort(function (a, b) {
             return b.wins - a.wins || a.teamId.localeCompare(b.teamId);
           })
@@ -8444,6 +8512,7 @@
     renderEventBar();
     postRecorderContext(); // (the recording page names its cues from what's shown)
     if (syncParallelRace()) saveState();
+    if (syncTeamCombos()) saveState();
     if (!state.secondRace && !secondRaceAsking) lastRaceSeats = activePlayers().map(function (q) { return q.id; });
     var active = activePlayers();
     if (needsTwoAtTheTable()) {
@@ -9169,6 +9238,7 @@
 
   function creditWin(isTeam, key, winnerVoice) {
     syncParallelRace(); // (🏁 two races: the one whose players are at the table)
+    syncTeamCombos(); // (each pair its own score: the pair at the table)
     var typeLabel = GAME_TYPES[state.currentGame.gameType].label;
     // ("won 8-Ball" - a one-rack game's "(target 1)" says nothing)
     var targetSuffix = state.currentGame.unit === "rack" && state.currentGame.target <= 1 ? "" : " (target " + state.currentGame.target + ")";
@@ -9216,13 +9286,13 @@
       winnerIds = members.map(function (p) {
         return p.id;
       });
-      // Tallied by team slot ("A"/"B"), not by the exact roster combo, so a
-      // sub joining/leaving mid-race (add player, standby toggle, team
-      // reassignment) doesn't fragment the running win count into a "new"
-      // pairing starting at 0 - see the session-reset bug this fixed.
+      // Each pair is a team of its own (2026-11-08): the letter's count is
+      // its players' (synced by syncTeamCombos before this - partners changed,
+      // that pair's own score), kept under them in state.comboWins too.
       teamComboKeyValue = teamComboKey(key);
       var newTeamWins = (state.teamWins[key] || 0) + 1;
       state.teamWins[key] = newTeamWins;
+      if (teamComboKeyValue) state.comboWins[teamComboKeyValue] = newTeamWins;
       members.forEach(function (p) {
         state.playerWins[p.id] = (state.playerWins[p.id] || 0) + 1;
       });
@@ -9454,7 +9524,11 @@
         }
         state.teamQueue = teamLine;
         // a race each pairing: the new pairing starts at 0 - 0
-        if (isRacing()) seatedTeamIds().forEach(function (id) { state.teamWins[id] = 0; });
+        if (isRacing()) {
+          syncTeamCombos();
+          seatedTeamIds().forEach(function (id) { state.teamWins[id] = 0; });
+          syncTeamCombos();
+        }
       }
     }
 
@@ -9666,6 +9740,8 @@
         players: state.players.map(function (p) { return { id: p.id, balls: p.balls, playing: p.playing, teamId: p.teamId }; }),
         playerWins: state.playerWins,
         teamWins: state.teamWins,
+        comboWins: state.comboWins || {},
+        teamSlotCombo: state.teamSlotCombo || {},
         teamMvpWins: state.teamMvpWins,
         gameHistory: state.gameHistory,
         gamesPlayedCount: state.gamesPlayedCount,
@@ -9700,6 +9776,7 @@
     });
     state.playerWins = b.playerWins;
     state.teamWins = b.teamWins;
+    if ("comboWins" in b) { state.comboWins = b.comboWins; state.teamSlotCombo = b.teamSlotCombo || {}; }
     state.teamMvpWins = b.teamMvpWins;
     state.gameHistory = b.gameHistory;
     state.gamesPlayedCount = b.gamesPlayedCount;
@@ -9775,7 +9852,7 @@
       state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
     });
     if (entry.isTeam && entry.teamId) {
-      state.teamWins[entry.teamId] = Math.max(0, (state.teamWins[entry.teamId] || 0) - 1);
+      adjustTeamWin(entry, -1);
       if (entry.mvpId) {
         state.teamMvpWins[entry.mvpId] = Math.max(0, (state.teamMvpWins[entry.mvpId] || 0) - 1);
       }
@@ -10531,13 +10608,14 @@
     state.playerWins = {};
     state.teamWins = {};
     state.teamMvpWins = {};
+    state.comboWins = {};
     state.gameHistory.forEach(function (entry) {
       if (!entry || typeof entry === "string" || !entry.winnerIds) return;
       entry.winnerIds.forEach(function (id) {
         state.playerWins[id] = (state.playerWins[id] || 0) + 1;
       });
       if (entry.isTeam && entry.teamId) {
-        state.teamWins[entry.teamId] = (state.teamWins[entry.teamId] || 0) + 1;
+        adjustTeamWin(entry, 1);
         if (entry.mvpId) {
           state.teamMvpWins[entry.mvpId] = (state.teamMvpWins[entry.mvpId] || 0) + 1;
         }
@@ -10636,6 +10714,8 @@
       gameHistory: JSON.parse(JSON.stringify(state.gameHistory)),
       playerWins: JSON.parse(JSON.stringify(state.playerWins)),
       teamWins: JSON.parse(JSON.stringify(state.teamWins)),
+      comboWins: JSON.parse(JSON.stringify(state.comboWins || {})),
+      teamSlotCombo: JSON.parse(JSON.stringify(state.teamSlotCombo || {})),
       teamMvpWins: JSON.parse(JSON.stringify(state.teamMvpWins)),
       gamesPlayedCount: state.gamesPlayedCount,
       currentGame: JSON.parse(JSON.stringify(state.currentGame)),
@@ -10758,6 +10838,7 @@
     state.gameHistory = snapshot.gameHistory;
     state.playerWins = snapshot.playerWins;
     state.teamWins = snapshot.teamWins;
+    if (snapshot.comboWins) { state.comboWins = snapshot.comboWins; state.teamSlotCombo = snapshot.teamSlotCombo || {}; }
     state.teamMvpWins = snapshot.teamMvpWins;
     state.gamesPlayedCount = snapshot.gamesPlayedCount;
     state.currentGame = snapshot.currentGame;
@@ -11527,6 +11608,8 @@
     clearUndo();
     state.playerWins = {};
     state.teamWins = {};
+    state.comboWins = {};
+    state.teamSlotCombo = {};
     state.teamMvpWins = {};
     state.gameHistory = [];
     state.gamesPlayedCount = 0;
@@ -19940,6 +20023,8 @@
       savePlayerStatsToStorage(PLAYER_STATS);
       state.playerWins = {};
       state.teamWins = {};
+      state.comboWins = {};
+      state.teamSlotCombo = {};
       state.teamMvpWins = {};
       state.gameHistory = [];
       resetGameBalls();
@@ -19977,6 +20062,8 @@
       state.players = [];
       state.playerWins = {};
       state.teamWins = {};
+      state.comboWins = {};
+      state.teamSlotCombo = {};
       state.teamMvpWins = {};
       saveState();
       validateNewPlayerNameInput();
@@ -20077,7 +20164,7 @@
           state.playerWins[id] = Math.max(0, (state.playerWins[id] || 0) - 1);
         });
         if (g.isTeam && g.teamId) {
-          state.teamWins[g.teamId] = Math.max(0, (state.teamWins[g.teamId] || 0) - 1);
+          adjustTeamWin(g, -1);
           if (g.mvpId) {
             state.teamMvpWins[g.mvpId] = Math.max(0, (state.teamMvpWins[g.mvpId] || 0) - 1);
           }
