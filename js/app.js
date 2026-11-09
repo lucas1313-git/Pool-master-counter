@@ -3634,6 +3634,21 @@
   var dayNotesDay = null; // the day the notes box holds (the report's day - see pickReportDay)
   var dayNotesSaveTimer = null;
   var reportCalendarGrid = document.getElementById("report-calendar-grid");
+  var btnAiTake = document.getElementById("btn-ai-take");
+  var aiTakeToneSelect = document.getElementById("ai-take-tone-select");
+  var btnAiTakeKey = document.getElementById("btn-ai-take-key");
+  var aiTakeKeyBox = document.getElementById("ai-take-key");
+  var aiTakeKeySaved = document.getElementById("ai-take-key-saved");
+  var aiTakeKeyInput = document.getElementById("ai-take-key-input");
+  var btnAiTakeKeySave = document.getElementById("btn-ai-take-key-save");
+  var btnAiTakeKeyRemove = document.getElementById("btn-ai-take-key-remove");
+  var aiTakeKeyError = document.getElementById("ai-take-key-error");
+  var aiTakeResult = document.getElementById("ai-take-result");
+  var aiTakeStatus = document.getElementById("ai-take-status");
+  var aiTakeText = document.getElementById("ai-take-text");
+  var aiTakeActions = document.getElementById("ai-take-actions");
+  var btnAiTakeCopy = document.getElementById("btn-ai-take-copy");
+  var btnAiTakeShare = document.getElementById("btn-ai-take-share");
   var runRecordsSummary = document.getElementById("run-records-summary");
   var dayReportFormatSelect = document.getElementById("day-report-format-select");
   var btnDayReportCopy = document.getElementById("btn-day-report-copy");
@@ -13583,6 +13598,7 @@
     var chosenGames = days[chosen] || 0;
     document.getElementById("report-calendar-picked-text").textContent = T("dayNotes.reportFor", { date: reportCalendarLongDate(chosen) }) + (chosenGames ? " · " + countPhrase("games", chosenGames) : "");
     document.getElementById("btn-report-calendar-latest").classList.toggle("hidden", !pickedReportDay);
+    renderAiTake();
   }
   function moveReportCalendar(step) {
     var y = +reportCalendarMonth.slice(0, 4), m = +reportCalendarMonth.slice(5, 7) - 1 + step;
@@ -13608,6 +13624,312 @@
     dayNotesSaveTimer = null;
     setDayNotes(dayNotesDay || todayDateStr(), dayNotesTextarea.value);
     updateDayNotesSummary();
+  }
+
+  // 🤖 AI take: Claude reads the report's day and writes a short take on the
+  // night. It needs the owner's own Anthropic API key - the app is public web
+  // code, so no key can ship inside it. The key stays on this device: it is
+  // not in deviceSettingKeys, so never in a backup (and a backup can go out
+  // with a report). Anthropic's SDK (js/vendor, ~360 KB) loads on the first
+  // take, not at start-up. Each day's take is kept, so reopening it is free.
+  var AI_TAKE_KEY_KEY = "poolMasterCounter.anthropicApiKey.v1";
+  var AI_TAKE_TONE_KEY = "poolMasterCounter.aiTakeTone.v1";
+  var AI_TAKES_KEY = "poolMasterCounter.aiTakes.v1";
+  var AI_TAKES_CAP = 60;
+  var AI_TAKE_MODEL = "claude-opus-5-5";
+  var AI_TAKE_LANGUAGES = { english: "English", french: "French", spanish: "Spanish", cantonese: "Cantonese, in Traditional Chinese characters", tagalog: "Tagalog" };
+  var AI_TAKE_TONES = {
+    sportswriter: "Write it like a local sports columnist: lively, warm, a bit dramatic, never mean.",
+    banter: "Write it like the friend at the bar who roasts everyone: cheeky trash talk and playful jabs about the pool only (never looks, bodies, jobs or anything personal), affectionate underneath."
+  };
+  var AI_TAKE_SYSTEM = [
+    "You write a short take on one night of pool at a bar, for the regulars who played. You get the night's results from the scorekeeping app Pool Master Counter.",
+    "",
+    "What to write:",
+    "- 120 to 220 words, in 2 to 4 short paragraphs. Plain text only: no headings, no bullet points, no markdown, no asterisks. A few emoji are fine. It is read on a phone and pasted into a group chat.",
+    "- Find the story of the night: who carried it, upsets (a lower-rated player or team beating a higher-rated one), streaks, comebacks, rivalries, skunks, how the ratings moved, and how tonight compares with recent nights when they are given.",
+    "- Name everyone who played.",
+    "- Use only what the results show. Never invent shots, quotes, scores or events; saying what a result suggests is fine.",
+    "",
+    "How the app scores:",
+    "- Each player has a rating, Elo style; everyone starts at 400. The change shown is that night's.",
+    "- In a team game the whole team wins or loses together: never single out one player as the one who won or lost it. Credit or rib the team.",
+    "- The exception is Rotating Teams, where partners change and each player's own result counts on its own.",
+    "- A skunk is a shutout win."
+  ].join("\n");
+  var aiTakeBusyDay = null; // the day a take is being written for
+  var aiTakeSdkPromise = null;
+
+  function loadAiTakeKey() {
+    try {
+      return localStorage.getItem(AI_TAKE_KEY_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+  function saveAiTakeKey(key) {
+    try {
+      if (key) localStorage.setItem(AI_TAKE_KEY_KEY, key);
+      else localStorage.removeItem(AI_TAKE_KEY_KEY);
+    } catch (e) {
+      noteSaveFailure("AI key", e);
+    }
+  }
+  function loadAiTakeTone() {
+    try {
+      return localStorage.getItem(AI_TAKE_TONE_KEY) === "banter" ? "banter" : "sportswriter";
+    } catch (e) {
+      return "sportswriter";
+    }
+  }
+  function loadAiTakes() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(AI_TAKES_KEY) || "{}");
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveAiTake(dateStr, take) {
+    var takes = loadAiTakes();
+    takes[dateStr] = take;
+    var kept = {};
+    Object.keys(takes).sort().slice(-AI_TAKES_CAP).forEach(function (d) { kept[d] = takes[d]; });
+    try {
+      localStorage.setItem(AI_TAKES_KEY, JSON.stringify(kept));
+    } catch (e) {
+      noteSaveFailure("AI take", e);
+    }
+  }
+
+  function loadAnthropicSdk() {
+    if (window.PMCAnthropic) return Promise.resolve(window.PMCAnthropic);
+    if (aiTakeSdkPromise) return aiTakeSdkPromise;
+    aiTakeSdkPromise = new Promise(function (resolve, reject) {
+      // (the same ?v= tag as this file, so a new version fetches it anew)
+      var appScript = document.querySelector('script[src*="js/app.js"]');
+      var query = appScript ? appScript.getAttribute("src").split("?")[1] : "";
+      var script = document.createElement("script");
+      script.src = "js/vendor/anthropic-sdk.js" + (query ? "?" + query : "");
+      script.onload = function () {
+        if (window.PMCAnthropic) resolve(window.PMCAnthropic);
+        else reject(new Error("Anthropic SDK did not load"));
+      };
+      script.onerror = function () {
+        aiTakeSdkPromise = null;
+        script.remove();
+        reject(new Error("Anthropic SDK did not load"));
+      };
+      document.head.appendChild(script);
+    });
+    return aiTakeSdkPromise;
+  }
+
+  function aiTakeLongDate(dateStr) {
+    try {
+      return new Date(dateStr + "T00:00:00").toLocaleDateString(reportLocale(), { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    } catch (e) {
+      return formatReportDateHeading(dateStr);
+    }
+  }
+
+  // The night as Claude reads it: every player, every game in order (teams
+  // marked, no "who potted it" - a team game is the team's), the races and
+  // matchups, the players' own notes, and the archive's recent nights.
+  function buildAiTakeRequestText(dateStr, tone) {
+    var data = computeDayReportData(dateStr);
+    var signed = function (n) { return n > 0 ? "+" + n : String(n || 0); };
+    var lines = ["The night: " + aiTakeLongDate(dateStr) + " (a pool day runs from 5 a.m. to 5 a.m.)", "", "Players (won, lost, rating now, change that night):"];
+    data.players.forEach(function (p) {
+      lines.push("- " + p.name + ": " + p.wins + " won, " + p.losses + " lost, rating " + p.rating + " (" + signed(p.ratingDelta) + ")");
+    });
+    lines.push("", "Games, in order:");
+    data.games.slice().sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0; }).forEach(function (g) {
+      var joiner = g.isTeam ? " & " : ", ";
+      var winners = (g.winnerNames || []).join(joiner);
+      // (a game is read from a winner's copy when there is one: its other side is the losers)
+      var losers = g.result === "won" ? (g.opponentNames || []).join(joiner) : "";
+      var score = gameScoreText(g);
+      var kind = g.rotatingTeams ? " (Rotating Teams)" : g.isTeam ? " (team game)" : "";
+      lines.push("- " + formatReportGameTime(g.ts) + " · " + g.gameLabel + kind + ": " + winners + (losers ? " beat " + losers : " won") + (score ? " " + score : "") + (g.skunk ? " · skunk" : ""));
+    });
+    var extras = data.raceWins.map(formatReportRaceWinLine).concat(data.tournaments.map(formatReportTournamentLine));
+    if (data.bestRunToday) extras.push(formatReportBestRunLine(data.bestRunToday));
+    if (extras.length) lines.push("", "Races, tournaments and runs:");
+    extras.forEach(function (line) { lines.push("- " + line); });
+    if (data.matchups && data.matchups.length) {
+      lines.push("", "Head to head that night:");
+      data.matchups.forEach(function (m) { lines.push("- " + formatReportMatchupLine(m)); });
+    }
+    var notes = dateStr === dayNotesDay ? dayNotesTextarea.value : getDayNotes(dateStr);
+    if (notes && notes.trim()) lines.push("", "Notes the players wrote:", notes.trim());
+    var recent = REPORT_ARCHIVE.filter(function (entry) { return entry.dateStr < dateStr && (entry.players || []).length; }).slice(0, 6);
+    if (recent.length) {
+      lines.push("", "Recent nights before it, for comparison (won-lost):");
+      recent.forEach(function (entry) {
+        lines.push("- " + entry.dateStr + ": " + entry.players.map(function (p) { return p.name + " " + p.wins + "-" + p.losses; }).join(", "));
+      });
+    }
+    lines.push("", AI_TAKE_TONES[tone] || AI_TAKE_TONES.sportswriter, "Write the take in " + (AI_TAKE_LANGUAGES[activeLanguageCode] || "English") + ".");
+    return lines.join("\n");
+  }
+
+  function aiTakeStatusLine(take) {
+    var tone = take.tone === "banter" ? T("aiTake.toneBanter") : T("aiTake.toneSportswriter");
+    return T("aiTake.writtenAt", { when: formatTimestamp(take.at, true), tone: tone });
+  }
+
+  // What the take box shows: the take being written for the chosen day, or
+  // that day's saved one, or nothing
+  function renderAiTake() {
+    if (!aiTakeResult) return;
+    var day = reportDayChosen();
+    btnAiTake.disabled = !!aiTakeBusyDay;
+    if (aiTakeBusyDay === day) return;
+    var take = loadAiTakes()[day];
+    btnAiTake.textContent = T(take ? "aiTake.writeNew" : "aiTake.write");
+    aiTakeResult.classList.toggle("hidden", !take);
+    aiTakeStatus.classList.remove("is-error");
+    aiTakeStatus.textContent = take ? aiTakeStatusLine(take) : "";
+    aiTakeText.textContent = take ? take.text : "";
+    aiTakeActions.classList.toggle("hidden", !take);
+  }
+
+  function showAiTakeProgress(text) {
+    aiTakeResult.classList.remove("hidden");
+    aiTakeStatus.classList.remove("is-error");
+    aiTakeStatus.textContent = T(text ? "aiTake.writing" : "aiTake.thinking");
+    aiTakeText.textContent = text;
+    aiTakeActions.classList.add("hidden");
+  }
+
+  function showAiTakeError(message) {
+    renderAiTake();
+    aiTakeResult.classList.remove("hidden");
+    aiTakeStatus.classList.add("is-error");
+    aiTakeStatus.textContent = message;
+  }
+
+  function aiTakeErrorText(err) {
+    var A = window.PMCAnthropic;
+    if (!A || A.APIConnectionError && err instanceof A.APIConnectionError) return T("aiTake.errorOffline");
+    if (err instanceof A.AuthenticationError || err instanceof A.PermissionDeniedError) return T("aiTake.errorKey");
+    if (err instanceof A.RateLimitError || err instanceof A.InternalServerError) return T("aiTake.errorBusy");
+    // (e.g. no credit left: the API's own words say so)
+    var apiMessage = err && err.error && err.error.error && err.error.error.message;
+    return T("aiTake.errorApi", { message: apiMessage || (err && err.message) || String(err) });
+  }
+
+  function showAiTakeKeyBox(show) {
+    var key = loadAiTakeKey();
+    aiTakeKeyBox.classList.toggle("hidden", !show);
+    aiTakeKeyError.classList.add("hidden");
+    aiTakeKeyInput.value = "";
+    aiTakeKeySaved.classList.toggle("hidden", !key);
+    aiTakeKeySaved.textContent = key ? T("aiTake.keySavedHint", { key: key.slice(0, 10) + "…" + key.slice(-4) }) : "";
+    btnAiTakeKeyRemove.classList.toggle("hidden", !key);
+    if (show) aiTakeKeyInput.focus();
+  }
+
+  function saveAiTakeKeyFromInput() {
+    var key = aiTakeKeyInput.value.trim();
+    if (!/^sk-ant-\S+$/.test(key)) {
+      aiTakeKeyError.textContent = T("aiTake.keyBad");
+      aiTakeKeyError.classList.remove("hidden");
+      return;
+    }
+    saveAiTakeKey(key);
+    showAiTakeKeyBox(false);
+    showToast(T("aiTake.keySaved"));
+  }
+
+  function writeAiTake() {
+    var key = loadAiTakeKey();
+    if (!key) {
+      showAiTakeKeyBox(true);
+      return;
+    }
+    if (aiTakeBusyDay) return;
+    var day = reportDayChosen();
+    if (!computeDayReportData(day).players.length) {
+      showToast(T("aiTake.noGames"));
+      return;
+    }
+    var tone = aiTakeToneSelect.value;
+    var request = buildAiTakeRequestText(day, tone);
+    var text = "";
+    aiTakeBusyDay = day;
+    btnAiTake.disabled = true;
+    showAiTakeProgress("");
+    loadAnthropicSdk()
+      .then(function (Anthropic) {
+        var client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+        var stream = client.beta.messages.stream({
+          model: AI_TAKE_MODEL,
+          max_tokens: 16000,
+          output_config: { effort: "medium" },
+          // (a declined request is run again on the model Anthropic picks for it)
+          betas: ["server-side-fallback-2026-07-01"],
+          fallbacks: "default",
+          system: AI_TAKE_SYSTEM,
+          messages: [{ role: "user", content: request }]
+        });
+        stream.on("text", function (delta) {
+          text += delta;
+          if (reportDayChosen() === day) showAiTakeProgress(text);
+        });
+        return stream.finalMessage();
+      })
+      .then(function (message) {
+        aiTakeBusyDay = null;
+        if (message.stop_reason === "refusal") {
+          if (reportDayChosen() === day) showAiTakeError(T("aiTake.errorDeclined"));
+          else renderAiTake();
+          return;
+        }
+        var written = message.content
+          .filter(function (block) { return block.type === "text"; })
+          .map(function (block) { return block.text; })
+          .join("")
+          .trim();
+        saveAiTake(day, { text: written, tone: tone, at: new Date().toISOString(), model: message.model });
+        renderAiTake();
+      }, function (err) {
+        aiTakeBusyDay = null;
+        console.warn("[AI take]", err);
+        var A = window.PMCAnthropic;
+        if (A && (err instanceof A.AuthenticationError || err instanceof A.PermissionDeniedError)) showAiTakeKeyBox(true);
+        if (reportDayChosen() === day) showAiTakeError(aiTakeErrorText(err));
+        else renderAiTake();
+      });
+  }
+
+  function aiTakeShareText() {
+    var take = loadAiTakes()[reportDayChosen()];
+    return take ? T("aiTake.shareHeading", { date: aiTakeLongDate(reportDayChosen()) }) + "\n\n" + take.text : "";
+  }
+
+  function copyAiTake() {
+    var text = aiTakeShareText();
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { showToast(T("aiTake.copied")); }, function () { alertModal(text); });
+    } else {
+      alertModal(text);
+    }
+  }
+
+  function shareAiTake() {
+    var text = aiTakeShareText();
+    if (!text) return;
+    if (!navigator.share) {
+      copyAiTake();
+      return;
+    }
+    navigator.share({ title: "Pool Master Counter — " + T("aiTake.heading"), text: text }).catch(function (err) {
+      if (err && err.name === "AbortError") return;
+      copyAiTake();
+    });
   }
 
   // Live "🔥 best run today / 🏆 all-time record" line in the Publish
@@ -21212,6 +21534,8 @@
       "poolMasterCounter.challongePrivate.v1", "poolMasterCounter.challongeVenue.v1",
       "poolMasterCounter.dayReportAttachBackup.v1", "poolMasterCounter.dayReportAttachColorful.v1",
       "poolMasterCounter.keypadSpeechEnabled.v1", "poolMasterCounter.keypadSpeechVoicePreset.v1",
+      // (the 🤖 AI takes and their tone - never the Anthropic key, AI_TAKE_KEY_KEY)
+      "poolMasterCounter.aiTakeTone.v1", "poolMasterCounter.aiTakes.v1",
       "pmc-camera-settings", "pmc-camera-calibration", "pmc-camera-background-ref", "pmc-camera-empty-room",
       "pmc-camera-selected-device", "pmc-camera-wizard-done",
       "pmc-room-plan", "pmc-camera-room-tags", "pmc-room-map-options", "pmc-camera-view", "poolMasterCounter.quickGameRace.v1"];
@@ -42084,6 +42408,33 @@
   document.getElementById("btn-report-calendar-prev").addEventListener("click", function () { moveReportCalendar(-1); });
   document.getElementById("btn-report-calendar-next").addEventListener("click", function () { moveReportCalendar(1); });
   document.getElementById("btn-report-calendar-latest").addEventListener("click", function () { pickReportDay(reportDayStr()); });
+
+  aiTakeToneSelect.value = loadAiTakeTone();
+  aiTakeToneSelect.addEventListener("change", function () {
+    try {
+      localStorage.setItem(AI_TAKE_TONE_KEY, aiTakeToneSelect.value);
+    } catch (e) {
+      noteSaveFailure("AI take tone", e);
+    }
+  });
+  btnAiTake.addEventListener("click", writeAiTake);
+  btnAiTakeKey.addEventListener("click", function () { showAiTakeKeyBox(aiTakeKeyBox.classList.contains("hidden")); });
+  btnAiTakeKeySave.addEventListener("click", saveAiTakeKeyFromInput);
+  document.getElementById("btn-ai-take-key-link").addEventListener("click", function () {
+    try {
+      window.open("https://platform.claude.com/settings/keys", "_blank", "noopener");
+    } catch (e) {}
+  });
+  aiTakeKeyInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") saveAiTakeKeyFromInput();
+  });
+  btnAiTakeKeyRemove.addEventListener("click", function () {
+    saveAiTakeKey("");
+    showAiTakeKeyBox(false);
+    showToast(T("aiTake.keyRemoved"));
+  });
+  btnAiTakeCopy.addEventListener("click", copyAiTake);
+  btnAiTakeShare.addEventListener("click", shareAiTake);
 
   dayReportFormatSelect.value = dayReportFormat;
   dayReportFormatSelect.addEventListener("change", function () {

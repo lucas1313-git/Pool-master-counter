@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (223)
+## Identical to English (225)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -35,6 +35,8 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `contactSheet.id` | ID |
 | `contactSheet.openGraveyard` | 🪦 Graveyard |
 | `dayNotes.bestRunAllTime` | 🏆 All-time record: () |
+| `aiTake.toneSportswriter` | 📰 Sportswriter |
+| `aiTake.keyChange` | 🔑 AI key |
 | `fargo.comparisonText` | Rating: · Fargo: |
 | `gameSetup.raceModeRaceTo` | 🏁 Race to Wins |
 | `gameSetup.shotCounterEnable` | ⏱️ Shot clock |

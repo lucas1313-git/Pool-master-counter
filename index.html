@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261108a">
+<link rel="stylesheet" href="css/style.css?v=20261108b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -793,6 +793,44 @@
         <button type="button" id="btn-day-report-push-challonge" class="btn btn-ghost" data-i18n="challonge.pushButton">☁️ Push to Challonge</button>
       </div>
       <p class="player-stats-note" id="day-report-recipients-line"></p>
+      <!-- 🤖 AI take: Claude writes a short take on the chosen day (needs the owner's own Anthropic API key) -->
+      <div class="ai-take" id="ai-take">
+        <h3 class="ai-take-heading" data-i18n="aiTake.heading">🤖 AI take</h3>
+        <p class="player-stats-note" data-i18n="aiTake.intro">Claude, an AI, reads the chosen day's results and writes a short take on the night: who carried it, the upsets, the streaks, the teams.</p>
+        <div class="row ai-take-controls">
+          <button type="button" id="btn-ai-take" class="btn btn-primary" data-i18n="aiTake.write">🤖 Write an AI take</button>
+          <span class="ai-take-tone">
+            <label for="ai-take-tone-select" data-i18n="aiTake.tone">Tone</label>
+            <select id="ai-take-tone-select">
+              <option value="sportswriter" data-i18n="aiTake.toneSportswriter">📰 Sportswriter</option>
+              <option value="banter" data-i18n="aiTake.toneBanter">😏 Trash talk</option>
+            </select>
+          </span>
+          <button type="button" id="btn-ai-take-key" class="btn btn-ghost" data-i18n="aiTake.keyChange">🔑 AI key</button>
+        </div>
+        <div class="ai-take-key hidden" id="ai-take-key">
+          <p class="player-stats-note" data-i18n="aiTake.keyIntro">To write a take, the app needs your own Anthropic API key (it starts with sk-ant-). Make one at platform.claude.com, under API keys, and add some credit there: each take costs a few cents.</p>
+          <p class="player-stats-note" data-i18n="aiTake.keyPrivacy">The key stays on this device only and is never put in a backup. To write a take, the night's names and results are sent to Anthropic.</p>
+          <p class="player-stats-note hidden" id="ai-take-key-saved"></p>
+          <div class="row">
+            <input type="password" id="ai-take-key-input" data-i18n-placeholder="aiTake.keyPlaceholder" placeholder="Paste your key: sk-ant-…" autocomplete="off" spellcheck="false">
+            <button type="button" id="btn-ai-take-key-save" class="btn btn-primary" data-i18n="aiTake.keySave">Save key</button>
+          </div>
+          <div class="row">
+            <button type="button" id="btn-ai-take-key-link" class="btn btn-ghost" data-i18n="aiTake.keyGetLink">Make a key ↗</button>
+            <button type="button" id="btn-ai-take-key-remove" class="btn btn-ghost hidden" data-i18n="aiTake.keyRemove">Remove key</button>
+          </div>
+          <p class="player-stats-note ai-take-error hidden" id="ai-take-key-error" role="alert"></p>
+        </div>
+        <div class="ai-take-result hidden" id="ai-take-result">
+          <p class="player-stats-note ai-take-status" id="ai-take-status" aria-live="polite"></p>
+          <div class="ai-take-text" id="ai-take-text"></div>
+          <div class="row ai-take-actions" id="ai-take-actions">
+            <button type="button" id="btn-ai-take-copy" class="btn btn-ghost" data-i18n="aiTake.copy">📋 Copy</button>
+            <button type="button" id="btn-ai-take-share" class="btn btn-ghost" data-i18n="aiTake.share">📤 Share</button>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -3194,27 +3232,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261108a"></script>
-<script src="js/big-store.js?v=20261108a"></script>
-<script src="js/mp4-clip.js?v=20261108a"></script>
-<script src="js/recording-consent.js?v=20261108a"></script>
-<script src="js/local-recorder.js?v=20261108a"></script>
-<script src="js/lib/pool-day.js?v=20261108a"></script>
-<script src="js/lib/race-math.js?v=20261108a"></script>
-<script src="js/lib/handicaps.js?v=20261108a"></script>
-<script src="js/lib/brackets.js?v=20261108a"></script>
-<script src="js/lib/league.js?v=20261108a"></script>
-<script src="js/lib/events.js?v=20261108a"></script>
-<script src="js/lib/chips.js?v=20261108a"></script>
-<script src="js/lib/highlights.js?v=20261108a"></script>
-<script src="js/lib/payouts.js?v=20261108a"></script>
-<script src="js/app.js?v=20261108a"></script>
-<script src="js/camera-client.js?v=20261108a"></script>
-<script src="js/voice.js?v=20261108a"></script>
+<script src="js/pairing.js?v=20261108b"></script>
+<script src="js/big-store.js?v=20261108b"></script>
+<script src="js/mp4-clip.js?v=20261108b"></script>
+<script src="js/recording-consent.js?v=20261108b"></script>
+<script src="js/local-recorder.js?v=20261108b"></script>
+<script src="js/lib/pool-day.js?v=20261108b"></script>
+<script src="js/lib/race-math.js?v=20261108b"></script>
+<script src="js/lib/handicaps.js?v=20261108b"></script>
+<script src="js/lib/brackets.js?v=20261108b"></script>
+<script src="js/lib/league.js?v=20261108b"></script>
+<script src="js/lib/events.js?v=20261108b"></script>
+<script src="js/lib/chips.js?v=20261108b"></script>
+<script src="js/lib/highlights.js?v=20261108b"></script>
+<script src="js/lib/payouts.js?v=20261108b"></script>
+<script src="js/app.js?v=20261108b"></script>
+<script src="js/camera-client.js?v=20261108b"></script>
+<script src="js/voice.js?v=20261108b"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261108a").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261108b").catch(function () {}); });
   }
 </script>
 </body>

@@ -1862,6 +1862,61 @@ input.field-invalid {
   color: var(--text);
 }
 
+/* ---- 🤖 AI take (Publish Daily Report) ---- */
+.ai-take {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.ai-take-heading {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+}
+.ai-take-controls {
+  align-items: center;
+}
+.ai-take-tone {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-take-tone select {
+  flex: 0 1 auto;
+}
+.ai-take-key {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+.ai-take-key input {
+  flex: 1;
+  min-width: 0;
+}
+.ai-take-error {
+  color: var(--danger);
+  font-weight: 700;
+}
+.ai-take-result {
+  margin-top: 12px;
+}
+.ai-take-status.is-error {
+  color: var(--danger);
+  font-weight: 700;
+}
+.ai-take-text {
+  white-space: pre-wrap;
+  background: var(--bg-card);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 1.08rem;
+  line-height: 1.5;
+}
+.ai-take-text:empty {
+  display: none;
+}
+
 select {
   flex: 1;
   min-width: 140px;

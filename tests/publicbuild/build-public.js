@@ -22,7 +22,7 @@ const SKIP = [/(^|\/)README\.md$/, /^camera\/models\/(osnet|dinov2|depth|segment
 // research / non-commercial only - see camera/models/osnet/README.md
 if (process.env.PMC_PAID_BUILD === "1") SKIP.push(/^camera\/models\/osnet\//, /^camera\/osnet\.js$/);
 const KEEP = [/^camera\/models\/(osnet|dinov2|depth)\/README\.md$/]; // model licence notes
-const VENDOR = [/^camera\/tfjs\.js$/, /^camera\/pose-detection\.js$/, /^camera\/models\//];
+const VENDOR = [/^camera\/tfjs\.js$/, /^camera\/pose-detection\.js$/, /^camera\/models\//, /^js\/vendor\//];
 
 function minJs(code, label) {
   // no "format": esbuild then keeps top-level names (other scripts and
