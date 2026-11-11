@@ -13595,6 +13595,7 @@
         night3d[view] = module.mount(el, night3d.night, {
           t: function (k, v) { return T(k, v); },
           tp: function (k, n, v) { return TP(k, n, v); },
+          clock: night3dClock,
           onSavePicture: shareNight3dPicture
         });
       } else if (night3d.shown[view] !== night3d.sig) {
