@@ -8,6 +8,7 @@
   :root {
     --bg: #1a0a0a;
     --panel: #241010;
+    --field: #120606;
     --accent: #e8b923;
     --rec: #ff4d4d;
     --text: #f6efe9;
@@ -20,15 +21,21 @@
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   header h1 { margin: 0; font-size: 1.3rem; color: var(--accent); }
   header nav { display: flex; gap: 8px; flex-wrap: wrap; }
-  a.btn, button { font: inherit; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 8px 14px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
-  button:disabled { opacity: 0.45; cursor: default; }
-  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 40px; }
-  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  .pill { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-dim); display: inline-block; }
+  a.btn, button { font: inherit; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 8px 14px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  main { max-width: 1320px; margin: 0 auto; padding: 12px 16px 40px; }
+
+  /* how things stand: the camera, the recording, the scoreboard, the shots, where it's saved */
+  .pills { display: flex; gap: 6px 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .pill { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 7px; max-width: 100%; min-width: 0; }
+  .pill > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--text-dim); display: inline-block; }
   .dot.ok { background: var(--ok); }
   .dot.rec { background: var(--rec); animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: 0.25; } }
+
+  /* the picture and its zoom on one side, the buttons on the other (under it on a narrow screen) */
+  .studio { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
   .stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); }
   .stage video { width: 100%; height: 100%; object-fit: contain; display: block; }
   .inset { position: absolute; right: 10px; bottom: 10px; width: 22%; min-width: 120px; aspect-ratio: 16 / 9; border: 2px solid rgba(255,255,255,0.7); border-radius: 6px; overflow: hidden; background: #000; cursor: crosshair; touch-action: none; }
@@ -36,30 +43,68 @@
   .inset .crop { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 999px rgba(0,0,0,0.45); pointer-events: none; }
   .rec-badge { position: absolute; left: 12px; top: 10px; background: rgba(0,0,0,0.65); color: var(--text); border-radius: 8px; padding: 4px 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .rec-badge.on { color: var(--rec); }
-  .cue-badge { position: absolute; left: 12px; bottom: 12px; right: 26%; background: rgba(0,0,0,0.7); border: 2px solid var(--accent); border-radius: 10px; padding: 6px 12px; font-weight: 800; color: var(--accent); }
-  .bar { display: flex; align-items: center; gap: 12px; margin: 10px 2px; flex-wrap: wrap; }
-  .bar label { white-space: nowrap; font-weight: 700; }
-  .bar input[type="range"] { flex: 1; min-width: 160px; }
-  .big { font-size: 1.15rem; font-weight: 800; padding: 12px 22px; min-height: 52px; }
-  #recordBtn.on { background: var(--rec); border-color: var(--rec); color: #fff; }
-  #pauseBtn { border: 2px solid var(--text); }
-  #pauseBtn.on { background: var(--accent); border-color: var(--accent); color: #1a0a0a; }
   .rec-badge.paused { color: var(--accent); }
-  #markBtn { background: var(--accent); border-color: var(--accent); color: #1a0a0a; }
+  .cue-badge { position: absolute; left: 12px; bottom: 12px; right: 26%; background: rgba(0,0,0,0.7); border: 2px solid var(--accent); border-radius: 10px; padding: 6px 12px; font-weight: 800; color: var(--accent); }
+  .auto-badge { bottom: auto; top: 56px; border-color: var(--rec); color: #fff; }
+  .bar { display: flex; align-items: center; gap: 12px; margin: 10px 2px 0; flex-wrap: wrap; }
+  .bar label { white-space: nowrap; font-weight: 700; }
+  .bar input[type="range"] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+
+  /* the buttons: the recording (start / stop, pause), then its cues (mark, finish, auto) */
+  .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .controls .wide { grid-column: 1 / -1; }
+  .controls .group { grid-column: 1 / -1; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin-top: 6px; }
+  .big { font-size: 1.1rem; font-weight: 800; padding: 10px 12px; min-height: 54px; }
+  /* (the key that does the same, on the button) */
+  .big[data-key]::after { content: attr(data-key); font-size: 0.72rem; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 5px; border: 1px solid currentColor; opacity: 0.65; margin-left: 4px; }
+  #recordBtn { min-height: 64px; font-size: 1.2rem; border: 2px solid var(--rec); }
+  #recordBtn.on { background: var(--rec); border-color: var(--rec); color: #fff; }
+  #pauseBtn { border: 2px solid var(--text-dim); }
+  #pauseBtn.on { background: var(--accent); border-color: var(--accent); color: #1a0a0a; }
+  #markBtn { background: var(--accent); border: 2px solid var(--accent); color: #1a0a0a; }
   #finishBtn { border: 2px solid var(--accent); color: var(--accent); }
   #autoBtn { border: 2px solid var(--accent); color: var(--accent); }
   #autoBtn.on { background: var(--rec); border-color: var(--rec); color: #fff; }
-  .auto-badge { bottom: auto; top: 56px; border-color: var(--rec); color: #fff; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+
+  /* a label over (or beside) what it sets */
+  .fields { display: grid; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > label, .field > .label { font-size: 0.85rem; font-weight: 700; color: var(--text-dim); }
+  .check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+  .check input { width: 18px; height: 18px; margin: 2px 0 0; flex: 0 0 auto; accent-color: var(--accent); }
+  select, input[type="number"] { font: inherit; background: var(--field); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-height: 40px; max-width: 100%; }
+  select { width: 100%; }
+  input[type="number"] { width: 76px; }
+  .unit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-top: 14px; }
   .panel h2 { margin: 0 0 8px; font-size: 1rem; color: var(--accent); }
-  select, input[type="number"] { font: inherit; background: #120606; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+  details.panel > summary { cursor: pointer; font-weight: 800; color: var(--accent); list-style-position: inside; }
+  details.panel[open] > summary { margin-bottom: 12px; }
+  details.panel.quiet > summary { color: var(--text-dim); font-weight: 700; }
+  .help p { margin: 0 0 8px; line-height: 1.45; }
+  .help p:last-child { margin-bottom: 0; }
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 22px; align-items: start; }
+  .settings-grid .wide { grid-column: 1 / -1; }
   .dim { color: var(--text-dim); font-size: 0.9rem; }
   .log { font-size: 0.9rem; color: var(--text-dim); max-height: 200px; overflow: auto; white-space: pre-line; }
-  ul.cues { list-style: none; padding: 0; margin: 0; }
-  ul.cues li { padding: 6px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
-  .toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); background: var(--accent); color: #1a0a0a; font-weight: 800; padding: 10px 18px; border-radius: 12px; z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); background: var(--accent); color: #1a0a0a; font-weight: 800; padding: 10px 18px; border-radius: 12px; z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.4); max-width: calc(100vw - 24px); }
   .toast[hidden] { display: none; }
+
+  @media (max-width: 900px) {
+    .studio { grid-template-columns: minmax(0, 1fr); }
+    .controls { grid-template-columns: repeat(6, 1fr); }
+    .controls > button { grid-column: span 2; }
+    .controls #recordBtn { grid-column: span 4; }
+    .controls .wide { grid-column: span 2; }
+    .controls .group { display: none; }
+    .fields.setup { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: end; }
+  }
+  @media (max-width: 520px) {
+    .big { font-size: 1rem; padding: 8px 6px; }
+    .big[data-key]::after { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -76,69 +121,91 @@
     <span class="pill"><span class="dot" id="recDot"></span><span id="recText">Not recording</span></span>
     <span class="pill"><span class="dot" id="boardDot"></span><span id="boardText">Scoreboard: not heard from yet</span></span>
     <span class="pill"><span class="dot" id="shotDot"></span><span id="shotText">Shots: not heard from the camera</span></span>
-    <span class="pill dim" id="folderText">Saved on the computer</span>
+    <span class="pill dim"><span id="folderText">Saved on the computer</span></span>
   </div>
 
-  <div class="stage">
-    <video id="out" autoplay playsinline muted></video>
-    <div class="rec-badge" id="recBadge">● 00:00:00</div>
-    <div class="cue-badge" id="cueBadge" hidden></div>
-    <div class="cue-badge auto-badge" id="autoBadge" hidden></div>
-    <div class="inset" id="inset" title="Drag to move the zoomed area">
-      <video id="raw" autoplay playsinline muted></video>
-      <div class="crop" id="cropBox"></div>
+  <div class="studio">
+    <div>
+      <div class="stage">
+        <video id="out" autoplay playsinline muted></video>
+        <div class="rec-badge" id="recBadge">● 00:00:00</div>
+        <div class="cue-badge" id="cueBadge" hidden></div>
+        <div class="cue-badge auto-badge" id="autoBadge" hidden></div>
+        <div class="inset" id="inset" title="Drag to move the zoomed area">
+          <video id="raw" autoplay playsinline muted></video>
+          <div class="crop" id="cropBox"></div>
+        </div>
+      </div>
+      <div class="bar" title="The zoom and its position are this recording's own - drag the small picture, or the big one, to move it. The player detection camera isn't touched.">
+        <label for="zoom">🔍 Zoom <span id="zoomVal">1.0×</span></label>
+        <input type="range" id="zoom" min="1" max="4" step="0.1" value="1">
+        <button type="button" id="centreBtn" title="Back to the middle">⌖ Centre</button>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="controls">
+        <button type="button" class="big wide" id="recordBtn">● Start recording</button>
+        <!-- ⏸ Pause: the file so far ends (all of it to watch), the recording goes on after ▶ Resume -->
+        <button type="button" class="big wide" id="pauseBtn" data-key="P" disabled data-i18n-title="rec.pauseHint" title="Pause the recording (P) - the same recording goes on after ▶ Resume, and all of it so far can be watched">⏸ Pause</button>
+        <span class="group">Cues</span>
+        <button type="button" class="big" id="markBtn" data-key="M" disabled title="Right after a good shot (M): the cue starts a little before the mark">⭐ Mark</button>
+        <button type="button" class="big" id="finishBtn" data-key="F" disabled title="Ends the marked cue (F)">✔ Finish</button>
+        <button type="button" class="big wide" id="autoBtn" data-key="A" disabled title="The camera finds the shot and keeps it (A) - again to cancel">🎯 Auto cue</button>
+      </div>
+      <!-- what's recorded: chosen before it starts -->
+      <div class="fields setup">
+        <div class="field"><label for="cameraSelect">Camera</label><select id="cameraSelect"></select></div>
+        <div class="field"><label for="qualitySelect">Quality</label>
+          <select id="qualitySelect">
+            <option value="1080">1080p (about 3.6 GB an hour)</option>
+            <option value="2160">4K (about 9 GB an hour)</option>
+            <option value="720">720p (about 1.8 GB an hour)</option>
+          </select>
+        </div>
+        <label class="check"><input type="checkbox" id="soundToggle"> <span>🎙️ Record sound too (what's said at the table - ask first)</span></label>
+      </div>
     </div>
   </div>
 
-  <div class="bar">
-    <label for="zoom">🔍 Zoom <span id="zoomVal">1.0×</span></label>
-    <input type="range" id="zoom" min="1" max="4" step="0.1" value="1">
-    <button type="button" id="centreBtn" title="Back to the middle">⌖ Centre</button>
-  </div>
-  <div class="dim">The zoom and its position are this recording's own (drag the small picture, or the big one, to move it) - the player detection camera isn't touched.</div>
-
-  <div class="bar" style="margin-top:14px">
-    <button type="button" class="big" id="recordBtn">● Start recording</button>
-    <!-- ⏸ Pause: the file so far ends (all of it to watch), the recording goes on after ▶ Resume -->
-    <button type="button" class="big" id="pauseBtn" disabled data-i18n-title="rec.pauseHint" title="Pause the recording (P) - the same recording goes on after ▶ Resume, and all of it so far can be watched">⏸ Pause</button>
-    <button type="button" class="big" id="markBtn" disabled>⭐ Mark</button>
-    <button type="button" class="big" id="finishBtn" disabled>✔ Finish</button>
-    <button type="button" class="big" id="autoBtn" disabled>🎯 Auto cue</button>
-  </div>
-  <div class="dim">Mark (M, or say "mark" on the scoreboard) right after a good shot: the cue starts <b id="preRollText">20</b> s before the mark - the shot's beginning - and is named as things stood then. Finish (F, or "finish") ends it - or / (here, or on the scoreboard, or its ⭐ Cue button) for both. Each one is kept as a cue - see 🎞️ Cues.</div>
-  <div class="dim">🎯 Auto cue (A here, * or 🎯 on the scoreboard, or say "auto cue"): the camera finds the shot - the one going on, or the last one up to <b id="autoBackText">15</b> s before the press, or else the next one within <b id="autoWaitText">25</b> s - and keeps it from <b id="autoLeadText">5</b> s before the player gets down on it to <b id="autoTailText">5</b> s after the balls stop. No shot in that time: no clip. Needs the camera page watching the table (📷 Set Up Camera, table calibrated). Press again to cancel.</div>
+  <details class="panel quiet help">
+    <summary>❓ How Mark, Finish and Auto cue work</summary>
+    <p>⭐ <b>Mark</b> (M, or say "mark" on the scoreboard) right after a good shot: the cue starts <b id="preRollText">20</b> s before the mark - the shot's beginning - and is named as things stood then. ✔ <b>Finish</b> (F, or "finish") ends it - or / (here, or on the scoreboard, or its ⭐ Cue button) for both. Each one is kept as a cue - see 🎞️ Cues.</p>
+    <p>🎯 <b>Auto cue</b> (A here, * or 🎯 on the scoreboard, or say "auto cue"): the camera finds the shot - the one going on, or the last one up to <b id="autoBackText">15</b> s before the press, or else the next one within <b id="autoWaitText">25</b> s - and keeps it from <b id="autoLeadText">5</b> s before the player gets down on it to <b id="autoTailText">5</b> s after the balls stop. No shot in that time: no clip. Needs the camera page watching the table (📷 Set Up Camera, table calibrated). Press again to cancel.</p>
+    <p>🔍 The zoom and its position are this recording's own (drag the small picture, or the big one, to move it) - the player detection camera isn't touched.</p>
+  </details>
 
   <div class="panel">
     <h2>🎞️ Cues - watch, set right, export (while it records)</h2>
     <div id="cueViewer"></div>
   </div>
 
-  <div class="panel">
-    <h2>Settings</h2>
-    <div class="row"><label for="cameraSelect">Camera</label><select id="cameraSelect"></select></div>
-    <div class="row"><label for="qualitySelect">Quality</label>
-      <select id="qualitySelect">
-        <option value="1080">1080p (about 3.6 GB an hour)</option>
-        <option value="2160">4K (about 9 GB an hour)</option>
-        <option value="720">720p (about 1.8 GB an hour)</option>
-      </select>
+  <details class="panel">
+    <summary>⚙️ More settings</summary>
+    <div class="settings-grid">
+      <div class="field"><label for="preRoll">⭐ A marked clip starts</label><div class="unit"><input type="number" id="preRoll" min="0" max="120" step="1" value="20"><span>seconds before the mark</span></div></div>
+      <div class="field"><label for="partMin">A new file every</label><div class="unit"><input type="number" id="partMin" min="2" max="60" step="1" value="10"><span>minutes (quick to open and jump around in)</span></div></div>
+      <div class="field"><label for="autoBack">🎯 Auto cue looks back</label><div class="unit"><input type="number" id="autoBack" min="0" max="60" step="1" value="15"><span>seconds for a shot already played</span></div></div>
+      <div class="field"><label for="autoWait">🎯 Auto cue waits</label><div class="unit"><input type="number" id="autoWait" min="5" max="120" step="1" value="25"><span>seconds for the next shot</span></div></div>
+      <div class="field"><label for="autoLead">🎯 Auto cue keeps</label><div class="unit"><input type="number" id="autoLead" min="0" max="30" step="1" value="5"><span>seconds before the shot</span></div></div>
+      <div class="field"><label for="autoTail">🎯 ...and</label><div class="unit"><input type="number" id="autoTail" min="0" max="30" step="1" value="5"><span>seconds after the balls stop</span></div></div>
+      <div class="field"><label for="keepSelect" data-i18n="rec.keepFor">Keep recordings</label><select id="keepSelect"></select></div>
+      <div class="field"><span class="label">When this page opens</span><label class="check"><input type="checkbox" id="autoStart"> <span>Start recording as soon as this page opens</span></label></div>
+      <div class="wide"><button type="button" id="printSignBtn">🖨️ Print a "Camera in use" sign</button></div>
     </div>
-    <div class="row"><label><input type="checkbox" id="soundToggle"> 🎙️ Record sound too (what's said at the table - ask first)</label></div>
-    <div class="row"><button type="button" id="printSignBtn">🖨️ Print a "Camera in use" sign</button></div>
-    <div class="row"><label for="preRoll">A clip starts</label><input type="number" id="preRoll" min="0" max="120" step="1" value="20"><span>seconds before the mark</span></div>
-    <div class="row"><label for="autoBack">🎯 Auto cue: looks back</label><input type="number" id="autoBack" min="0" max="60" step="1" value="15"><span>s, waits</span><input type="number" id="autoWait" min="5" max="120" step="1" value="25"><span>s for a shot, keeps</span><input type="number" id="autoLead" min="0" max="30" step="1" value="5"><span>s before it and</span><input type="number" id="autoTail" min="0" max="30" step="1" value="5"><span>s after</span></div>
-    <div class="row"><label for="partMin">A new file every</label><input type="number" id="partMin" min="2" max="60" step="1" value="10"><span>minutes (quick to open and jump around in)</span></div>
-    <div class="row"><label><input type="checkbox" id="autoStart"> Start recording as soon as this page opens</label></div>
-    <div class="row"><label for="keepSelect" data-i18n="rec.keepFor">Keep recordings</label><select id="keepSelect"></select></div>
+  </details>
+
+  <details class="panel quiet">
+    <summary>📋 What happened (the log)</summary>
     <div class="log" id="log"></div>
-  </div>
+  </details>
 </main>
 <div class="toast" id="toast" hidden></div>
 
-<script src="js/camera-i18n.js?v=20261108b"></script>
+<script src="js/camera-i18n.js?v=20261111a"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="js/recording-consent.js?v=20261028m"></script>
-<script src="js/cue-viewer.js?v=20261108b"></script>
+<script src="js/cue-viewer.js?v=20261111a"></script>
 <script>
 (function () {
   "use strict";

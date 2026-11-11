@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261108b">
+<link rel="stylesheet" href="css/style.css?v=20261111a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -226,49 +226,63 @@
     </button>
     <p class="panel-summary" id="local-record-panel-summary"></p>
     <div class="panel-body" id="local-record-panel-body">
-      <p class="player-stats-note" data-i18n="lrec.intro">Records with this device's camera; the video stays on this device until you save it. Right after a good shot press ⭐ Cue (or the / key, or say "mark"): the clip starts 20 s before. Player recognition pauses while it records.</p>
-      <div class="lrec-stage"><video id="lrec-preview" class="hidden" playsinline muted autoplay></video></div>
-      <div class="row lrec-settings">
-        <label for="lrec-camera" data-i18n="lrec.camera">Camera</label>
-        <select id="lrec-camera"></select>
-        <label for="lrec-mode" data-i18n="lrec.mode">Keep</label>
-        <select id="lrec-mode">
-          <option value="highlights" data-i18n="lrec.modeHighlights">✨ Highlights - only the cued clips</option>
-          <option value="full" data-i18n="lrec.modeFull">🎞️ Everything</option>
-        </select>
-        <label class="checkbox-row"><input type="checkbox" id="lrec-sound"> <span data-i18n="lrec.sound">🎙️ Record sound too (what's said at the table - ask first)</span></label>
-        <button type="button" id="btn-lrec-sign" class="btn btn-ghost" data-i18n="rec.printSign">🖨️ Print a "Camera in use" sign</button>
+      <p class="player-stats-note lrec-intro" data-i18n="lrec.intro">Records with this device's camera; the video stays on this device until you save it. Right after a good shot press ⭐ Cue (or the / key, or say "mark"): the clip starts 20 s before. Player recognition pauses while it records.</p>
+      <!-- what to record, chosen before it starts (hidden while it records: nothing here can change then) -->
+      <div class="lrec-settings" id="lrec-settings">
+        <div class="lrec-field">
+          <label for="lrec-camera" data-i18n="lrec.camera">Camera</label>
+          <select id="lrec-camera"></select>
+        </div>
+        <div class="lrec-field">
+          <label for="lrec-mode" data-i18n="lrec.mode">Keep</label>
+          <select id="lrec-mode">
+            <option value="highlights" data-i18n="lrec.modeHighlights">✨ Highlights - only the cued clips</option>
+            <option value="full" data-i18n="lrec.modeFull">🎞️ Everything</option>
+          </select>
+        </div>
+        <label class="checkbox-row lrec-check"><input type="checkbox" id="lrec-sound"> <span data-i18n="lrec.sound">🎙️ Record sound too (what's said at the table - ask first)</span></label>
+        <button type="button" id="btn-lrec-sign" class="btn btn-ghost lrec-sign" data-i18n="rec.printSign">🖨️ Print a "Camera in use" sign</button>
       </div>
-      <div class="row lrec-controls">
+      <div class="lrec-stage"><video id="lrec-preview" class="hidden" playsinline muted autoplay></video></div>
+      <div class="lrec-controls">
         <button type="button" id="btn-lrec-start" class="btn btn-primary lrec-big">● Start recording</button>
         <button type="button" id="btn-lrec-cue" class="btn recorder-cue-btn lrec-big" disabled>⭐ Cue</button>
       </div>
       <p class="lrec-status" id="lrec-status" aria-live="polite"></p>
-      <h3 class="backup-subsection-title" data-i18n="lrec.cuesTitle">⭐ Cues</h3>
-      <!-- ☑ the checked cues, together (js/local-recorder.js) -->
-      <div class="lrec-group" id="lrec-group">
+      <!-- ▶ what's being watched: right under the controls, above the lists (js/local-recorder.js playBlob) -->
+      <div class="lrec-watch hidden" id="lrec-watch">
+        <div class="lrec-watch-head">
+          <span class="lrec-watch-name" id="lrec-watch-name"></span>
+          <button type="button" class="btn btn-ghost lrec-watch-close" id="btn-lrec-watch-close" data-i18n-aria-label="common.close" aria-label="Close">×</button>
+        </div>
+        <video id="lrec-player" class="hidden" controls playsinline></video>
+        <!-- 🐢 slow motion, to look at a foul (js/local-recorder.js) -->
+        <div class="lrec-speed hidden" id="lrec-speed">
+          <span data-i18n="lrec.speed">🐢 Speed</span>
+          <button type="button" class="btn btn-ghost is-on" data-speed="1">1×</button>
+          <button type="button" class="btn btn-ghost" data-speed="0.5">½×</button>
+          <button type="button" class="btn btn-ghost" data-speed="0.25">¼×</button>
+          <button type="button" class="btn btn-ghost" data-speed="0.125">⅛×</button>
+          <button type="button" class="btn btn-ghost" data-step="-1" data-i18n="lrec.frameBack">◀ 1 frame</button>
+          <button type="button" class="btn btn-ghost" data-step="1" data-i18n="lrec.frameOn">1 frame ▶</button>
+        </div>
+      </div>
+      <h3 class="backup-subsection-title lrec-title" data-i18n="lrec.cuesTitle">⭐ Cues</h3>
+      <!-- ☑ the checked cues, together (js/local-recorder.js) - there once there's a cue -->
+      <div class="lrec-group hidden" id="lrec-group">
         <label class="lrec-pick-all"><input type="checkbox" id="lrec-pick-all"> <span data-i18n="lrec.groupAll">All</span></label>
         <span class="lrec-picked" id="lrec-picked"></span>
-        <button type="button" class="btn btn-ghost" data-g="delete" disabled data-i18n="lrec.groupDelete">🗑 Delete</button>
-        <button type="button" class="btn btn-ghost" data-g="export" disabled data-i18n="lrec.groupExport">⬇ Export</button>
-        <button type="button" class="btn btn-ghost" data-g="keep" disabled data-i18n="lrec.groupKeep">📌 Save (keep forever)</button>
-        <button type="button" class="btn btn-ghost" data-g="share" disabled data-i18n="lrec.groupShare">📤 Share</button>
+        <span class="lrec-group-actions">
+          <button type="button" class="btn btn-ghost" data-g="share" disabled data-i18n="lrec.groupShare">📤 Share</button>
+          <button type="button" class="btn btn-ghost" data-g="export" disabled data-i18n="lrec.groupExport">⬇ Export</button>
+          <button type="button" class="btn btn-ghost" data-g="keep" disabled data-i18n="lrec.groupKeep">📌 Save (keep forever)</button>
+          <button type="button" class="btn btn-ghost" data-g="delete" disabled data-i18n="lrec.groupDelete">🗑 Delete</button>
+        </span>
       </div>
       <ul class="lrec-list" id="lrec-cues"></ul>
-      <h3 class="backup-subsection-title" data-i18n="lrec.recordingsTitle">🎞️ Recordings on this device</h3>
+      <h3 class="backup-subsection-title lrec-title" data-i18n="lrec.recordingsTitle">🎞️ Recordings on this device</h3>
       <ul class="lrec-list" id="lrec-sessions"></ul>
-      <video id="lrec-player" class="hidden" controls playsinline></video>
-      <!-- 🐢 slow motion, to look at a foul (js/local-recorder.js) -->
-      <div class="lrec-speed hidden" id="lrec-speed">
-        <span data-i18n="lrec.speed">🐢 Speed</span>
-        <button type="button" class="btn btn-ghost is-on" data-speed="1">1×</button>
-        <button type="button" class="btn btn-ghost" data-speed="0.5">½×</button>
-        <button type="button" class="btn btn-ghost" data-speed="0.25">¼×</button>
-        <button type="button" class="btn btn-ghost" data-speed="0.125">⅛×</button>
-        <button type="button" class="btn btn-ghost" data-step="-1" data-i18n="lrec.frameBack">◀ 1 frame</button>
-        <button type="button" class="btn btn-ghost" data-step="1" data-i18n="lrec.frameOn">1 frame ▶</button>
-      </div>
-      <p class="player-stats-note" id="lrec-storage"></p>
+      <p class="player-stats-note lrec-storage" id="lrec-storage"></p>
     </div>
   </section>
 
@@ -3232,27 +3246,27 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261108b"></script>
-<script src="js/big-store.js?v=20261108b"></script>
-<script src="js/mp4-clip.js?v=20261108b"></script>
-<script src="js/recording-consent.js?v=20261108b"></script>
-<script src="js/local-recorder.js?v=20261108b"></script>
-<script src="js/lib/pool-day.js?v=20261108b"></script>
-<script src="js/lib/race-math.js?v=20261108b"></script>
-<script src="js/lib/handicaps.js?v=20261108b"></script>
-<script src="js/lib/brackets.js?v=20261108b"></script>
-<script src="js/lib/league.js?v=20261108b"></script>
-<script src="js/lib/events.js?v=20261108b"></script>
-<script src="js/lib/chips.js?v=20261108b"></script>
-<script src="js/lib/highlights.js?v=20261108b"></script>
-<script src="js/lib/payouts.js?v=20261108b"></script>
-<script src="js/app.js?v=20261108b"></script>
-<script src="js/camera-client.js?v=20261108b"></script>
-<script src="js/voice.js?v=20261108b"></script>
+<script src="js/pairing.js?v=20261111a"></script>
+<script src="js/big-store.js?v=20261111a"></script>
+<script src="js/mp4-clip.js?v=20261111a"></script>
+<script src="js/recording-consent.js?v=20261111a"></script>
+<script src="js/local-recorder.js?v=20261111a"></script>
+<script src="js/lib/pool-day.js?v=20261111a"></script>
+<script src="js/lib/race-math.js?v=20261111a"></script>
+<script src="js/lib/handicaps.js?v=20261111a"></script>
+<script src="js/lib/brackets.js?v=20261111a"></script>
+<script src="js/lib/league.js?v=20261111a"></script>
+<script src="js/lib/events.js?v=20261111a"></script>
+<script src="js/lib/chips.js?v=20261111a"></script>
+<script src="js/lib/highlights.js?v=20261111a"></script>
+<script src="js/lib/payouts.js?v=20261111a"></script>
+<script src="js/app.js?v=20261111a"></script>
+<script src="js/camera-client.js?v=20261111a"></script>
+<script src="js/voice.js?v=20261111a"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261108b").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261111a").catch(function () {}); });
   }
 </script>
 </body>
