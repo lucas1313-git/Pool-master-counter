@@ -643,3 +643,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   real-clip-2026-10-29-shot.mp4`. First run: the player found in 113 of 119 looks, one id all along
   (kept 106 of 106). `node tests/probe_real_detector.js http://localhost:4235/ "<that clip>" [shots]`
   against a test server; skip it where the clip isn't there.
+- **probe_night_3d.js** — 🧊 The night in 3D (☰ Menu › Day Report): no games - the panel says so;
+  then a night played here (three players at 8-Ball, Winner Stays bringing the next one in): the
+  day it picks, the night rebuilt from the saved games (the tally, who came in and who sat down
+  between two matches), ▶ Replay stepped (the players walk, then it rests), ← on the keyboard,
+  ▶ Play to the last match; 🧵 The whole night in its place, a player's ribbon followed, its
+  picture a PNG made at once (under iOS's canvas limit), 🖼️ Save as picture a download on a
+  computer and the share sheet - from that tap - on a tablet; a light theme; no page errors.
+  `node tests/probe_night_3d.js http://localhost:4339/ [shots]` against a test server
+  (`HOME=tests/tmphome PORT=4339 node server/server.js`). The night's sums (racks into matches,
+  a race, who came in, partners switched, a game filed and still open counted once, the pool
+  day): tests/unit/night-timeline.test.js, in `npm test`.

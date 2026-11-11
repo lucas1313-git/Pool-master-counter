@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (229)
+## Identical to English (234)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -239,6 +239,11 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `nightBraid.tournament` | Tournament |
 | `nightBraid.minutes` | min |
 | `nightBraid.skunk` | 🦨 Skunk |
+| `nightReplay.minutes` | min |
+| `nightReplay.leaderboard` | Leaderboard |
+| `nightReplay.chip.raceTo` | 🏁 Race to |
+| `nightReplay.chip.tournament` | 🏆 Tournament |
+| `nightReplay.chip.skunk` | 🦨 Skunk! |
 
 ## Mostly English words (16)
 

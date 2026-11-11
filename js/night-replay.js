@@ -17,7 +17,7 @@
 //
 // PMCNightReplay.mount(root, night, opts) -> handle
 //   night = PMCLib.nightTimeline.build(...) (js/lib/night-timeline.js), or null
-//   opts = { t(key, vars), tp(key, n, vars) } - the app's words; without
+//   opts = { t(key, vars), tp(key, n, vars), clock(localIso) } - the app's words and clock; without
 //     them, the English table below (keys "nightReplay.*", = languages/*.json)
 //   handle = { setNight(night) - another day (none, or no match: one line),
 //     refresh() - the language or the theme changed, or the panel just
@@ -95,7 +95,7 @@
   var BZ0 = 2.02, TD = 0.62, TSTEP = 0.42; // bench: front edge, tier depth, tier height
   var SEATW = 0.69;
   var YAW0 = -0.25, PITCH0 = 0.56, DIST = 10.5;
-  var WIDE = 960, TIGHT = 640;             // root width: side by side from; stage width: the small scoreboard below
+  var WIDE = 960, TIGHT = 700;             // root width: side by side from; stage width: the small scoreboard below
 
   // the ball of each game, in its real colours
   var BALL_NO = { "8ball": 8, "8ballrotation": 8, "8ballpunishment": 8, "9ball": 9, "10ball": 10, "15ballrotation": 15, straight: 14, onepocket: 1 };
@@ -136,7 +136,13 @@
     return { hi: mix(c, "#ffffff", 0.55), light: mix(c, "#ffffff", 0.22), base: c, dark: mix(c, "#000000", 0.32), deep: mix(c, "#000000", 0.55) };
   }
   function rgba(h, a) { var A = rgb(h); return "rgba(" + A[0] + "," + A[1] + "," + A[2] + "," + a + ")"; }
-  function hhmm(s) { var m = /T(\d\d):(\d\d)/.exec(s || ""); return m ? m[1] + ":" + m[2] : ""; }
+  // (the app's own clock - "2:19 PM" - when it gives one: opts.clock)
+  var ownClock = null;
+  function hhmm(s) {
+    if (s && ownClock) { try { var own = ownClock(s); if (own) return own; } catch (e) {} }
+    var m = /T(\d\d):(\d\d)/.exec(s || "");
+    return m ? m[1] + ":" + m[2] : "";
+  }
   function minuteOf(s) { var m = /T(\d\d):(\d\d)/.exec(s || ""); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; }
   // (the library's times are local, with no zone: counted as they read)
   function stamp(s) {
@@ -146,7 +152,7 @@
   function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
   // ---- the model: everything is worked out from the night object ----
-  // Where side number `i` of `count` stands: an end of the table (L, R), or -
+  // Where a side stands: an end of the table (L, R), or -
   // three sides and more - in front of it (F0, F1...).
   function anchorsFor(n) {
     var out = [{ key: "L" }, { key: "R" }], f = n - 2, j;
@@ -436,7 +442,7 @@
     ".pmc-nr-chip .who{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}",
     // leaderboard
     ".pmc-nr-board{display:flex;flex-direction:column;min-width:0;padding:12px 10px 8px}",
-    ".pmc-nr-lbhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 6px 8px}",
+    ".pmc-nr-lbhead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 8px;padding:0 6px 8px}",
     ".pmc-nr-lbttl{font-size:15px;font-weight:700;color:var(--text,#f6efe9)}",
     ".pmc-nr-after{font-size:12px;color:var(--text-dim,#c9a2a2);font-variant-numeric:tabular-nums;text-align:right}",
     ".pmc-nr-hold{margin:0 2px 10px;padding:9px 12px 10px;border-radius:12px;border:1px solid var(--accent,#e8b923);" +
@@ -452,9 +458,11 @@
     ".pmc-nr-hold .run small{display:block;font-size:10px;color:var(--text-dim,#c9a2a2);letter-spacing:.06em;text-transform:uppercase;margin-top:2px;white-space:nowrap}",
     ".pmc-nr-hold .best{grid-column:1/-1;font-size:11.5px;color:var(--text-dim,#c9a2a2);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
     ".pmc-nr-cols{display:flex;justify-content:space-between;gap:8px;padding:0 12px 4px 46px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim,#c9a2a2);opacity:.8}",
+    ".pmc-nr-cols span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
     ".pmc-nr-rows{position:relative;flex:1 1 auto;min-height:0}",
     ".pmc-nr-row{position:absolute;left:0;right:0;top:0;display:grid;grid-template-columns:16px 26px minmax(0,1fr) auto;column-gap:8px;align-items:center;" +
       "padding:0 10px 0 6px;border-radius:10px;transition:transform .55s cubic-bezier(.3,.9,.3,1),background-color .3s;will-change:transform}",
+    ".pmc-nr-rows.still .pmc-nr-row{transition:none}",
     ".pmc-nr-row.at{background:var(--bg,#1a0a0a)}",
     ".pmc-nr-row.hold{background:linear-gradient(90deg,rgba(232,185,35,.2),rgba(232,185,35,.05))}",
     ".pmc-nr-rank{font-size:12px;font-weight:700;color:var(--text-dim,#c9a2a2);opacity:.8;text-align:right;font-variant-numeric:tabular-nums}",
@@ -463,7 +471,7 @@
     ".pmc-nr-mid{display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}",
     ".pmc-nr-name{font-size:14.5px;font-weight:700;line-height:1.15;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}",
     ".pmc-nr-line{display:flex;align-items:center;gap:8px;min-width:0;height:14px}",
-    ".pmc-nr-line small{flex:none;margin-left:auto;font-size:9px;font-weight:800;line-height:12px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;color:var(--text-dim,#c9a2a2);border:1px solid var(--border,#4a1e1e);border-radius:999px;padding:0 6px}",
+    ".pmc-nr-line small{flex:0 1 auto;max-width:62%;overflow:hidden;text-overflow:ellipsis;margin-left:auto;font-size:9px;font-weight:800;line-height:12px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;color:var(--text-dim,#c9a2a2);border:1px solid var(--border,#4a1e1e);border-radius:999px;padding:0 6px}",
     ".pmc-nr-row.hold .pmc-nr-line small{color:var(--on-accent,#241a00);background:var(--accent,#e8b923);border-color:var(--accent,#e8b923)}",
     ".pmc-nr-form{display:flex;flex:1 1 auto;gap:3px;height:9px;min-width:0}",
     ".pmc-nr-form i{flex:0 1 9px;min-width:2px;height:9px;border-radius:5px;border:1.5px solid var(--text-dim,#c9a2a2);opacity:.6;transition:transform .35s cubic-bezier(.3,1.6,.5,1),opacity .3s}",
@@ -550,6 +558,7 @@
   function mount(root, night, opts) {
     if (root.__pmcNightReplay && root.__pmcNightReplay.destroy) root.__pmcNightReplay.destroy();
     opts = opts || {};
+    ownClock = typeof opts.clock === "function" ? opts.clock : null;
     function T(key, vars) {
       if (opts.t) return String(opts.t(key, vars));
       return fill(EN[key] === undefined ? key : EN[key], vars);
@@ -758,7 +767,7 @@
         rowH = NP > 8 ? 40 : 48;
         el.rows.style.minHeight = ""; el.rows.style.height = (rowH * NP) + "px";
       }
-      el.rows.className = "pmc-nr-rows" + (rowH < 46 ? " compact" : "");
+      el.rows.className = "pmc-nr-rows still" + (rowH < 46 ? " compact" : "");   // (placed, not slid, when built or resized)
       Object.keys(rowEls).forEach(function (id) { rowEls[id].row.style.height = (rowH - 4) + "px"; });
       el.strip.className = "pmc-nr-strip" + (el.strip.clientWidth / Math.max(1, N) < 21 ? " thin" : "");
       // (a bracket too narrow for a word of its label: the line only)
@@ -769,6 +778,8 @@
       sized = true;
       if (pending) { pending = false; go(0, { force: true, instant: reduced }); }
       else { renderBoard(false); kick(); }
+      // (the layout read once first, so the rows land where they belong without a slide)
+      if (el.rows.offsetHeight >= 0) el.rows.className = el.rows.className.replace(" still", "");
     }
 
     // ---- drawing helpers ----
