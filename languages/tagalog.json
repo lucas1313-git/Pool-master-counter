@@ -2593,5 +2593,15 @@
   "shotClock.extended": "{{name}}: extension, +25 s",
   "shotClock.resetDone": "Na-reset ang shot clock",
   "voice.section.shotClock": "Shot clock",
-  "voice.note.shotClock": "Kapag naka-on ang shot clock (🎱 Laro): +25 s isang beses bawat manlalaro bawat rack, at bagong orasan sa susunod na tira."
+  "voice.note.shotClock": "Kapag naka-on ang shot clock (🎱 Laro): +25 s isang beses bawat manlalaro bawat rack, at bagong orasan sa susunod na tira.",
+  "night3d.heading": "🧊 Ang gabi sa 3D",
+  "night3d.summary": "Ang mga laro ng isang araw, pinapanood muli: sino ang naglaban, sino ang nanalo, sino ang pumasok at sino ang umupo.",
+  "night3d.day": "Araw",
+  "night3d.viewAria": "Paano ito titingnan",
+  "night3d.viewReplay": "▶ I-replay",
+  "night3d.viewBraid": "🧵 Ang buong gabi",
+  "night3d.empty": "Wala pang naitalang laro - maglaro ng isang gabi at lalabas ito rito.",
+  "night3d.pictureFailed": "Hindi nagawa ang larawan sa device na ito.",
+  "night3d.pictureSaved": "Na-save ang larawan: {{file}}",
+  "menu.night3d": "Ang gabi sa 3D"
 }

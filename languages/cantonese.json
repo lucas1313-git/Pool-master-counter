@@ -2593,5 +2593,15 @@
   "shotClock.extended": "{{name}}：延時 +25 秒",
   "shotClock.resetDone": "出桿計時重新開始",
   "voice.section.shotClock": "出桿計時",
-  "voice.note.shotClock": "開咗出桿計時（🎱 遊戲）：每位球員每局可以延時一次 +25 秒，下一桿重新計。"
+  "voice.note.shotClock": "開咗出桿計時（🎱 遊戲）：每位球員每局可以延時一次 +25 秒，下一桿重新計。",
+  "night3d.heading": "🧊 3D 睇返成晚",
+  "night3d.summary": "重播一日嘅賽事：邊個對邊個、邊個贏、邊個上場、邊個坐低。",
+  "night3d.day": "日期",
+  "night3d.viewAria": "點樣睇",
+  "night3d.viewReplay": "▶ 重播",
+  "night3d.viewBraid": "🧵 成晚一覽",
+  "night3d.empty": "未有賽事記錄 - 打完一晚就會喺度見到。",
+  "night3d.pictureFailed": "呢部裝置整唔到張圖。",
+  "night3d.pictureSaved": "已儲存圖片：{{file}}",
+  "menu.night3d": "3D 睇返成晚"
 }

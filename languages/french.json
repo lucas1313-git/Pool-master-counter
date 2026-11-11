@@ -2593,5 +2593,15 @@
   "shotClock.extended": "{{name}} : prolongation, +25 s",
   "shotClock.resetDone": "Chrono relancé",
   "voice.section.shotClock": "Chrono de coup",
-  "voice.note.shotClock": "Avec le chrono de coup (🎱 Partie) : +25 s une fois par joueur et par manche, et un chrono neuf pour le coup suivant."
+  "voice.note.shotClock": "Avec le chrono de coup (🎱 Partie) : +25 s une fois par joueur et par manche, et un chrono neuf pour le coup suivant.",
+  "night3d.heading": "🧊 La soirée en 3D",
+  "night3d.summary": "Les parties d'une journée rejouées : qui a joué contre qui, qui a gagné, qui est entré et qui s'est assis.",
+  "night3d.day": "Jour",
+  "night3d.viewAria": "Comment la voir",
+  "night3d.viewReplay": "▶ Rejouer",
+  "night3d.viewBraid": "🧵 Toute la soirée",
+  "night3d.empty": "Aucune partie enregistrée pour l'instant - jouez une soirée et elle apparaîtra ici.",
+  "night3d.pictureFailed": "L'image n'a pas pu être créée sur cet appareil.",
+  "night3d.pictureSaved": "Image enregistrée : {{file}}",
+  "menu.night3d": "La soirée en 3D"
 }

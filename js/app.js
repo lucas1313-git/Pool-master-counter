@@ -2689,6 +2689,7 @@
 
   function applyTheme(id, persist) {
     document.documentElement.setAttribute("data-theme", id);
+    refreshNight3dColors(); // (its pictures read the theme's colours when drawn)
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta && THEME_STATUS_COLORS[id]) meta.setAttribute("content", THEME_STATUS_COLORS[id]);
     if (persist) {
@@ -4895,6 +4896,7 @@
     updateDayReportRecipientsLine();
     renderWhenShown(recoverDataList, "recoverData", renderRecoverDataList);
     renderWhenShown(reportArchiveList, "reportArchive", renderReportArchiveList);
+    renderWhenShown(night3dPanelBody, "night3d", renderNight3d);
     // League is its own page now (not an always-rendered panel) and its
     // render rebuilds a whole Tables Overview grid - skip it on every
     // ordinary scoreboard tap's renderAll() and only do the work while the
@@ -7984,7 +7986,8 @@
       ] },
       { icon: "📝", key: "menu.dayReport", children: [
         { icon: "📝", key: "menu.todaysReport", run: panel("day-notes-panel") },
-        { icon: "🗂️", key: "menu.pastReports", run: panel("report-archive-panel") }
+        { icon: "🗂️", key: "menu.pastReports", run: panel("report-archive-panel") },
+        { icon: "🧊", key: "menu.night3d", run: panel("night-3d-panel") }
       ] },
       { icon: "💾", key: "menu.backup", run: panel("backup-panel") },
       { icon: "📷", key: "menu.camera", run: click("btn-open-camera-wizard-header") },
@@ -13517,6 +13520,134 @@
     parts.push(notes ? notes.length + " character note" : "no notes yet");
     setPanelSummary("day-notes-panel", parts.join(" · "));
   }
+
+  // ---- 🧊 The night in 3D ----
+  // A day's games played back (js/night-replay.js: the table, who comes in
+  // and who sits down, the score, step by step) and as one picture
+  // (js/night-braid.js: every player a ribbon, every match a block - shared
+  // as a PNG). Both draw what js/lib/night-timeline.js rebuilds from the
+  // saved games (each player's own log, and the open session). The day: the
+  // report's, until another is picked here. Nothing is worked out or drawn
+  // while the panel is folded (renderWhenShown).
+  var night3dPanelBody = document.getElementById("night-3d-panel-body");
+  var night3dDaySelect = document.getElementById("night3d-day");
+  var night3d = { day: null, picked: false, view: "replay", sig: null, night: null, replay: null, braid: null, shown: {} };
+  function night3dSource() {
+    return { playerStats: PLAYER_STATS, gameHistory: state.gameHistory || [], tournamentResults: TOURNAMENT_RESULTS, dayNotes: DAY_NOTES };
+  }
+  function night3dClock(localIso) {
+    try {
+      return new Date(localIso).toLocaleTimeString(reportLocale(), { hour: "numeric", minute: "2-digit" });
+    } catch (e) {
+      return String(localIso).slice(11, 16);
+    }
+  }
+  function renderNight3d() {
+    var lib = window.PMCLib && window.PMCLib.nightTimeline;
+    if (!lib || !night3dPanelBody) return;
+    var src = night3dSource();
+    var days = lib.days(src).map(function (d) { return d.day; });
+    if (!night3d.picked || days.indexOf(night3d.day) === -1) {
+      night3d.picked = false;
+      night3d.day = days.indexOf(reportDayChosen()) !== -1 ? reportDayChosen() : days[0] || null;
+    }
+    if (night3dDaySelect.dataset.days !== days.join(",")) {
+      night3dDaySelect.dataset.days = days.join(",");
+      night3dDaySelect.innerHTML = "";
+      days.forEach(function (d) {
+        var o = document.createElement("option");
+        o.value = d;
+        o.textContent = reportCalendarLongDate(d);
+        night3dDaySelect.appendChild(o);
+      });
+    }
+    night3dDaySelect.value = night3d.day || "";
+    night3dDaySelect.disabled = days.length < 2;
+    var night = night3d.day ? lib.build(night3d.day, src, {
+      locale: reportLocale(),
+      gameLabel: function (type, label) { return GAME_TYPES[type] ? GAME_TYPES[type].label : label; }
+    }) : null;
+    if (night && !night.matches.length) night = null;
+    document.getElementById("night3d-empty").classList.toggle("hidden", !!night);
+    var facts = document.getElementById("night3d-facts");
+    facts.classList.toggle("hidden", !night);
+    if (night) {
+      var last = night.matches[night.matches.length - 1];
+      facts.textContent = [countPhrase("players", night.players.length), countPhrase("games", night.rackCount), night3dClock(night.matches[0].endedAt) + " – " + night3dClock(last.endedAt)].join(" · ");
+    }
+    // (the same night as drawn: left as it is - a replay isn't sent back to its start by a redraw)
+    var sig = night ? [night.day, night.rackCount, night.matches.length, night.matches[night.matches.length - 1].endedAt, night.players.map(function (p) { return p.name; }).join("|")].join("#") : "";
+    night3d.sig = sig;
+    night3d.night = night;
+    showNight3dView();
+  }
+  function showNight3dView() {
+    ["replay", "braid"].forEach(function (view) {
+      var on = view === night3d.view, el = document.getElementById("night3d-" + view);
+      el.classList.toggle("hidden", !on || !night3d.night);
+      if (!on) {
+        if (view === "replay" && night3d.replay) night3d.replay.pause();
+        return;
+      }
+      var module = view === "replay" ? window.PMCNightReplay : window.PMCNightBraid;
+      if (!module) return;
+      if (!night3d[view]) {
+        night3d[view] = module.mount(el, night3d.night, {
+          t: function (k, v) { return T(k, v); },
+          tp: function (k, n, v) { return TP(k, n, v); },
+          onSavePicture: shareNight3dPicture
+        });
+      } else if (night3d.shown[view] !== night3d.sig) {
+        night3d[view].setNight(night3d.night);
+      } else {
+        night3d[view].refresh(); // (shown again: its size may have changed since)
+      }
+      night3d.shown[view] = night3d.sig;
+    });
+  }
+  function refreshNight3dColors() {
+    if (!night3d) return; // (the theme is applied before this is set up)
+    ["replay", "braid"].forEach(function (view) { if (night3d[view]) night3d[view].refresh(); });
+  }
+  // 🖼️ The whole night's picture, out through the share sheet (a phone or
+  // tablet) or as a download - made and shared within this tap (Safari
+  // refuses the share sheet after a wait: pictureDataUrl draws at once).
+  function shareNight3dPicture() {
+    if (!night3d.braid || !night3d.night) return;
+    var blob = null;
+    try { blob = dataUrlToBlob(night3d.braid.pictureDataUrl()); } catch (e) {}
+    if (!blob) { showToast(T("night3d.pictureFailed"), "⚠️ "); return; }
+    var file = new File([blob], "pool-master-counter-night-" + night3d.night.day + ".png", { type: "image/png" });
+    var save = function () {
+      downloadFileObject(file);
+      showToast(T("night3d.pictureSaved", { file: file.name }), "🖼️ ");
+    };
+    if ((navigator.maxTouchPoints || 0) > 1 && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file] }).catch(function (err) { if (!err || err.name !== "AbortError") save(); });
+    } else {
+      save();
+    }
+  }
+  // (tests)
+  window.PMCNight3d = {
+    state: function () {
+      return { day: night3d.day, view: night3d.view, night: night3d.night, replay: night3d.replay ? night3d.replay.state() : null, braid: night3d.braid ? night3d.braid.state() : null };
+    },
+    replay: function () { return night3d.replay; },
+    braid: function () { return night3d.braid; }
+  };
+  night3dDaySelect.addEventListener("change", function () {
+    night3d.day = night3dDaySelect.value;
+    night3d.picked = true;
+    renderNight3d();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="night3d-view"]'), function (radio) {
+    radio.addEventListener("change", function () {
+      if (!radio.checked) return;
+      night3d.view = radio.value;
+      showNight3dView();
+    });
+  });
 
   // ---- 📅 The report's calendar ----
   // Every day with games is marked with how many; tapping one makes the
@@ -42386,6 +42517,7 @@
   wireCollapsiblePanel("history-panel", "btn-toggle-history-panel");
   wireCollapsiblePanel("day-notes-panel", "btn-toggle-day-notes-panel");
   wireCollapsiblePanel("report-archive-panel", "btn-toggle-report-archive-panel");
+  wireCollapsiblePanel("night-3d-panel", "btn-toggle-night-3d-panel");
   wireCollapsiblePanel("resets-panel", "btn-toggle-resets-panel");
   wireCollapsiblePanel("focus-players-wrap", "btn-toggle-focus-players");
   wireCollapsiblePanel("player-page-synopsis-panel", "btn-toggle-player-page-synopsis-panel");

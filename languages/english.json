@@ -2593,5 +2593,15 @@
   "shotClock.extended": "{{name}}: extension, +25 s",
   "shotClock.resetDone": "Shot clock reset",
   "voice.section.shotClock": "Shot clock",
-  "voice.note.shotClock": "With the shot clock on (🎱 Game): +25 s once per player per rack, and a fresh clock for the next shot."
+  "voice.note.shotClock": "With the shot clock on (🎱 Game): +25 s once per player per rack, and a fresh clock for the next shot.",
+  "night3d.heading": "🧊 The night in 3D",
+  "night3d.summary": "A day's games played back: who played whom, who won, who came in and who sat down.",
+  "night3d.day": "Day",
+  "night3d.viewAria": "How to see it",
+  "night3d.viewReplay": "▶ Replay",
+  "night3d.viewBraid": "🧵 The whole night",
+  "night3d.empty": "No games on record yet - play a night and it shows here.",
+  "night3d.pictureFailed": "The picture couldn't be made on this device.",
+  "night3d.pictureSaved": "Picture saved: {{file}}",
+  "menu.night3d": "The night in 3D"
 }

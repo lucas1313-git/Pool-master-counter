@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261108b">
+<link rel="stylesheet" href="css/style.css?v=20261111b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -842,6 +842,28 @@
     <p class="panel-summary" id="report-archive-panel-summary" data-i18n="reportArchive.summary">Every colorful report you generate is saved here automatically, so you can revisit any day later.</p>
     <div class="panel-body" id="report-archive-panel-body">
       <ul id="report-archive-list" class="recover-data-list"></ul>
+    </div>
+  </section>
+
+  <!-- 🧊 The night in 3D: a day's games played back (js/night-replay.js) and as one picture (js/night-braid.js), rebuilt from the saved games by js/lib/night-timeline.js -->
+  <section class="panel collapsible-panel collapsed" id="night-3d-panel">
+    <button type="button" class="panel-toggle" id="btn-toggle-night-3d-panel" aria-expanded="false" aria-controls="night-3d-panel-body">
+      <h2 data-i18n="night3d.heading">🧊 The night in 3D</h2>
+      <span class="panel-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <p class="panel-summary" id="night-3d-panel-summary" data-i18n="night3d.summary">A day's games played back: who played whom, who won, who came in and who sat down.</p>
+    <div class="panel-body" id="night-3d-panel-body">
+      <div class="night3d-bar">
+        <label class="night3d-day"><span data-i18n="night3d.day">Day</span> <select id="night3d-day"></select></label>
+        <span class="gs-chips" role="radiogroup" data-i18n-aria-label="night3d.viewAria" aria-label="How to see it">
+          <label class="gs-chip"><input type="radio" name="night3d-view" value="replay" checked> <span data-i18n="night3d.viewReplay">▶ Replay</span></label>
+          <label class="gs-chip"><input type="radio" name="night3d-view" value="braid"> <span data-i18n="night3d.viewBraid">🧵 The whole night</span></label>
+        </span>
+      </div>
+      <p class="player-stats-note night3d-facts" id="night3d-facts"></p>
+      <p class="player-stats-note hidden" id="night3d-empty" data-i18n="night3d.empty">No games on record yet - play a night and it shows here.</p>
+      <div id="night3d-replay"></div>
+      <div id="night3d-braid" class="hidden"></div>
     </div>
   </section>
 
@@ -3232,27 +3254,30 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261108b"></script>
-<script src="js/big-store.js?v=20261108b"></script>
-<script src="js/mp4-clip.js?v=20261108b"></script>
-<script src="js/recording-consent.js?v=20261108b"></script>
-<script src="js/local-recorder.js?v=20261108b"></script>
-<script src="js/lib/pool-day.js?v=20261108b"></script>
-<script src="js/lib/race-math.js?v=20261108b"></script>
-<script src="js/lib/handicaps.js?v=20261108b"></script>
-<script src="js/lib/brackets.js?v=20261108b"></script>
-<script src="js/lib/league.js?v=20261108b"></script>
-<script src="js/lib/events.js?v=20261108b"></script>
-<script src="js/lib/chips.js?v=20261108b"></script>
-<script src="js/lib/highlights.js?v=20261108b"></script>
-<script src="js/lib/payouts.js?v=20261108b"></script>
-<script src="js/app.js?v=20261108b"></script>
-<script src="js/camera-client.js?v=20261108b"></script>
-<script src="js/voice.js?v=20261108b"></script>
+<script src="js/pairing.js?v=20261111b"></script>
+<script src="js/big-store.js?v=20261111b"></script>
+<script src="js/mp4-clip.js?v=20261111b"></script>
+<script src="js/recording-consent.js?v=20261111b"></script>
+<script src="js/local-recorder.js?v=20261111b"></script>
+<script src="js/lib/pool-day.js?v=20261111b"></script>
+<script src="js/lib/race-math.js?v=20261111b"></script>
+<script src="js/lib/handicaps.js?v=20261111b"></script>
+<script src="js/lib/brackets.js?v=20261111b"></script>
+<script src="js/lib/league.js?v=20261111b"></script>
+<script src="js/lib/events.js?v=20261111b"></script>
+<script src="js/lib/chips.js?v=20261111b"></script>
+<script src="js/lib/highlights.js?v=20261111b"></script>
+<script src="js/lib/payouts.js?v=20261111b"></script>
+<script src="js/lib/night-timeline.js?v=20261111b"></script>
+<script src="js/night-replay.js?v=20261111b"></script>
+<script src="js/night-braid.js?v=20261111b"></script>
+<script src="js/app.js?v=20261111b"></script>
+<script src="js/camera-client.js?v=20261111b"></script>
+<script src="js/voice.js?v=20261111b"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261108b").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261111b").catch(function () {}); });
   }
 </script>
 </body>

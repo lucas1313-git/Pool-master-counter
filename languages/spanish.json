@@ -2593,5 +2593,15 @@
   "shotClock.extended": "{{name}}: extensión, +25 s",
   "shotClock.resetDone": "Reloj de tiro reiniciado",
   "voice.section.shotClock": "Reloj de tiro",
-  "voice.note.shotClock": "Con el reloj de tiro (🎱 Juego): +25 s una vez por jugador y partida, y un reloj nuevo para el siguiente tiro."
+  "voice.note.shotClock": "Con el reloj de tiro (🎱 Juego): +25 s una vez por jugador y partida, y un reloj nuevo para el siguiente tiro.",
+  "night3d.heading": "🧊 La noche en 3D",
+  "night3d.summary": "Las partidas de un día, repetidas: quién jugó contra quién, quién ganó, quién entró y quién se sentó.",
+  "night3d.day": "Día",
+  "night3d.viewAria": "Cómo verla",
+  "night3d.viewReplay": "▶ Repetición",
+  "night3d.viewBraid": "🧵 Toda la noche",
+  "night3d.empty": "Todavía no hay partidas guardadas: juega una noche y aparecerá aquí.",
+  "night3d.pictureFailed": "No se pudo crear la imagen en este dispositivo.",
+  "night3d.pictureSaved": "Imagen guardada: {{file}}",
+  "menu.night3d": "La noche en 3D"
 }

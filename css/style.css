@@ -10602,6 +10602,37 @@ input[type="number"].big-number-input {
   margin: 6px 0;
 }
 
+/* 🧊 The night in 3D: the day and the view (▶ Replay / 🧵 The whole night)
+   over the picture - the two views bring their own styles
+   (js/night-replay.js .pmc-nr, js/night-braid.js .pmc-nb). */
+.night3d-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 8px;
+}
+
+.night3d-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.night3d-day select {
+  flex: 1;
+  min-width: 0;
+}
+
+.night3d-facts {
+  margin: 0 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* "💾 Back up" with its ❓ (what a backup includes) beside it */
 .bk-title-row {
   display: flex;
