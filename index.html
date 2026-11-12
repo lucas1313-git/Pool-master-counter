@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261112b">
+<link rel="stylesheet" href="css/style.css?v=20261112c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2168,7 +2168,7 @@
         <li data-i18n-html="help.main.scoreboard"><strong>Scoreboard</strong> — Sits right above the player cards, visible whether Focus Mode is on or off. "Do not record games statistics and players data" stops every save while it's checked — nothing goes into state, career stats, or ratings until you uncheck it; wins still count live on screen for the rest of this browser tab, but none of it survives a reload. Tap + / − on a player's card to track balls/points/racks toward the target. Reaching the target banks a win and starts the next game. Focus Mode hides every other panel down to just the scoreboard — while in it, a small "Players" chevron above the board still lets you flip who's Playing vs Standby without leaving focus; every number on screen also scales up (up to 3x) to stay readable from across the room, shrinking back down on its own once enough players are on screen that the cards get narrower. Whenever Games Rotations is on with 2+ game types, a "Rotation Position" line appears right under the "Now Playing" banner with ◀/▶ buttons - each tap moves the rotation's own games-toward-the-next-switch counter by exactly one game (the same counter a real win advances), so it only actually changes the active game type once enough taps cross a switch-every boundary. No score, win, or ball count is touched - it's purely for correcting the rotation's position by hand if it ever drifts.</li>
         <li data-i18n-html="help.main.recentGames"><strong>Recent Games</strong> — Every game played today, most recent first. A day runs from 5 a.m. to 5 a.m., so a night that goes past midnight stays one night, even across a race being won and the next one starting fresh; last night’s games that haven’t been saved yet stay here too. Each winner's rating change from that exact game shows beside their badge; the game that completes a race-to-N gets a gold highlight and its own banner line ("🏆 Alice won the Race to 5 session!").</li>
         <li data-i18n-html="help.main.todaysNotes"><strong>Publish Daily Report</strong> — A free-text box for anything worth remembering about today's live play; it saves automatically as you type. Copy/Email/Text Report builds a plain-text day report — who played, win/loss and rating movement for each, total games, game types played, a game-by-game breakdown (grouped by matchup — "Luc won 3 games of 8-Ball against Suresh" rather than one line per game) split into earlier-session/current-session, and your notes — ready to paste, email, or send as a text message.</li>
-        <li data-i18n-html="help.main.night3d"><strong>🧊 The night in 3D</strong> — ☰ Menu › Day Report › The night in 3D. Pick a day with games. 🗺️ Map is a 3D diagram of the night, to turn and move like a map. The white line is the table, with a ball for every match. Each player is a node: a ball when playing, a ring when sitting out. Players join into sides, and sides into the match; gold is the winning side. Dashes show a loser going out. Drag to turn it, use two fingers to move it, pinch to zoom. Tap a player to follow them, or a match ball for its details. 🌀 Spiral and ➖ Straight change its shape. 🧵 The whole night is one flat picture: every player a ribbon, every match a block. 🖼️ Save as picture shares either one. Both are rebuilt from the saved games.</li>
+        <li data-i18n-html="help.main.night3d"><strong>🧊 The night in 3D</strong> — ☰ Menu › Day Report › The night in 3D. Pick a day with games. 🗺️ Map is a 3D diagram of the night, to turn and move like a map. The white line is the table, with a ball for every match. Each match has a plate: the balls on it are the players in that match. Below runs the bench: a square there is a player sitting out, with their name. Players join into sides, and sides into the match; gold is the winning side. Dashes show a loser going down to the bench. Drag to turn it, use two fingers to move it, pinch to zoom. Tap a player to follow them, or a match ball for its details. 🌀 Spiral and ➖ Straight change its shape. 🧵 The whole night is one flat picture: every player a ribbon, every match a block. 🖼️ Save as picture shares either one. Both are rebuilt from the saved games.</li>
         <li data-i18n-html="help.main.resets"><strong>All Resets</strong> — Every reset button in the app, gathered in one place: Reset Current Game (clears the live score, no win credited), Reset Tournament (offers to save the session first if there are unsaved games, then clears session wins/history and ends any active bracket tournament together), Reset All Players' Official Rating (roster only, back to the default starting rating), and Reset All Player Stats / Reset Player Lists (each backs up first, warns you, then clears — career stats plus the live session, and saved lists, respectively; ratings are never touched). Ending just an in-progress tournament without touching the live session is still on the Tournament page's own Abandon Tournament button.</li>
         <li data-i18n-html="help.main.streamOverlay"><strong>📺 Stream overlay (OBS, YouTube, Facebook)</strong> — A scoreboard to lay over a live stream, on a see-through background: the names, Q-Scores, the score, Race to N, the game, the rack and who breaks. 1) On the device keeping score (the scoreboard opened from the computer's server), ☰ Menu › More › Multi Tables › 🎯 Host This Session. 2) In OBS add a <em>Browser Source</em>: URL <code>http://localhost:4173/overlay.html?layout=lower</code>, width 1920, height 1080 — or <code>?layout=vertical</code> at 1080 × 1920 for upright 9:16 video. OBS on another computer: the computer's address instead of localhost (e.g. <code>http://192.168.1.20:4173/overlay.html?layout=lower</code>) plus <code>&amp;device=</code> and the app key from ☰ Menu › More › 📱 Paired devices › Show the address. 3) Go live on YouTube or Facebook from OBS as usual. Nothing to tap on the overlay — options go in the address: <code>&amp;theme=emerald-rail</code> (otherwise the scoring device's theme), <code>&amp;lang=french</code>, <code>&amp;break=alternate</code> (otherwise the last rack's winner breaks), <code>&amp;ratings=off</code>, <code>&amp;pos=top</code>. The full guide is docs/stream-overlay.md.</li>
       </ul>
@@ -3269,30 +3269,30 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261112b"></script>
-<script src="js/big-store.js?v=20261112b"></script>
-<script src="js/mp4-clip.js?v=20261112b"></script>
-<script src="js/recording-consent.js?v=20261112b"></script>
-<script src="js/local-recorder.js?v=20261112b"></script>
-<script src="js/lib/pool-day.js?v=20261112b"></script>
-<script src="js/lib/race-math.js?v=20261112b"></script>
-<script src="js/lib/handicaps.js?v=20261112b"></script>
-<script src="js/lib/brackets.js?v=20261112b"></script>
-<script src="js/lib/league.js?v=20261112b"></script>
-<script src="js/lib/events.js?v=20261112b"></script>
-<script src="js/lib/chips.js?v=20261112b"></script>
-<script src="js/lib/highlights.js?v=20261112b"></script>
-<script src="js/lib/payouts.js?v=20261112b"></script>
-<script src="js/lib/night-timeline.js?v=20261112b"></script>
-<script src="js/night-map.js?v=20261112b"></script>
-<script src="js/night-braid.js?v=20261112b"></script>
-<script src="js/app.js?v=20261112b"></script>
-<script src="js/camera-client.js?v=20261112b"></script>
-<script src="js/voice.js?v=20261112b"></script>
+<script src="js/pairing.js?v=20261112c"></script>
+<script src="js/big-store.js?v=20261112c"></script>
+<script src="js/mp4-clip.js?v=20261112c"></script>
+<script src="js/recording-consent.js?v=20261112c"></script>
+<script src="js/local-recorder.js?v=20261112c"></script>
+<script src="js/lib/pool-day.js?v=20261112c"></script>
+<script src="js/lib/race-math.js?v=20261112c"></script>
+<script src="js/lib/handicaps.js?v=20261112c"></script>
+<script src="js/lib/brackets.js?v=20261112c"></script>
+<script src="js/lib/league.js?v=20261112c"></script>
+<script src="js/lib/events.js?v=20261112c"></script>
+<script src="js/lib/chips.js?v=20261112c"></script>
+<script src="js/lib/highlights.js?v=20261112c"></script>
+<script src="js/lib/payouts.js?v=20261112c"></script>
+<script src="js/lib/night-timeline.js?v=20261112c"></script>
+<script src="js/night-map.js?v=20261112c"></script>
+<script src="js/night-braid.js?v=20261112c"></script>
+<script src="js/app.js?v=20261112c"></script>
+<script src="js/camera-client.js?v=20261112c"></script>
+<script src="js/voice.js?v=20261112c"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261112b").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261112c").catch(function () {}); });
   }
 </script>
 </body>
