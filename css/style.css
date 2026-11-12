@@ -8379,26 +8379,6 @@ body.network-guest-mode #header-group-start {
 .stop-choice { font-size: 1.1rem; }
 .stop-standing { font-size: 1.1rem; font-weight: 700; }
 
-/* ☑ the in-app recorder's checked cues, together */
-.lrec-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 10px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; }
-.lrec-group .btn { width: auto; min-height: 44px; }
-.lrec-group .btn.lrec-ready { background: var(--accent); color: #1a0d0d; font-weight: 900; }
-.lrec-pick-all { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
-.lrec-picked { color: var(--text-dim); margin-right: 6px; }
-#lrec-cues li { position: relative; padding-left: 44px !important; }
-#lrec-cues li .lrec-pick { position: absolute; left: 12px; top: 14px; width: 22px; height: 22px; margin: 0; }
-#lrec-cues li.lrec-kept .lrec-name { color: var(--accent); }
-
-/* 🐢 the in-app player's slow motion */
-.lrec-speed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
-.lrec-speed.hidden { display: none; }
-.lrec-speed .btn { min-height: 44px; min-width: 56px; width: auto; }
-.lrec-speed .btn.is-on { background: var(--accent); color: #1a0d0d; border-color: var(--accent); font-weight: 900; }
-
-/* 🎬 the in-app recorder's cues: ⭐ gold, 🎱 game marks blue */
-#lrec-cues li.lrec-cue { border-left: 5px solid var(--accent); padding-left: 10px; }
-#lrec-cues li.lrec-game { border-left: 5px solid #3fa9f5; padding-left: 10px; }
-#lrec-cues li.lrec-game .lrec-name { color: #3fa9f5; }
 
 /* ✨ Tonight's highlights (P35): who said yes, the clips, the reel */
 .highlights-who { display: flex; flex-wrap: wrap; gap: 4px 18px; }
@@ -10509,20 +10489,74 @@ input[type="number"].big-number-input {
 }
 
 /* 🎬 Record this session (js/local-recorder.js) - on a device with no
-   local server: the camera's picture while it records, big Start and Cue
-   buttons, then the cues and the recordings kept on this device. */
+   local server. Top to bottom: what to record (camera, what's kept, sound -
+   away while it records), the camera's picture, the two big buttons (Start
+   and Cue) and how it's going; then what's being watched, the cues and the
+   recordings kept on this device - each a line: its name and details, its
+   buttons beside them. */
+.lrec-intro {
+  text-align: left;
+  margin: 0 0 12px;
+}
+
+.lrec-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.lrec-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lrec-field label {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.lrec-field select {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.lrec-check {
+  flex-wrap: nowrap;
+  min-height: 44px;
+}
+
+.lrec-sign {
+  min-height: 44px;
+  justify-self: start;
+}
+
 .lrec-stage video {
   width: 100%;
   max-height: 46vh;
   background: #000;
   border-radius: var(--radius);
   display: block;
-  margin: 8px 0;
+  margin: 0 0 10px;
 }
 
-.lrec-big {
-  flex: 1;
-  min-height: 56px;
+.lrec-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.lrec-big,
+.recorder-cue-btn.lrec-big {
+  width: 100%;
+  height: auto;
+  min-height: 60px;
+  justify-content: center;
   font-size: 1.2rem;
   font-weight: 800;
 }
@@ -10537,7 +10571,7 @@ input[type="number"].big-number-input {
   text-align: center;
   font-weight: 700;
   color: var(--text-dim);
-  margin: 6px 0 12px;
+  margin: 8px 0 14px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -10545,13 +10579,138 @@ input[type="number"].big-number-input {
   color: var(--danger);
 }
 
+/* ▶ what's being watched: its name, × to put it away, 🐢 its speed */
+.lrec-watch {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  padding: 8px 10px 10px;
+  margin: 0 0 14px;
+}
+
+.lrec-watch-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.lrec-watch-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.lrec-watch-close {
+  flex: 0 0 auto;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+#lrec-player {
+  width: 100%;
+  max-height: 50vh;
+  background: #000;
+  border-radius: 10px;
+  display: block;
+}
+
+.lrec-speed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: var(--text-dim);
+}
+
+.lrec-speed .btn {
+  min-height: 44px;
+  min-width: 56px;
+  width: auto;
+}
+
+.lrec-speed .btn.is-on {
+  background: var(--accent);
+  color: #1a0d0d;
+  border-color: var(--accent);
+  font-weight: 900;
+}
+
+.lrec-title {
+  margin: 18px 0 8px;
+  font-size: 1.1rem;
+}
+
+/* ☑ the checked cues, together - there once there's a cue to check */
+.lrec-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text-dim) 9%, transparent);
+}
+
+.lrec-pick-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lrec-pick-all input,
+.lrec-pick {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.lrec-picked {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.lrec-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.lrec-group .btn {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 12px;
+}
+
+.lrec-group .btn.lrec-ready {
+  background: var(--accent);
+  color: #1a0d0d;
+  font-weight: 900;
+}
+
 .lrec-list {
   list-style: none;
   padding: 0;
-  margin: 6px 0 14px;
+  margin: 0 0 6px;
 }
 
 .lrec-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 10px;
@@ -10559,10 +10718,26 @@ input[type="number"].big-number-input {
   background: var(--bg-card);
 }
 
-.lrec-list li.lrec-empty {
+#lrec-cues li {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.lrec-list li.lrec-empty,
+#lrec-cues li.lrec-empty {
+  display: block;
   color: var(--text-dim);
   background: none;
   border-style: dashed;
+}
+
+/* ⭐ a cue: gold; 🎱 a game mark: blue; 📌 kept for good: its name gold */
+#lrec-cues li.lrec-cue { border-left: 5px solid var(--accent); }
+#lrec-cues li.lrec-game { border-left: 5px solid #3fa9f5; }
+#lrec-cues li.lrec-game .lrec-name { color: #3fa9f5; }
+#lrec-cues li.lrec-kept .lrec-name { color: var(--accent); }
+
+.lrec-text {
+  min-width: 0;
 }
 
 .lrec-name {
@@ -10574,11 +10749,20 @@ input[type="number"].big-number-input {
   color: var(--text-dim);
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
-  margin: 2px 0 6px;
+  margin-top: 2px;
 }
 
 .lrec-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
+}
+
+.lrec-actions .btn {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 12px;
 }
 
 .lrec-actions .btn.lrec-ready {
@@ -10594,12 +10778,31 @@ input[type="number"].big-number-input {
   color: #fff;
 }
 
-#lrec-player {
-  width: 100%;
-  max-height: 50vh;
-  background: #000;
-  border-radius: var(--radius);
-  margin: 6px 0;
+.lrec-storage {
+  margin-top: 10px;
+}
+
+/* a narrow screen: a row's buttons under its words */
+@media (max-width: 640px) {
+  .lrec-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #lrec-cues li {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  #lrec-cues li .lrec-actions {
+    grid-column: 1 / -1;
+  }
+
+  .lrec-actions {
+    justify-content: flex-start;
+  }
+
+  .lrec-group-actions {
+    margin-left: 0;
+  }
 }
 
 /* 🧊 The night in 3D: the day and the view (▶ Replay / 🧵 The whole night)

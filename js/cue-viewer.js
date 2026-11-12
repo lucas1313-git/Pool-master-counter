@@ -51,7 +51,9 @@
 
   var CSS = [
     ".cv { display: block; }",
-    ".cv video { width: 100%; max-height: 52vh; background: #000; border-radius: 12px; display: block; }",
+    ".cv video { width: 100%; aspect-ratio: 16 / 9; max-height: 52vh; background: #000; border-radius: 12px; display: block; }",
+    // (nothing chosen to watch yet: no empty player, no speed buttons - see load())
+    ".cv .cv-video:not([src]), .cv .cv-video:not([src]) ~ .cv-speed { display: none; }",
     ".cv .cv-name { font-weight: 800; color: var(--accent, #e8b923); margin: 8px 2px 4px; overflow-wrap: anywhere; min-height: 1.3em; }",
     ".cv .cv-name input { width: 100%; font: inherit; background: #120606; color: inherit; border: 1px solid var(--border, #4a1e1e); border-radius: 8px; padding: 6px 8px; }",
     ".cv .cv-line { position: relative; height: 54px; margin: 10px 0 6px; background: #120606; border-radius: 10px; cursor: pointer; touch-action: none; user-select: none; }",
@@ -126,7 +128,19 @@
     ".cv .cv-wbubble { position: absolute; top: -32px; transform: translateX(-50%); background: #000; color: #fff; border: 1px solid var(--accent, #e8b923); border-radius: 6px; padding: 2px 8px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; pointer-events: none; z-index: 4; font-variant-numeric: tabular-nums; }",
     ".cv .cv-wnav button { min-height: 40px; }",
     ".cv .cv-wat { font-weight: 800; font-variant-numeric: tabular-nums; margin: 0 6px; }",
-    ".cv .cv-wnav .cv-addcue { margin-left: auto; min-height: 44px; }"
+    ".cv .cv-wnav .cv-addcue { margin-left: auto; min-height: 44px; }",
+    // a narrow screen: a cue's name on its own line, its date and length under it (not a squeezed column each)
+    "@media (max-width: 640px) {",
+    "  .cv table, .cv tbody { display: block; }",
+    "  .cv tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--border, #4a1e1e); }",
+    "  .cv td { border-bottom: 0; padding: 1px 4px; }",
+    "  .cv td:only-child { grid-column: 1 / -1; }",
+    "  .cv td.pk { grid-column: 1; grid-row: 1 / span 3; }",
+    "  .cv td.n, .cv td.n ~ td { grid-column: 2; }",
+    "  .cv td.n ~ td:empty { display: none; }",
+    "  .cv td.x { grid-column: 3 !important; grid-row: 1 / span 3; width: auto; }",
+    "  .cv .cv-wnav .cv-addcue { margin-left: 0; }",
+    "}"
   ].join("\n");
 
   function mount(root, opts) {
@@ -267,7 +281,11 @@
       play.index = index;
       // (the file still being recorded: a copy of it as it is now, to jump around in - asked
       // fresh each time, so it reaches the latest seconds)
+      // (the player comes in above the lines and the list the first time: the page moves
+      // along with it, so what was clicked stays under the finger)
+      var below = q(".cv-name"), top0 = video.getAttribute("src") ? null : below.getBoundingClientRect().top;
       video.src = "/api/rec/" + encodeURIComponent(play.session.id) + "/file/" + encodeURIComponent(p.file) + (p.endedAt ? "" : "?live=" + Date.now());
+      if (top0 !== null) { var moved = below.getBoundingClientRect().top - top0; if (moved > 0) window.scrollBy(0, moved); }
       video.onloadedmetadata = function () {
         video.onloadedmetadata = null;
         video.playbackRate = rate;

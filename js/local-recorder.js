@@ -78,6 +78,9 @@
   function mb(n) { return n >= 1e9 ? (n / 1e9).toFixed(1) + " GB" : Math.max(0.1, n / 1e6).toFixed(1) + " MB"; }
   function whoOf(c) { if (c.player) return c.player + (c.opponent ? "-vs-" + c.opponent : ""); return c.matchup || "Table"; }
   function nameFor(c) { return [whoOf(c), c.gameLabel, c.position, c.endedAt ? lengthText(c.endedAt - c.startedAt) : "", stamp(c.startedAt), "cued"].filter(Boolean).join("-"); }
+  // On screen: "Luigi vs Luc · 8-Ball · game 3 of raceto 5" - the file's own
+  // name (nameFor: dashes, its length, date and time) stays for the saved clip.
+  function titleOf(c) { return [whoOf(c).replace(/-vs-/g, " vs "), c.gameLabel, c.position].filter(Boolean).join(" · "); }
   function safeName(n) { return String(n || "clip").replace(/[\/\\:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 150) || "clip"; }
   function uid(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
@@ -385,7 +388,7 @@
     var now = Date.now(), startedAt = Math.max(rec.startedAt, now - PRE_ROLL_MS), b = boardAt(startedAt);
     openCue = { id: uid("c"), session: rec.id, markedAt: now, startedAt: startedAt, endedAt: null, player: b.player || "", opponent: b.opponent || "", matchup: b.matchup || "", gameType: b.gameType || "", gameLabel: b.gameLabel || "", position: b.position || "", source: source || "button" };
     openCue.name = nameFor(openCue);
-    put("cues", openCue);
+    put("cues", openCue).then(refreshLists); // (in the list at once: "still marking")
     duck(/voice/.test(source || "") ? 3000 : 900);
     render();
     bridge.changed();
@@ -400,7 +403,7 @@
     c.note = typeof why === "string" ? why : "";
     put("cues", c).then(refreshLists);
     duck(900);
-    bridge.toast(T("lrec.finished", { name: c.name }), "✔ ");
+    bridge.toast(T("lrec.finished", { name: titleOf(c) }), "✔ ");
     render();
     bridge.changed();
     return true;
@@ -583,21 +586,32 @@
       }
     });
   }
-  function playFile(file) { playBlob(file, 0); }
-  function play(sessionId, atMs) {
-    recordingBlob(sessionId).then(function (r) { playBlob(r.blob, atMs); });
+  // (title: what's being watched, said above the picture)
+  function playFile(file, title) { playBlob(file, 0, title); }
+  function play(sessionId, atMs, title) {
+    recordingBlob(sessionId).then(function (r) { playBlob(r.blob, atMs, title); });
   }
-  function playBlob(blob, atMs) {
-    (function (r) {
-      if (els.player.dataset.url) URL.revokeObjectURL(els.player.dataset.url);
-      var url = URL.createObjectURL(r.blob);
-      els.player.dataset.url = url;
-      els.player.classList.remove("hidden");
-      if (els.speed) els.speed.classList.remove("hidden");
-      els.player.src = url;
-      els.player.onloadedmetadata = function () { els.player.playbackRate = playRate; try { els.player.currentTime = Math.max(0, (atMs || 0) / 1000); } catch (e) {} els.player.play().catch(function () {}); };
-      els.player.scrollIntoView({ block: "center", behavior: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-    })({ blob: blob });
+  function playBlob(blob, atMs, title) {
+    if (els.player.dataset.url) URL.revokeObjectURL(els.player.dataset.url);
+    var url = URL.createObjectURL(blob);
+    els.player.dataset.url = url;
+    els.player.classList.remove("hidden");
+    if (els.speed) els.speed.classList.remove("hidden");
+    if (els.watch) els.watch.classList.remove("hidden");
+    if (els.watchName) els.watchName.textContent = title || "";
+    els.player.src = url;
+    els.player.onloadedmetadata = function () { els.player.playbackRate = playRate; try { els.player.currentTime = Math.max(0, (atMs || 0) / 1000); } catch (e) {} els.player.play().catch(function () {}); };
+    (els.watch || els.player).scrollIntoView({ block: "center", behavior: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+  // × on the player: the picture put away
+  function closeWatch() {
+    try { els.player.pause(); } catch (e) {}
+    if (els.player.dataset.url) { URL.revokeObjectURL(els.player.dataset.url); delete els.player.dataset.url; }
+    els.player.removeAttribute("src");
+    try { els.player.load(); } catch (e) {}
+    els.player.classList.add("hidden");
+    if (els.speed) els.speed.classList.add("hidden");
+    if (els.watch) els.watch.classList.add("hidden");
   }
 
   // ---- the panel ----
@@ -624,8 +638,12 @@
     els.camera.disabled = on; els.sound.disabled = on;
     if (els.mode) els.mode.disabled = on;
     els.preview.classList.toggle("hidden", !on);
+    // (camera, what's kept, sound: chosen before it starts - out of the way while it records)
+    if (els.settings) els.settings.classList.toggle("hidden", on);
     renderStatus();
   }
+  // a row's words (its name over its details), beside its buttons
+  function textOf(name, meta) { var d = document.createElement("div"); d.className = "lrec-text"; d.appendChild(name); d.appendChild(meta); return d; }
   function button(text, cls, fn) { var b = document.createElement("button"); b.type = "button"; b.className = "btn btn-ghost " + (cls || ""); b.textContent = text; b.addEventListener("click", fn); return b; }
   // Save: the file is made first (cut, gathered) - and Safari only opens the
   // share sheet straight from a tap, so on a phone/tablet the button then
@@ -671,6 +689,8 @@
       lastCues = cues;
       Object.keys(picked).forEach(function (id) { if (!cues.some(function (c) { return c.id === id; })) delete picked[id]; });
       els.cues.innerHTML = "";
+      // (☑ All and its buttons: only once there's a cue to check)
+      if (els.group) els.group.classList.toggle("hidden", !cues.length);
       var pickBox = function (c) {
         var box = document.createElement("input");
         box.type = "checkbox";
@@ -689,34 +709,36 @@
           li.appendChild(pickBox(c));
           var gname = document.createElement("div"); gname.className = "lrec-name"; gname.textContent = c.name || "Game";
           var gmeta = document.createElement("div"); gmeta.className = "lrec-meta"; gmeta.textContent = when(c.startedAt);
-          var grow = document.createElement("div"); grow.className = "row lrec-actions";
+          var grow = document.createElement("div"); grow.className = "lrec-actions";
           grow.appendChild(button(T("lrec.play"), "", function () {
             get("sessions", c.session).then(function (s) {
               if (!s) return;
               // (a Highlights recording keeps only the cues: a minute from the mark, if it's there)
-              if (s.mode === "highlights") clipFile(Object.assign({}, c, { endedAt: c.startedAt + 60000 })).then(playFile, function () { bridge.toast(T("lrec.cantCut"), "⚠️ "); });
-              else play(c.session, c.startedAt - s.startedAt);
+              if (s.mode === "highlights") clipFile(Object.assign({}, c, { endedAt: c.startedAt + 60000 })).then(function (f) { playFile(f, c.name || "Game"); }, function () { bridge.toast(T("lrec.cantCut"), "⚠️ "); });
+              else play(c.session, c.startedAt - s.startedAt, c.name || "Game");
             });
           }));
           var gbin = button("🗑", "lrec-del", function () {});
           askTwice(gbin, T("lrec.deleteAsk"), function () { del("cues", c.id).then(refreshLists); });
           grow.appendChild(gbin);
-          li.appendChild(gname); li.appendChild(gmeta); li.appendChild(grow);
+          li.appendChild(textOf(gname, gmeta)); li.appendChild(grow);
           els.cues.appendChild(li);
           return;
         }
         li.className = "lrec-cue" + (c.kept ? " lrec-kept" : "");
         li.appendChild(pickBox(c));
-        var name = document.createElement("div"); name.className = "lrec-name"; name.textContent = (c.kept ? "📌 " : "") + (c.name || nameFor(c)) + (c.endedAt ? "" : " " + T("lrec.cueLive"));
-        var meta = document.createElement("div"); meta.className = "lrec-meta"; meta.textContent = when(c.startedAt) + (c.endedAt ? " · " + clock(c.endedAt - c.startedAt) : "");
-        var row = document.createElement("div"); row.className = "row lrec-actions";
+        var title = titleOf(c);
+        var name = document.createElement("div"); name.className = "lrec-name"; name.textContent = (c.kept ? "📌 " : "") + title + (c.endedAt ? "" : " " + T("lrec.cueLive"));
+        name.title = c.name || nameFor(c); // (the saved clip's file name)
+        var meta = document.createElement("div"); meta.className = "lrec-meta"; meta.textContent = (c.endedAt ? clock(c.endedAt - c.startedAt) + " · " : "") + when(c.startedAt);
+        var row = document.createElement("div"); row.className = "lrec-actions";
         row.appendChild(button(T("lrec.play"), "", function () {
           get("sessions", c.session).then(function (s) {
-            if (c.keptClip && (!s || s.mode === "highlights")) { playFile(c.keptClip); return; }
+            if (c.keptClip && (!s || s.mode === "highlights")) { playFile(c.keptClip, title); return; }
             if (!s) return;
             // (a Highlights recording has gaps: its clip, cut out)
-            if (s.mode === "highlights") clipFile(c).then(playFile, function () { bridge.toast(T("lrec.cantCut"), "⚠️ "); });
-            else play(c.session, c.startedAt - s.startedAt);
+            if (s.mode === "highlights") clipFile(c).then(function (f) { playFile(f, title); }, function () { bridge.toast(T("lrec.cantCut"), "⚠️ "); });
+            else play(c.session, c.startedAt - s.startedAt, title);
           });
         }));
         var save = button(T("lrec.saveClip"), "lrec-save", function () {});
@@ -726,7 +748,7 @@
         var bin = button("🗑", "lrec-del", function () {});
         askTwice(bin, T("lrec.deleteAsk"), function () { del("cues", c.id).then(refreshLists); });
         row.appendChild(bin);
-        li.appendChild(name); li.appendChild(meta); li.appendChild(row);
+        li.appendChild(textOf(name, meta)); li.appendChild(row);
         els.cues.appendChild(li);
       });
       els.sessions.innerHTML = "";
@@ -739,10 +761,10 @@
         var size = highlights ? T("lrec.keptSize", { size: mb(typeof s.keptBytes === "number" ? s.keptBytes : s.bytes || 0) }) : mb(s.bytes || 0);
         var ofThis = cues.filter(function (c) { return c.session === s.id; }), games = ofThis.filter(function (c) { return c.kind === "game"; }).length;
         meta.textContent = clock((s.endedAt || Date.now()) - s.startedAt) + " · " + size + " · " + (ofThis.length - games) + " ⭐" + (games ? " · " + games + " 🎱" : "");
-        var row = document.createElement("div"); row.className = "row lrec-actions";
+        var row = document.createElement("div"); row.className = "lrec-actions";
         // (Highlights keeps only the cues: no whole recording to play or save)
         if (!highlights) {
-          row.appendChild(button(T("lrec.play"), "", function () { play(s.id, 0); }));
+          row.appendChild(button(T("lrec.play"), "", function () { play(s.id, 0, name.textContent); }));
           var n = partCount(s);
           if (n > 1) {
             for (var i = 0; i < n; i++) (function (i) {
@@ -772,7 +794,7 @@
           }).then(refreshLists);
         });
         row.appendChild(bin);
-        li.appendChild(name); li.appendChild(meta); li.appendChild(row);
+        li.appendChild(textOf(name, meta)); li.appendChild(row);
         els.sessions.appendChild(li);
       });
       renderGroup();
@@ -789,9 +811,11 @@
   function mount(root, b) {
     bridge = b;
     var q = function (id) { return root.querySelector("#" + id); };
-    els = { root: root, preview: q("lrec-preview"), camera: q("lrec-camera"), sound: q("lrec-sound"), mode: q("lrec-mode"), start: q("btn-lrec-start"), cue: q("btn-lrec-cue"), status: q("lrec-status"), cues: q("lrec-cues"), sessions: q("lrec-sessions"), player: q("lrec-player"), speed: q("lrec-speed"), group: q("lrec-group"), picked: q("lrec-picked"), pickAll: q("lrec-pick-all"), storage: q("lrec-storage"), summary: document.getElementById("local-record-panel-summary") };
+    els = { root: root, preview: q("lrec-preview"), camera: q("lrec-camera"), sound: q("lrec-sound"), mode: q("lrec-mode"), start: q("btn-lrec-start"), cue: q("btn-lrec-cue"), status: q("lrec-status"), cues: q("lrec-cues"), sessions: q("lrec-sessions"), player: q("lrec-player"), speed: q("lrec-speed"), group: q("lrec-group"), picked: q("lrec-picked"), pickAll: q("lrec-pick-all"), storage: q("lrec-storage"), settings: q("lrec-settings"), watch: q("lrec-watch"), watchName: q("lrec-watch-name"), summary: document.getElementById("local-record-panel-summary") };
     wireSpeed();
     wireGroup();
+    var watchClose = q("btn-lrec-watch-close");
+    if (watchClose) watchClose.addEventListener("click", closeWatch);
     var signBtn = q("btn-lrec-sign");
     if (signBtn) signBtn.addEventListener("click", function () {
       if (window.PMCRecordingConsent) window.PMCRecordingConsent.printSign({ sound: els.sound.checked });
