@@ -399,7 +399,7 @@
           hits.push({ x: q[0], y: q[1], r: Math.max(16, r + 6), player: nd.id });
           // the name: beside the node at the two ends of a table that runs across, else over it (under it at the foot of one that stands)
           // (the names in between: when followed, or from near enough to read them)
-          if (ends || (nd.kind === "player" && (hi === nd.id || r >= 12.5))) labels.push({ x: q[0], y: nd.last && up ? q[1] + r + 4 : q[1] - r - 4, text: pl.short || pl.name, col: col, a: a, d: q[2], bold: true, top: !!(nd.last && up), rank: nd.last ? 0 : nd.first ? 1 : hi === nd.id ? 1 : 3,
+          if (ends || (nd.kind === "player" && (hi === nd.id || r >= 12.5))) labels.push({ x: q[0], y: nd.last && up ? q[1] + r + 4 : q[1] - r - 4, text: nameTag(nd, pl), col: col, a: a, d: q[2], bold: true, top: !!(nd.last && up), rank: nd.last ? 0 : nd.first ? 1 : hi === nd.id ? 1 : 3,
             align: beside ? (nd.first ? "right" : "left") : "center", dx: beside ? (nd.first ? -r - 5 : r + 5) : 0, dy: beside ? r + 13 : 0 });
         } else if (nd.kind === "side") {
           if (hi !== null && nd.ids.indexOf(hi) === -1) a = 0.15;
@@ -459,6 +459,16 @@
         ctx.fillText(String(b[0]), x, y + 0.5);
       }
       ctx.globalAlpha = 1;
+    }
+    // the name, its Q-Score beside it (just after this match; as the night began, at the first node aside; as it ended, at the last)
+    // and + / − for this match won or lost: "Luc 424 +"
+    function nameTag(nd, pl) {
+      var m = nd.kind === "player" ? model.night.matches[nd.k] : null;
+      var q = m ? (m.ratings || {})[nd.id] : nd.last ? pl.rating : nd.first ? pl.ratingBefore : undefined;
+      var text = pl.short || pl.name;
+      if (typeof q === "number") text += " " + q;
+      if (m && m.winner !== null) text += nd.winner ? " +" : " −";
+      return text;
     }
     // "2–0", "8–6" - a single rack with no points is just a win: no score
     function scoreText(m) {
@@ -521,7 +531,7 @@
         var b = el("button", "pmc-nm-chip", legend);
         b.type = "button";
         el("i", "", b).style.background = p.color;
-        el("b", "", b).textContent = p.name;
+        el("b", "", b).textContent = p.name + (typeof p.rating === "number" ? " " + p.rating : ""); // (the Q-Score as the night ended)
         el("small", "", b).textContent = T("nightMap.chipStats", { played: p.played, won: p.won });
         b.addEventListener("click", function () { highlight(hi === p.id ? null : p.id); });
         chips.push({ id: p.id, el: b });

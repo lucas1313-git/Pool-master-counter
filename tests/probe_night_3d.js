@@ -100,6 +100,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const c2 = night.matches[1] && night.matches[1].changes, c3 = night.matches[2] && night.matches[2].changes;
   check("...who came in, who sat down: match 2 " + in2 + " in, " + l1 + " out, the winner stayed; match 3 " + l1 + " back in", c2 && names(c2.in).join() === in2 && names(c2.out).join() === l1 && c2.winnerStayed === true && c3 && names(c3.in).join() === l1 && names(c3.out).join() === in2, { c2, c3 });
   check("...the last one's winner: " + in3, night.matches[2] && names(night.matches[2].sides[night.matches[2].winner].players).join() === in3, night.matches[2]);
+  // the Q-Scores beside the names: 400 as the night began, then just after every match, and as it ended
+  const idOf = (n) => by[n] && by[n].id, rt = (k, n) => (night.matches[k] && night.matches[k].ratings || {})[idOf(n)];
+  const lastRated = (n) => { let q; night.matches.forEach((m, k) => { if (typeof rt(k, n) === "number") q = rt(k, n); }); return q; };
+  check("the Q-Scores: 400 to begin; " + w1 + " up and " + l1 + " down after match 1 (" + rt(0, w1) + " / " + rt(0, l1) + "), " + l1 + " up again after winning match 3 (" + rt(2, l1) + "); the night's end = each one's last",
+    night.players.every((p) => p.ratingBefore === 400 && p.rating === lastRated(p.name)) && rt(0, w1) > 400 && rt(0, l1) < 400 && Math.abs(rt(0, w1) + rt(0, l1) - 800) <= 1 && rt(2, l1) > rt(0, l1) && rt(2, w1) < rt(1, w1),
+    { players: night.players.map((p) => [p.name, p.ratingBefore, p.rating]), ratings: night.matches.map((m) => m.ratings) });
 
   // 🗺️ Map
   const canvasOf = (id) => page.evaluate((id) => { const c = document.querySelector("#" + id + " canvas"); return c ? { w: c.width, h: c.height, shown: !!c.offsetParent } : null; }, id);
@@ -126,6 +132,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.evaluate(() => [...document.querySelectorAll("#night3d-map .pmc-nm-shapes button")].find((b) => /Straight/.test(b.textContent)).click());
   st = await state();
   check("...➖ Straight: the other shape, the same night, back in 3D", st.map.shape === "line" && st.map.matches === 3 && st.map.view === "3d" && (await inked()) > 50, st.map);
+  const chipNames = await page.evaluate(() => [...document.querySelectorAll("#night3d-map .pmc-nm-chip b")].map((b) => b.textContent));
+  check("...the chips: each name with its Q-Score as the night ended (" + chipNames.join(", ") + ")", chipNames.length === 3 && night.players.every((p, i) => chipNames[i] === p.name + " " + p.rating), chipNames);
   await page.click("#night3d-map .pmc-nm-chip");
   check("...a player's chip tapped: their path followed", (await state()).map.highlight === night.players[0].id, (await state()).map);
   await page.click("#night3d-map .pmc-nm-chip");

@@ -106,6 +106,7 @@
     BL: 60, GAP: 48, LO: 30, // block length, gap between blocks, lead-out after the last block
     STUB: 14, STAG: 9, BEAM: 24, W_SHIFT: 0.06, W_UNDER: 2.2
   };
+  var TAG_MAX = 100; // the widest name tag where a row starts (a name and its Q-Score)
 
   // ---------- small helpers ----------
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
@@ -156,7 +157,8 @@
       var i = players.length, c = /^#[0-9a-f]{6}$/i.test(src.color || "") ? src.color : PALETTE[i % PALETTE.length];
       var name = src.name || String(id);
       players.push({ id: id, name: name, short: src.short || name, index: i, color: c, benchColor: mix(c, THEME.panel, 0.36), ghost: mix(c, "#2a1414", 0.82), edge: mix(c, "#000000", 0.45),
-        played: src.played || 0, won: src.won || 0, fitted: {} });
+        played: src.played || 0, won: src.won || 0, fitted: {},
+        rating: typeof src.rating === "number" ? src.rating : null, ratingBefore: typeof src.ratingBefore === "number" ? src.ratingBefore : null });
       byId[id] = i;
       return i;
     }
@@ -177,7 +179,7 @@
       // (a start that is only "the match before's end" is not a start: the end is what is known)
       var known = !!m.startedAt && !m.startEstimated;
       return {
-        n: m.n != null ? m.n : (i + 1), src: m, sides: sides, halves: halves, winner: w, winHalf: w >= 0 ? 0 : -1,
+        n: m.n != null ? m.n : (i + 1), src: m, sides: sides, halves: halves, winner: w, winHalf: w >= 0 ? 0 : -1, ratings: m.ratings || {},
         game: m.game || "", gameType: m.gameType || "", start: known ? hhmm(m.startedAt) : "", end: hhmm(m.endedAt),
         mins: known ? minutesBetween(m.startedAt, m.endedAt) : null, plate: plateOf(sides, w)
       };
@@ -377,13 +379,27 @@
     while (s.length > 1 && textW(s + "…", font) > maxW) s = s.substr(0, s.length - 1);
     return s + "…";
   }
+  // A name with its Q-Score beside it, and + / − for a match won or lost ("Luc 424 +"): the name is
+  // what's cut when there's no room. The score: just after match n; before the night when n < 0.
+  function scoreTag(model, p, n, sign) {
+    var pl = model.players[p], q = pl.ratingBefore, m = n >= 0 ? model.matches[n] : null;
+    for (var k = n; k >= 0; k--) {
+      if (model.side[k][p] >= 0 && typeof model.matches[k].ratings[pl.id] === "number") { q = model.matches[k].ratings[pl.id]; break; }
+    }
+    var tag = q === null ? "" : " " + q;
+    if (sign && m && m.winHalf >= 0 && model.side[n][p] >= 0) tag += model.side[n][p] === m.winHalf ? " +" : " −";
+    return tag;
+  }
+  function fitTag(name, tag, font, maxW) {
+    return tag ? fit(name, font, maxW - textW(tag, font)) + tag : fit(name, font, maxW);
+  }
 
   function buildScene(model, sol, availW, opts) {
     opts = opts || {};
     var M = model.matches.length, P = model.players.length, F2 = G.FELT / 2;
     var mx = 10, tagFont = "700 11px " + FONT, tagW = 0, p;
-    for (p = 0; p < P; p++) tagW = Math.max(tagW, textW(model.players[p].short, tagFont));
-    tagW = Math.min(tagW, 70) + 14;
+    for (p = 0; p < P; p++) tagW = Math.max(tagW, textW(model.players[p].short + scoreTag(model, p, -1, false), tagFont));
+    tagW = Math.min(tagW, TAG_MAX) + 14;
     var yN = -(sol.nearL ? sol.B0N + (sol.nearL - 1) * G.PITCH + G.PITCH / 2 + 7 : F2 + sol.maxHalf + G.MN);
     var yF = (sol.farL ? sol.B0F + (sol.farL - 1) * G.PITCH + G.PITCH / 2 + 7 : F2 + sol.maxHalf + G.MF);
     var depth = yF - yN, step = G.BL + G.GAP;
@@ -887,22 +903,25 @@
       var L = R.labels[i], pl = model.players[L.p];
       var ghost = st.hi >= 0 && st.hi !== L.p;
       if (ghost && model.side[L.n][st.hi] < 0) continue;
-      var keyS = Math.round(G.BL * s);
-      if (!pl.fitted[keyS]) pl.fitted[keyS] = fit(pl.short, nameFont, G.BL * s - 8);
+      var tag = scoreTag(model, L.p, L.n, true), keyS = Math.round(G.BL * s) + tag;
+      if (!pl.fitted[keyS]) pl.fitted[keyS] = fitTag(pl.short, tag, nameFont, (G.BL + G.GAP * 0.6) * s - 8);
+      var lx = R.X(L.x, L.y), ly = R.Y(L.y, L.z), lw = textW(pl.fitted[keyS], nameFont) + 8;
+      // (wider than the block, with its Q-Score: on a tab of the ribbon's colour, out over the gaps a little)
+      if (lw > G.BL * s - 2) { rrect(ctx, lx - lw / 2, ly - 7 * fs, lw, 14 * fs, 4); ctx.fillStyle = ghost ? pl.ghost : pl.color; ctx.fill(); }
       ctx.fillStyle = ghost ? "rgba(246,239,233,0.62)" : THEME.ink;
-      ctx.fillText(pl.fitted[keyS], R.X(L.x, L.y), R.Y(L.y, L.z) + 0.5);
+      ctx.fillText(pl.fitted[keyS], lx, ly + 0.5);
     }
     // name tags where each thread starts on this row
     for (i = 0; i < R.tags.length; i++) {
-      var tg = R.tags[i], pp = model.players[tg.p];
-      var tw = Math.min(textW(pp.short, nameFont), 70 * fs) + 12, thh = Math.round(13 * fs);
+      var tg = R.tags[i], pp = model.players[tg.p], tgText = fitTag(pp.short, scoreTag(model, tg.p, R.a - 1, false), nameFont, TAG_MAX * fs);
+      var tw = textW(tgText, nameFont) + 12, thh = Math.round(13 * fs);
       var tx = R.X(0, tg.y) + 3, ty = R.Y(tg.y, tg.z);
       ctx.globalAlpha = (st.hi >= 0 && st.hi !== tg.p) ? 0.25 : 1;
       rrect(ctx, tx - tw, ty - thh / 2, tw, thh, 5);
       ctx.fillStyle = pp.color; ctx.fill();
       ctx.lineWidth = 1; ctx.strokeStyle = "rgba(16,4,4,0.8)"; ctx.stroke();
       ctx.fillStyle = THEME.ink; ctx.textAlign = "center";
-      ctx.fillText(fit(pp.short, nameFont, 70 * fs), tx - tw / 2, ty + 0.5);
+      ctx.fillText(tgText, tx - tw / 2, ty + 0.5);
       ctx.globalAlpha = 1;
     }
     // ...and the small ones along a long sit on the bench
@@ -964,7 +983,7 @@
     var chipH = 40, chipGap = 8, x = pad, y = 78, chips = [], i;
     var nameF = "700 14px " + FONT, statF = "500 12px " + FONT;
     for (i = 0; i < model.players.length; i++) {
-      var pl = model.players[i], stat = T("nightBraid.chipStats", { played: pl.played, won: pl.won }), nm = fit(pl.name, nameF, 220);
+      var pl = model.players[i], stat = T("nightBraid.chipStats", { played: pl.played, won: pl.won }), nm = fitTag(pl.name, pl.rating === null ? "" : " " + pl.rating, nameF, 220);
       var cw = 24 + Math.max(textW(nm, nameF), textW(stat, statF)) + 14;
       if (x + cw > W - pad && x > pad) { x = pad; y += chipH + chipGap; }
       chips.push({ x: x, y: y, w: cw, pl: pl, name: nm, stat: stat });
@@ -1110,7 +1129,7 @@
       model.players.forEach(function (pl, i) {
         var b = el("button", "pmc-nb-chip", legend);
         b.type = "button";
-        b.innerHTML = "<span class=\"pmc-nb-sw\" style=\"background:" + pl.color + "\"></span><span class=\"pmc-nb-nm\">" + esc(pl.name) + "</span><span class=\"pmc-nb-st\">" +
+        b.innerHTML = "<span class=\"pmc-nb-sw\" style=\"background:" + pl.color + "\"></span><span class=\"pmc-nb-nm\">" + esc(pl.name + (pl.rating === null ? "" : " " + pl.rating)) + "</span><span class=\"pmc-nb-st\">" +
           esc(T("nightBraid.chipStats", { played: pl.played, won: pl.won })) + "</span>";
         b.onclick = function () { setHi(hi === i ? -1 : i); };
         chips.push(b);

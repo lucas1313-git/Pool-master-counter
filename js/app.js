@@ -13569,6 +13569,7 @@
       gameLabel: function (type, label) { return GAME_TYPES[type] ? GAME_TYPES[type].label : label; }
     }) : null;
     if (night && !night.matches.length) night = null;
+    if (night) addNight3dRatings(night);
     document.getElementById("night3d-empty").classList.toggle("hidden", !!night);
     var facts = document.getElementById("night3d-facts");
     facts.classList.toggle("hidden", !night);
@@ -13577,10 +13578,40 @@
       facts.textContent = [countPhrase("players", night.players.length), countPhrase("games", night.rackCount), night3dClock(night.matches[0].endedAt) + " – " + night3dClock(last.endedAt)].join(" · ");
     }
     // (the same night as drawn: left as it is - a map turned or a player followed isn't reset by a redraw)
-    var sig = night ? [night.day, night.rackCount, night.matches.length, night.matches[night.matches.length - 1].endedAt, night.players.map(function (p) { return p.name; }).join("|")].join("#") : "";
+    var sig = night ? [night.day, night.rackCount, night.matches.length, night.matches[night.matches.length - 1].endedAt, night.players.map(function (p) { return p.name + ":" + p.rating; }).join("|")].join("#") : "";
     night3d.sig = sig;
     night3d.night = night;
     showNight3dView();
+  }
+  // Each player's Q-Score through the night, from their rating history (the
+  // views put it beside the names): p.ratingBefore (as the day began),
+  // p.rating (as it ended), m.ratings[id] (just after match m). Left out for
+  // a player with no rated games.
+  function addNight3dRatings(night) {
+    var dayStartMs = new Date(night.day + "T" + String(POOL_DAY_START_HOUR).padStart(2, "0") + ":00:00").getTime();
+    var dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
+    var historyOf = {};
+    // (the last rating at or before a time; a match's end is kept to the second)
+    function ratingAt(id, ms) {
+      var hist = historyOf[id], found = null, at = -Infinity;
+      if (!hist) return null;
+      hist.forEach(function (h) { if (h.t <= ms && h.t >= at) { at = h.t; found = h.rating; } });
+      return found === null ? DEFAULT_RATING : found;
+    }
+    night.players.forEach(function (p) {
+      var entry = getPlayerRatingEntry(p.name);
+      if (!entry || !entry.history.length) return;
+      historyOf[p.id] = entry.history.map(function (h) { return { t: new Date(h.ts).getTime(), rating: h.rating }; });
+      p.ratingBefore = Math.round(ratingAt(p.id, dayStartMs - 1));
+      p.rating = Math.round(ratingAt(p.id, dayEndMs - 1));
+    });
+    night.matches.forEach(function (m) {
+      var endMs = new Date(m.endedAt).getTime() + 999;
+      m.ratings = {};
+      m.sides.forEach(function (s) {
+        s.players.forEach(function (id) { if (historyOf[id]) m.ratings[id] = Math.round(ratingAt(id, endMs)); });
+      });
+    });
   }
   function showNight3dView() {
     ["map", "braid"].forEach(function (view) {
