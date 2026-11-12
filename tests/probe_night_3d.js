@@ -1,8 +1,9 @@
 // 🧊 The night in 3D (☰ Menu › Day Report): a night played here - three players at 8-Ball, so Winner
 // Stays brings the next one in - then the panel: the day it picks, the night rebuilt from the saved
-// games (who came in, who sat down, the tally), ▶ Replay stepped, played to the end and driven from the
-// keyboard, 🧵 The whole night with a player followed, its picture made within the tap (a PNG, saved as
-// a download on a computer and through the share sheet on a tablet), a light theme, no page errors.
+// games (who came in, who sat down, the tally), 🗺️ Map drawn, turned by a drag, a ready view, the other
+// shape, a player followed, a match's ball tapped for its words, its picture; 🧵 The whole night with a
+// player followed, its picture made within the tap (a PNG, saved as a download on a computer and
+// through the share sheet on a tablet), a light theme, no page errors.
 // usage: node tests/probe_night_3d.js http://localhost:4339/ [screenshot dir]
 //   (server: HOME=tests/tmphome PORT=4339 node server/server.js)
 const puppeteer = require("puppeteer-core");
@@ -100,35 +101,54 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("...who came in, who sat down: match 2 " + in2 + " in, " + l1 + " out, the winner stayed; match 3 " + l1 + " back in", c2 && names(c2.in).join() === in2 && names(c2.out).join() === l1 && c2.winnerStayed === true && c3 && names(c3.in).join() === l1 && names(c3.out).join() === in2, { c2, c3 });
   check("...the last one's winner: " + in3, night.matches[2] && names(night.matches[2].sides[night.matches[2].winner].players).join() === in3, night.matches[2]);
 
-  // ▶ Replay
+  // 🗺️ Map
   const canvasOf = (id) => page.evaluate((id) => { const c = document.querySelector("#" + id + " canvas"); return c ? { w: c.width, h: c.height, shown: !!c.offsetParent } : null; }, id);
-  let cv = await canvasOf("night3d-replay");
-  check("▶ Replay: drawn (" + (cv && cv.w + "x" + cv.h) + "), 3 matches, at the first", st.replay && st.replay.count === 3 && st.replay.index === 0 && st.replay.width > 300 && cv && cv.shown && cv.w > 300, { replay: st.replay, cv });
-  if (OUT) await (await page.$("#night-3d-panel")).screenshot({ path: path.join(OUT, "night_3d_replay.png") });
-  await page.click("#night3d-replay .pmc-nr-next");
-  await sleep(300);
-  const moving = (await state()).replay;
-  await sleep(4000);
+  const boxOf = () => page.evaluate(() => { const c = document.querySelector("#night3d-map canvas"); c.scrollIntoView({ block: "center" }); const r = c.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+  const inked = () => page.evaluate(() => { const c = document.querySelector("#night3d-map canvas"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4 * 97) if (d[i] > 40) n++; return n; });
+  let cv = await canvasOf("night3d-map");
+  const ink = await inked();
+  check("🗺️ Map: drawn (" + (cv && cv.w + "x" + cv.h) + "), 3 matches, 3 players, a spiral in 3D", st.view === "map" && st.map && st.map.matches === 3 && st.map.players === 3 && st.map.nodes > 9 && st.map.shape === "spiral" && st.map.view === "3d" && st.map.width > 300 && cv && cv.shown && cv.w > 300 && ink > 50, { map: st.map, cv, ink });
+  if (OUT) await (await page.$("#night-3d-panel")).screenshot({ path: path.join(OUT, "night_3d_map.png") });
+  let box = await boxOf();
+  const before = st.map;
+  await page.mouse.move(box.x + box.w * 0.5, box.y + box.h * 0.75);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.w * 0.5 + 140, box.y + box.h * 0.75 - 50, { steps: 6 });
+  await page.mouse.up();
+  await sleep(400); // (past a double-tap's wait)
   st = await state();
-  check("...▶ the next match: the players walk (moving), then it rests on match 2", moving.index === 1 && moving.moving === true && st.replay.index === 1 && st.replay.moving === false, { moving, after: st.replay });
-  await page.focus("#night3d-replay");
-  await page.keyboard.press("ArrowLeft");
-  await sleep(300);
-  check("...← on the keyboard (focus in the replay): back to match 1", (await state()).replay.index === 0, (await state()).replay);
-  await page.click("#night3d-replay .pmc-nr-play");
-  await sleep(400);
-  const playing = (await state()).replay.playing;
-  for (let i = 0; i < 40; i++) { if (!(await state()).replay.playing) break; await sleep(500); }
+  check("...a drag: it turns (no ready view any more), nothing else moves", st.map.yaw !== before.yaw && st.map.pitch !== before.pitch && st.map.view === "" && st.map.zoom === before.zoom, st.map);
+  await page.evaluate(() => [...document.querySelectorAll("#night3d-map .pmc-nm-tools button")].find((b) => b.textContent === "Side").click());
+  const side = (await state()).map;
+  await page.click('#night3d-map button[aria-label="Zoom in"]');
   st = await state();
-  check("...▶ Play: runs to the last match and stops", playing === true && st.replay.playing === false && st.replay.index === 2, st.replay);
+  check("...Side: that ready view; +: nearer", side.view === "side" && side.yaw === 0 && st.map.zoom > side.zoom, { side, after: st.map });
+  await page.evaluate(() => [...document.querySelectorAll("#night3d-map .pmc-nm-shapes button")].find((b) => /Straight/.test(b.textContent)).click());
+  st = await state();
+  check("...➖ Straight: the other shape, the same night, back in 3D", st.map.shape === "line" && st.map.matches === 3 && st.map.view === "3d" && (await inked()) > 50, st.map);
+  await page.click("#night3d-map .pmc-nm-chip");
+  check("...a player's chip tapped: their path followed", (await state()).map.highlight === night.players[0].id, (await state()).map);
+  await page.click("#night3d-map .pmc-nm-chip");
+  box = await boxOf();
+  const spot = await page.evaluate(() => window.PMCNight3d.map().spots().find((s) => s.match === 1));
+  await page.mouse.click(box.x + spot.x, box.y + spot.y);
+  await sleep(300);
+  const info = await page.evaluate(() => { const i = document.querySelector("#night3d-map .pmc-nm-info"); return { shown: !i.hidden, text: i.textContent }; });
+  check("...match 2's ball tapped: its words (" + info.text.slice(0, 60) + "...)", (await state()).map.selected === 1 && info.shown && /Match 2/.test(info.text) && info.text.indexOf(in2) !== -1 && /Won by/.test(info.text) && info.text.indexOf("In: " + in2) !== -1, info);
+  if (OUT) await (await page.$("#night-3d-panel")).screenshot({ path: path.join(OUT, "night_3d_map_match.png") });
+  const mapPic = await page.evaluate(() => { const url = window.PMCNight3d.map().pictureDataUrl(), bin = atob(url.split(",")[1]); return { png: /^data:image\/png;base64,/.test(url) && bin.charCodeAt(1) === 80 && bin.charCodeAt(2) === 78 && bin.charCodeAt(3) === 71, bytes: bin.length }; });
+  await page.evaluate(() => [...document.querySelectorAll("#night3d-map button")].find((b) => /Save as picture/.test(b.textContent)).click());
+  await sleep(500);
+  const mapSaved = await page.evaluate(() => { const d = window.__downloads.slice(); window.__downloads.length = 0; return d; });
+  check("...its picture: a PNG made at once (" + Math.round(mapPic.bytes / 1024) + " KB); 🖼️ Save as picture downloads the map as it stands", mapPic.png && mapPic.bytes > 20000 && mapSaved.length === 1 && /^pool-master-counter-night-\d{4}-\d{2}-\d{2}\.png$/.test(mapSaved[0].name), { mapPic, mapSaved });
 
   // 🧵 The whole night
   await page.evaluate(() => document.querySelector('input[name="night3d-view"][value="braid"]').click());
   await sleep(900);
   st = await state();
   cv = await canvasOf("night3d-braid");
-  const shown = await page.evaluate(() => ({ replay: !document.getElementById("night3d-replay").classList.contains("hidden"), braid: !document.getElementById("night3d-braid").classList.contains("hidden") }));
-  check("🧵 The whole night: the picture in place of the replay - 3 matches, 3 players, drawn in " + (st.braid && Math.round(st.braid.drawMs)) + " ms", !shown.replay && shown.braid && st.braid && st.braid.matches === 3 && st.braid.players === 3 && cv && cv.shown && cv.w > 300, { shown, braid: st.braid, cv });
+  const shown = await page.evaluate(() => ({ map: !document.getElementById("night3d-map").classList.contains("hidden"), braid: !document.getElementById("night3d-braid").classList.contains("hidden") }));
+  check("🧵 The whole night: the picture in place of the map - 3 matches, 3 players, drawn in " + (st.braid && Math.round(st.braid.drawMs)) + " ms", !shown.map && shown.braid && st.braid && st.braid.matches === 3 && st.braid.players === 3 && cv && cv.shown && cv.w > 300, { shown, braid: st.braid, cv });
   if (OUT) await (await page.$("#night-3d-panel")).screenshot({ path: path.join(OUT, "night_3d_braid.png") });
   await page.click("#night3d-braid .pmc-nb-chip");
   await sleep(300);
@@ -145,7 +165,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await sleep(600);
   st = await state();
   if (OUT) await (await page.$("#night-3d-panel")).screenshot({ path: path.join(OUT, "night_3d_light.png") });
-  check("a light theme (Paper Contrast): still drawn", st.braid && st.braid.matches === 3 && (await canvasOf("night3d-braid")).shown, st.braid);
+  await page.evaluate(() => document.querySelector('input[name="night3d-view"][value="map"]').click());
+  await sleep(600);
+  const lightMap = { state: (await state()).map, ink: await inked() };
+  check("a light theme (Paper Contrast): both still drawn", st.braid && st.braid.matches === 3 && lightMap.state.matches === 3 && lightMap.ink > 50, { braid: st.braid, lightMap });
+  if (OUT) await (await page.$("#night-3d-panel")).screenshot({ path: path.join(OUT, "night_3d_map_light.png") });
 
   // a tablet: the same night (kept on this device), the picture through the share sheet, from the tap
   const tab = await open(true);

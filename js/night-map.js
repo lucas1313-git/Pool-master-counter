@@ -1,32 +1,37 @@
 // js/night-map.js
 // 🗺️ The map, in 🧊 The night in 3D: a night as a diagram in space, to turn
 // and move around like a map - nothing plays, nothing walks.
-// Down the middle runs the table: a ball for every match, in order. Around
-// it, on a ring, every player has a line of their own: their seat while
-// they sit out. For a match its players leave their lines, meet in a node
-// for each side, and the sides meet in the match's ball; the winning side's
-// way in is gold. Who plays the next match too stays inside and goes
-// straight on to it; who doesn't goes back out to their line - aside. So
-// the inside of the cage is who is at the table, the cage is the bench, and
-// a player's whole night is one path through it. A player's node grows with
-// their wins so far.
+// The white line is the table: a ball for every match, in order. Every
+// player has their own direction from it, all night, and before every match
+// a node there: a ball of their colour near the table when they play it, an
+// empty ring further out - aside - when they sit it out. The players of a
+// side join in the side's node, the sides in the match's ball; gold is the
+// winning side (its node, its way into the ball, a ring round its players).
+// From the ball everyone goes on to their node for the next match: in
+// again, or out to the ring - a loser's way out is dashed. So a player's
+// whole night is one path through it, and who mixes with whom shows in
+// where the lines meet.
+// Two shapes: 🌀 spiral (the table's line winds round and up - compact, the
+// whole night at a glance) and ➖ straight (the order of things, left to
+// right; top to bottom in a narrow box).
 // Drag: turn it. Two fingers, Shift-drag or right-drag: move it. Pinch,
-// Ctrl-wheel, + / −: zoom. Double-tap: back as it was. Four ready views:
-// 3D, from the side (time left to right), end-on (looking down the table:
-// who mixes with whom) and from above. Tap a player (a chip, a node): their
-// path alone. Tap a ball: that match in words.
+// Ctrl-wheel, + / −: zoom. Double-tap: back as it was. Three ready views:
+// 3D, from the side, and from above (spiral) or end-on (straight: looking
+// down the table). Tap a player (a chip, a node): their path alone. Tap a
+// ball: that match in words. The players' names in between show from near
+// enough to read them.
 //
 // The night comes from js/lib/night-timeline.js (PMCLib.nightTimeline.build).
 // PMCNightMap.mount(root, night, { t(key, vars), tp(key, n, vars),
 //   clock(localIso), onSavePicture() }) -> { setNight(night), refresh(),
-//   destroy(), highlight(playerId | null), view(name), pictureDataUrl(),
-//   state() }
+//   destroy(), highlight(playerId | null), view("3d" | "side" | "end"),
+//   shape("spiral" | "line"), spots(), pictureDataUrl(), state() }
 //   - nothing is drawn while root has no width (a folded panel): refresh(),
 //     or the width coming, draws it.
 //   - pictureDataUrl(): what's on show now as a PNG data URL, made at once
 //     (a share sheet opens only from inside the tap).
-//   - state(): { matches, players, nodes, highlight, selected, view, yaw,
-//     pitch, zoom, width } (tests).
+//   - state(): { matches, players, nodes, highlight, selected, shape, view,
+//     yaw, pitch, zoom, width } (tests).
 // Words: every one through T / TP (keys nightMap.*) - the app's when given,
 // else the English below (the same keys as languages/english.json).
 (function () {
@@ -718,6 +723,7 @@
       highlight: highlight,
       view: setView,
       shape: setShape,
+      spots: function () { return hits.map(function (h) { return { x: h.x, y: h.y, match: h.match, player: h.player }; }); }, // (what can be tapped, in the box - tests)
       pictureDataUrl: pictureDataUrl,
       state: function () {
         return { matches: model ? model.night.matches.length : 0, players: model ? model.night.players.length : 0, nodes: model ? model.nodes.length : 0, highlight: hi, selected: sel, shape: shape, view: cam.name, yaw: cam.yaw, pitch: cam.pitch, zoom: cam.zoom, width: W };

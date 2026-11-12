@@ -10807,7 +10807,7 @@ input[type="number"].big-number-input {
 
 /* 🧊 The night in 3D: the day and the view (▶ Replay / 🧵 The whole night)
    over the picture - the two views bring their own styles
-   (js/night-replay.js .pmc-nr, js/night-braid.js .pmc-nb). */
+   (js/night-map.js .pmc-nm, js/night-braid.js .pmc-nb). */
 .night3d-bar {
   display: flex;
   flex-wrap: wrap;

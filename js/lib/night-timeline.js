@@ -1,5 +1,5 @@
 // js/lib/night-timeline.js
-// A night as a sequence of matches, for 🧊 The night in 3D (js/night-replay.js,
+// A night as a sequence of matches, for 🧊 The night in 3D (js/night-map.js,
 // js/night-braid.js): who played whom, which game, who won, the score - and
 // between two matches, who came in, who sat down, who changed partner.
 // Pure: no page, no storage, no app state - js/app.js calls it through

@@ -13522,16 +13522,17 @@
   }
 
   // ---- 🧊 The night in 3D ----
-  // A day's games played back (js/night-replay.js: the table, who comes in
-  // and who sits down, the score, step by step) and as one picture
-  // (js/night-braid.js: every player a ribbon, every match a block - shared
-  // as a PNG). Both draw what js/lib/night-timeline.js rebuilds from the
+  // A day's games as a diagram in space to turn and move like a map
+  // (js/night-map.js: every player a node at every match, joining in sides
+  // and the sides in the match, the losers going aside) and as one flat
+  // picture (js/night-braid.js: every player a ribbon, every match a
+  // block). Either is shared as a PNG. Both draw what js/lib/night-timeline.js rebuilds from the
   // saved games (each player's own log, and the open session). The day: the
   // report's, until another is picked here. Nothing is worked out or drawn
   // while the panel is folded (renderWhenShown).
   var night3dPanelBody = document.getElementById("night-3d-panel-body");
   var night3dDaySelect = document.getElementById("night3d-day");
-  var night3d = { day: null, picked: false, view: "replay", sig: null, night: null, replay: null, braid: null, shown: {} };
+  var night3d = { day: null, picked: false, view: "map", sig: null, night: null, map: null, braid: null, shown: {} };
   function night3dSource() {
     return { playerStats: PLAYER_STATS, gameHistory: state.gameHistory || [], tournamentResults: TOURNAMENT_RESULTS, dayNotes: DAY_NOTES };
   }
@@ -13575,21 +13576,18 @@
       var last = night.matches[night.matches.length - 1];
       facts.textContent = [countPhrase("players", night.players.length), countPhrase("games", night.rackCount), night3dClock(night.matches[0].endedAt) + " – " + night3dClock(last.endedAt)].join(" · ");
     }
-    // (the same night as drawn: left as it is - a replay isn't sent back to its start by a redraw)
+    // (the same night as drawn: left as it is - a map turned or a player followed isn't reset by a redraw)
     var sig = night ? [night.day, night.rackCount, night.matches.length, night.matches[night.matches.length - 1].endedAt, night.players.map(function (p) { return p.name; }).join("|")].join("#") : "";
     night3d.sig = sig;
     night3d.night = night;
     showNight3dView();
   }
   function showNight3dView() {
-    ["replay", "braid"].forEach(function (view) {
+    ["map", "braid"].forEach(function (view) {
       var on = view === night3d.view, el = document.getElementById("night3d-" + view);
       el.classList.toggle("hidden", !on || !night3d.night);
-      if (!on) {
-        if (view === "replay" && night3d.replay) night3d.replay.pause();
-        return;
-      }
-      var module = view === "replay" ? window.PMCNightReplay : window.PMCNightBraid;
+      if (!on) return;
+      var module = view === "map" ? window.PMCNightMap : window.PMCNightBraid;
       if (!module) return;
       if (!night3d[view]) {
         night3d[view] = module.mount(el, night3d.night, {
@@ -13608,15 +13606,17 @@
   }
   function refreshNight3dColors() {
     if (!night3d) return; // (the theme is applied before this is set up)
-    ["replay", "braid"].forEach(function (view) { if (night3d[view]) night3d[view].refresh(); });
+    ["map", "braid"].forEach(function (view) { if (night3d[view]) night3d[view].refresh(); });
   }
-  // 🖼️ The whole night's picture, out through the share sheet (a phone or
-  // tablet) or as a download - made and shared within this tap (Safari
-  // refuses the share sheet after a wait: pictureDataUrl draws at once).
+  // 🖼️ The picture of the view on show (the map as it is turned, or the
+  // whole night), out through the share sheet (a phone or tablet) or as a
+  // download - made and shared within this tap (Safari refuses the share
+  // sheet after a wait: pictureDataUrl draws at once).
   function shareNight3dPicture() {
-    if (!night3d.braid || !night3d.night) return;
+    var shown = night3d[night3d.view];
+    if (!shown || !night3d.night) return;
     var blob = null;
-    try { blob = dataUrlToBlob(night3d.braid.pictureDataUrl()); } catch (e) {}
+    try { blob = dataUrlToBlob(shown.pictureDataUrl()); } catch (e) {}
     if (!blob) { showToast(T("night3d.pictureFailed"), "⚠️ "); return; }
     var file = new File([blob], "pool-master-counter-night-" + night3d.night.day + ".png", { type: "image/png" });
     var save = function () {
@@ -13632,9 +13632,9 @@
   // (tests)
   window.PMCNight3d = {
     state: function () {
-      return { day: night3d.day, view: night3d.view, night: night3d.night, replay: night3d.replay ? night3d.replay.state() : null, braid: night3d.braid ? night3d.braid.state() : null };
+      return { day: night3d.day, view: night3d.view, night: night3d.night, map: night3d.map ? night3d.map.state() : null, braid: night3d.braid ? night3d.braid.state() : null };
     },
-    replay: function () { return night3d.replay; },
+    map: function () { return night3d.map; },
     braid: function () { return night3d.braid; }
   };
   night3dDaySelect.addEventListener("change", function () {

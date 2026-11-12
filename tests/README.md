@@ -646,8 +646,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
 - **probe_night_3d.js** — 🧊 The night in 3D (☰ Menu › Day Report): no games - the panel says so;
   then a night played here (three players at 8-Ball, Winner Stays bringing the next one in): the
   day it picks, the night rebuilt from the saved games (the tally, who came in and who sat down
-  between two matches), ▶ Replay stepped (the players walk, then it rests), ← on the keyboard,
-  ▶ Play to the last match; 🧵 The whole night in its place, a player's ribbon followed, its
+  between two matches), 🗺️ Map drawn (a spiral in 3D), turned by a drag, the Side view, +,
+  ➖ Straight, a player followed, a match's ball tapped for its words, its picture saved;
+  🧵 The whole night in its place, a player's ribbon followed, its
   picture a PNG made at once (under iOS's canvas limit), 🖼️ Save as picture a download on a
   computer and the share sheet - from that tap - on a tablet; a light theme; no page errors.
   `node tests/probe_night_3d.js http://localhost:4339/ [shots]` against a test server

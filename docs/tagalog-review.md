@@ -239,11 +239,11 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `nightBraid.tournament` | Tournament |
 | `nightBraid.minutes` | min |
 | `nightBraid.skunk` | 🦨 Skunk |
-| `nightReplay.minutes` | min |
-| `nightReplay.leaderboard` | Leaderboard |
-| `nightReplay.chip.raceTo` | 🏁 Race to |
-| `nightReplay.chip.tournament` | 🏆 Tournament |
-| `nightReplay.chip.skunk` | 🦨 Skunk! |
+| `nightMap.view3d` | 3D |
+| `nightMap.shapeSpiral` | 🌀 Spiral |
+| `nightMap.raceTo` | Race to |
+| `nightMap.tournament` | Tournament |
+| `nightMap.skunk` | 🦨 Skunk |
 
 ## Mostly English words (16)
 

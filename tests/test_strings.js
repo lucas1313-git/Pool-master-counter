@@ -59,7 +59,7 @@ const longHelp = helpSentences.filter((n) => n > 30);
 check("help sentences are short: " + helpSentences.length + " average " + avgHelp.toFixed(1) + " words (at most 15), none over 30", avgHelp <= 15 && longHelp.length === 0, longHelp);
 
 // keys the code names
-const sources = ["js/app.js", "js/voice.js", "js/pairing.js", "js/recording-consent.js", "js/local-recorder.js", "js/camera-client.js", "js/camera-i18n.js", "js/night-replay.js", "js/night-braid.js"].map((f) => fs.readFileSync(path.join(REPO, f), "utf8")).join("\n");
+const sources = ["js/app.js", "js/voice.js", "js/pairing.js", "js/recording-consent.js", "js/local-recorder.js", "js/camera-client.js", "js/camera-i18n.js", "js/night-map.js", "js/night-braid.js"].map((f) => fs.readFileSync(path.join(REPO, f), "utf8")).join("\n");
 const html = fs.readFileSync(path.join(REPO, "index.html"), "utf8");
 const used = new Set();
 // (a literal that's the whole key - "storage.group." + id is built, not named)
