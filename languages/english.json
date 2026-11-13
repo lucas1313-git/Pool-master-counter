@@ -1114,6 +1114,7 @@
   "players.noPlayersYetSummary": "No players yet — add some below.",
   "players.noSavedListsYet": "No saved lists yet",
   "players.playing": "Playing",
+  "players.newTeam": "Start a new team: {{team}}",
   "players.playingOfTotal": "{{playing}} of {{total}} playing",
   "players.queueEmpty": "No one waiting.",
   "players.queueHeading": "Standby Queue",

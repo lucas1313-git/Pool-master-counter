@@ -2372,6 +2372,12 @@ input[type="number"] {
   border-color: var(--accent);
 }
 
+/* ＋: start the next team - dashed, so it doesn't read as an empty team */
+.team-toggle button.team-new {
+  background: transparent;
+  border-style: dashed;
+}
+
 .roster-remove {
   background: transparent;
   color: var(--text-dim);

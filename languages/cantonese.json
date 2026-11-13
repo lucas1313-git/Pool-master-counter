@@ -1114,6 +1114,7 @@
   "players.noPlayersYetSummary": "仲未有玩家——喺下面新增啦。",
   "players.noSavedListsYet": "仲未有已儲存嘅名單",
   "players.playing": "上場",
+  "players.newTeam": "開一隊新隊伍：{{team}}",
   "players.playingOfTotal": "{{total}} 人入面有 {{playing}} 人上場",
   "players.queueEmpty": "而家無人等緊。",
   "players.queueHeading": "後備輪候名單",

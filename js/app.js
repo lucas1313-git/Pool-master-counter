@@ -5633,6 +5633,19 @@
           });
           toggle.appendChild(btn);
         });
+        if (teamNewOffered()) {
+          var nextTeam = TEAM_IDS[teamLettersShown()];
+          var newBtn = document.createElement("button");
+          newBtn.type = "button";
+          newBtn.className = "team-new";
+          newBtn.textContent = "＋";
+          newBtn.title = T("players.newTeam", { team: teamSlotLabel(nextTeam) });
+          newBtn.setAttribute("aria-label", newBtn.title);
+          newBtn.addEventListener("click", function () {
+            setPlayerTeam(p.id, nextTeam);
+          });
+          toggle.appendChild(newBtn);
+        }
         row.appendChild(toggle);
       }
 
@@ -9146,13 +9159,22 @@
   // the team buttons beside each player: only the letters in use (at least
   // A B) - two teams get A B and never an empty C, even six players in two
   // threes. More teams come from the 🎱 Game sheet's split into pairs (six
-  // players: A B C, see splitPlayingIntoTeams).
+  // players: A B C, see splitPlayingIntoTeams), or from ＋ (teamNewOffered).
   function teamLettersShown() {
     var last = -1;
     state.players.forEach(function (p) {
       if (p.teamId && (p.playing || effectiveTeamQueue().indexOf(p.teamId) !== -1)) last = Math.max(last, TEAM_IDS.indexOf(p.teamId));
     });
     return Math.min(TEAM_IDS.length, Math.max(2, last + 1));
+  }
+  // ＋ after the letters: that player starts the next team (2026-11-12: "i
+  // got 3 teams but don't see team c") - offered when there are people
+  // enough for one more pair, so two teams of three can make a third
+  function teamNewOffered() {
+    var shown = teamLettersShown();
+    if (shown >= TEAM_IDS.length) return false;
+    var people = state.players.filter(function (p) { return p.playing || (p.teamId && effectiveTeamQueue().indexOf(p.teamId) !== -1); }).length;
+    return people >= 2 * (shown + 1);
   }
 
   function setPlayerTeam(id, teamId) {

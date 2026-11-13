@@ -153,10 +153,21 @@ function board(names, extra) {
   threes.players.forEach((p, i) => { p.teamId = i % 2 ? "B" : "A"; });
   await open(JSON.stringify(threes));
   const six = await look();
-  const sixLetters = await page.evaluate(() => [...document.querySelectorAll("#roster-list .team-toggle")].map((row) => [...row.querySelectorAll("button")].map((x) => x.textContent).join("")));
+  const sixLetters = await page.evaluate(() => [...document.querySelectorAll("#roster-list .team-toggle")].map((row) => [...row.querySelectorAll("button:not(.team-new)")].map((x) => x.textContent).join("")));
+  const sixNew = await page.evaluate(() => [...document.querySelectorAll("#roster-list .team-toggle .team-new")].map((b) => b.textContent + " " + b.getAttribute("aria-label")));
   const sixColumns = await page.evaluate(() => getComputedStyle(document.getElementById("scoreboard")).gridTemplateColumns.split(" ").length);
   check("six players in two teams of three (A " + (six.teams.A || []).join(" & ") + ", B " + (six.teams.B || []).join(" & ") + "): team buttons " + sixLetters.join(" ") + " - no C, the board in two halves (" + sixColumns + " columns)", six.cards.join() === "A,B" && sixLetters.length === 6 && sixLetters.every((l) => l === "AB") && sixColumns === 2, { six, sixLetters, sixColumns });
   if (OUT) await page.screenshot({ path: path.join(OUT, "team_two_threes.png") });
+  // ＋ starts the next team (2026-11-12: "i got 3 teams but don't see team c")
+  check("...and ＋ after the letters on every row, to start a third team (\"" + sixNew[0] + "\")", sixNew.length === 6 && sixNew.every((t) => t === "＋ Start a new team: Team C"), sixNew);
+  const firstName = await page.evaluate(() => { const row = document.querySelector("#roster-list li.roster-row"); row.querySelector(".team-toggle .team-new").click(); return row.textContent; });
+  await sleep(500);
+  const afterNew = await page.evaluate(() => ({
+    teams: JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).players.map((p) => p.name + ":" + p.teamId),
+    letters: [...document.querySelectorAll("#roster-list .team-toggle")].map((row) => [...row.querySelectorAll("button:not(.team-new)")].map((x) => x.textContent).join("")),
+    plus: document.querySelectorAll("#roster-list .team-toggle .team-new").length
+  }));
+  check("...＋ tapped: that player on Team C (" + afterNew.teams.join(", ") + "), A B C on every row, no ＋ left (six: not enough for a 4th pair)", afterNew.teams.filter((t) => /:C$/.test(t)).length === 1 && afterNew.letters.length === 6 && afterNew.letters.every((l) => l === "ABC") && afterNew.plus === 0, { firstName, afterNew });
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

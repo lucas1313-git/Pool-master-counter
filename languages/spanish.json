@@ -1114,6 +1114,7 @@
   "players.noPlayersYetSummary": "Aún no hay jugadores — añade alguno abajo.",
   "players.noSavedListsYet": "Aún no hay listas guardadas",
   "players.playing": "Jugando",
+  "players.newTeam": "Crear un equipo nuevo: {{team}}",
   "players.playingOfTotal": "{{playing}} de {{total}} jugando",
   "players.queueEmpty": "Nadie esperando.",
   "players.queueHeading": "Cola de espera",

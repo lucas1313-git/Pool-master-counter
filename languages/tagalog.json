@@ -1114,6 +1114,7 @@
   "players.noPlayersYetSummary": "Wala pang manlalaro — magdagdag sa ibaba.",
   "players.noSavedListsYet": "Wala pang naka-save na listahan",
   "players.playing": "Naglalaro",
+  "players.newTeam": "Gumawa ng bagong team: {{team}}",
   "players.playingOfTotal": "{{playing}} sa {{total}} ang naglalaro",
   "players.queueEmpty": "Walang naghihintay.",
   "players.queueHeading": "Standby Queue",
