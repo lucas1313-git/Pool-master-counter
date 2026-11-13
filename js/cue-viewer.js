@@ -12,6 +12,12 @@
 // any moment (drag; the last 10 min / hour / all; ±10 s, ±1 min; 🔴 Live) and
 // ＋ add a cue there, named after the game being played then (its 🎱 mark).
 //
+// 🏆 Winning shots (2026-11-12): on each recording, a 30-second clip of the
+// winning shot of every game the scoreboard saw won while it ran (on this
+// computer - its saved games, js/lib/winning-shots.js), cut into the Clips
+// folder and named "winning shot Luc vs Bob-8-Ball-3-2" - green in the list
+// and on the timelines.
+//
 // PMCCueViewer.mount(container, { compact, sessions, onDelete(cueId) }) ->
 // { refresh, select(id), state() }. A cue (🗑 on its row) and a whole
 // recording (🗑 on its timeline - to the Trash, with its cues) can be
@@ -86,6 +92,13 @@
     ".cv tr.game td.n { color: #3fa9f5; }",
     ".cv tr.game td.n::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #3fa9f5; margin-right: 6px; }",
     ".cv tr:not(.game) td.n::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent, #e8b923); margin-right: 6px; }",
+    // (🏆 winning shots: green, apart from both)
+    ".cv tr.win td.n { color: #4fd18b; }",
+    ".cv tr.win td.n::before { background: #4fd18b; }",
+    ".cv tr.win a.cv-btn { color: #4fd18b; border-color: #4fd18b; }",
+    ".cv .cv-tl .c.w, .cv .cv-wline .c.w { background: #4fd18b; }",
+    ".cv .cv-session-head .cv-wins { margin-left: auto; min-height: 32px; padding: 4px 9px; color: #4fd18b; border-color: #4fd18b; }",
+    ".cv .cv-session-head .cv-wins + .cv-del { margin-left: 0; }",
     ".cv .cv-legend { margin-left: 10px; }",
     ".cv .cv-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 8px; vertical-align: -1px; }",
     ".cv .cv-tl .h { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; }",
@@ -370,7 +383,7 @@
       // the cues (gold) and the games' starts (blue), and the time along it
       var marks = cues.filter(function (c) { return (c.session ? c.session === s.id : c.startedAt >= sp.start && c.startedAt <= sp.end) && (c.endedAt || sp.end) >= w.s && c.startedAt <= w.e; }).map(function (c) {
         if (c.kind === "game") return '<div class="c g" title="' + esc(c.name || "Game") + '" style="left:' + p(c.startedAt) + '%"></div>';
-        return '<div class="c" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
+        return '<div class="c' + (c.kind === "win" ? " w" : "") + '" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
       }).join("");
       var span = w.e - w.s, steps = [10000, 30000, 60000, 300000, 600000, 900000, 1800000, 3600000, 7200000], step = steps[steps.length - 1];
       for (var i = 0; i < steps.length; i++) if (span / steps[i] <= 10) { step = steps[i]; break; }
@@ -689,6 +702,69 @@
         status(tr("rec.cueAdded", "＋ A cue at {{time}} - set its start and end (drag the yellow handles, or I / O), then 💾 Save.", { time: clockOf(c.startedAt).slice(0, 8) }));
       }).catch(function (err) { status("Couldn't add the cue: " + err.message); });
     }
+    // 🏆 The scoreboard's games, from this browser's storage (the scoreboard runs on this computer,
+    // beside the recording page): the open session's (state.gameHistory) and every player's saved
+    // ones (js/big-store.js - the scoreboard's "playerStats")
+    function scoreboardGames() {
+      var history = [], statsKey = "poolMasterCounter.playerStats.v1";
+      try { history = (JSON.parse(localStorage.getItem("poolMasterCounter.state.v2") || "null") || {}).gameHistory || []; } catch (e) {}
+      var stats = Promise.resolve(null);
+      if (window.PMCBigStore) {
+        window.PMCBigStore.register("playerStats", statsKey);
+        stats = window.PMCBigStore.load("playerStats", null).catch(function () { return null; });
+      }
+      return stats.then(function (ps) {
+        if (!ps) try { ps = JSON.parse(localStorage.getItem(statsKey) || "null"); } catch (e) {}
+        return { gameHistory: Array.isArray(history) ? history : [], playerStats: ps || {} };
+      });
+    }
+    // 🏆 every game won during recording `id`: a cue each (25 s before the win was entered to 5 s
+    // after), cut into the Clips folder - the ones already made kept, not made twice
+    var winsBusy = false;
+    function winningShots(id) {
+      var s = sessions.filter(function (x) { return x.id === id; })[0], W = window.PMCLib && window.PMCLib.winningShots;
+      if (!s || !W || winsBusy) return;
+      var sp = sessionSpan(s);
+      winsBusy = true;
+      renderSessions();
+      status(tr("rec.winLooking", "🏆 Looking for the games won during this recording..."));
+      var done = function (text) { winsBusy = false; status(text); return refresh(); };
+      scoreboardGames().then(function (src) {
+        // (a win in a ⏸ pause, or before the first file: not in the video)
+        var wins = W.between(src, sp.start, sp.end).filter(function (w) { var at = locate(w.at, s.id); return at && at.session.id === s.id; });
+        if (!wins.length) return done(tr("rec.winNone", "🏆 No game was won on this computer's scoreboard while this recording ran."));
+        var mine = function () { return cues.filter(function (c) { return c.kind === "win" && c.session === s.id; }); };
+        var fresh = wins.filter(function (w) { return !mine().some(function (c) { return Math.abs((c.winAt || 0) - w.at) < 2000; }); });
+        // (one name each: the same score in another match of the same two gets " (2)")
+        var taken = {};
+        cues.forEach(function (c) { taken[c.name] = true; });
+        var made = [];
+        return fresh.reduce(function (chain, w) {
+          return chain.then(function () {
+            var name = w.name, n = 2;
+            while (taken[name]) name = w.name + " (" + n++ + ")";
+            taken[name] = true;
+            var span = W.clipSpan(w.at, sp.start, sp.end), who = [w.winners].concat(w.losers).map(function (names) { return names.join(" & "); });
+            var c = { kind: "win", winAt: w.at, name: name, customName: true, startedAt: span.startedAt, markedAt: w.at, endedAt: span.endedAt, duration: span.endedAt - span.startedAt,
+              player: w.winners.join("+"), opponent: w.losers.map(function (names) { return names.join("+"); }).join("+"), matchup: who.join(" v "), gameType: w.gameType, gameLabel: w.game, position: w.score, source: "winning shot", session: s.id };
+            return api("/api/rec/cues", c).then(function (savedCue) { cues.unshift(savedCue); made.push(savedCue); });
+          });
+        }, Promise.resolve()).then(function () {
+          var todo = mine().filter(function (c) { return !c.clip; }), total = mine().length;
+          if (!todo.length) return done(made.length ? tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: folder + "/Clips" }) : tr("rec.winAll", "🏆 This recording's {{n}} winning shots are already in the list (in green).", { n: total }));
+          if (!ffmpeg) return done(tr("rec.winNoFfmpeg", "🏆 {{n}} winning shots added to the list (in green) - cutting the clips needs ffmpeg on the computer.", { n: total }));
+          var i = 0, where = folder + "/Clips";
+          return todo.reduce(function (chain, c) {
+            return chain.then(function () {
+              status(tr("rec.winCutting", "🏆 Cutting winning shot {{i}} of {{n}}...", { i: ++i, n: todo.length }));
+              return api("/api/rec/cues/" + encodeURIComponent(c.id) + "/clip", {}, "POST").then(function (r) { c.clip = r.file; if (r.folder) where = r.folder; renderRows(); });
+            });
+          }, Promise.resolve()).then(function () {
+            return done(tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: where }));
+          });
+        });
+      }).catch(function (err) { done(tr("rec.winFailed", "🏆 Couldn't make the winning shots: {{error}}", { error: err.message })); });
+    }
     // ⏪ N: a cue here; ← → 10 s back / on (Shift: a minute) while a recording plays - unless typing
     document.addEventListener("keydown", function (e) {
       if (!root.isConnected || !sessions.length || (e.target && /INPUT|SELECT|TEXTAREA|VIDEO/.test(e.target.tagName)) || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -713,7 +789,7 @@
       if (!list.length) { rows.innerHTML = '<tr><td class="dim">' + (cues.length ? "No cue matches." : "No cues yet - ⭐ Mark during the recording (or say \"mark\").") + "</td></tr>"; return; }
       rows.innerHTML = list.slice(0, opts.compact ? 12 : 1000).map(function (c) {
         var game = c.kind === "game";
-        return '<tr data-id="' + esc(c.id) + '" class="' + (sel && sel.id === c.id ? "sel " : "") + (game ? "game " : "") + (c.endedAt ? "" : "open") + '"><td class="pk"><input type="checkbox" class="cv-pick" data-id="' + esc(c.id) + '"' + (picked[c.id] ? " checked" : "") + ' aria-label="Check this cue"></td><td class="n">' + esc(c.name || nameFor(c) + (c.endedAt ? "" : " (still marking)")) + (c.keep ? ' <span class="kept" title="Kept for good">📌</span>' : "") + '</td><td class="dim" style="white-space:nowrap">' + esc(when(c.startedAt)) + '</td><td class="dim">' + (game ? "▶" : c.endedAt ? esc(len(c.endedAt - c.startedAt)) : "...") + "</td><td>" +
+        return '<tr data-id="' + esc(c.id) + '" class="' + (sel && sel.id === c.id ? "sel " : "") + (game ? "game " : "") + (c.kind === "win" ? "win " : "") + (c.endedAt ? "" : "open") + '"><td class="pk"><input type="checkbox" class="cv-pick" data-id="' + esc(c.id) + '"' + (picked[c.id] ? " checked" : "") + ' aria-label="Check this cue"></td><td class="n">' + esc(c.name || nameFor(c) + (c.endedAt ? "" : " (still marking)")) + (c.keep ? ' <span class="kept" title="Kept for good">📌</span>' : "") + '</td><td class="dim" style="white-space:nowrap">' + esc(when(c.startedAt)) + '</td><td class="dim">' + (game ? "▶" : c.endedAt ? esc(len(c.endedAt - c.startedAt)) : "...") + "</td><td>" +
           (c.clip ? '<a class="cv-btn" href="/api/rec/clips/' + encodeURIComponent(c.clip) + '" download="' + esc(c.clip) + '" title="The exported clip">⬇</a>' : "") + "</td>" +
           '<td class="x"><button class="cv-del" data-del="cue" data-id="' + esc(c.id) + '" title="Delete this cue (the recording stays)">🗑</button></td></tr>';
       }).join("");
@@ -849,9 +925,10 @@
         var p = function (t) { return Math.max(0, Math.min(100, (t - sp.start) / total * 100)); };
         var marks = cues.filter(function (c) { return c.startedAt >= sp.start - 2000 && c.startedAt <= sp.end; }).map(function (c) {
           if (c.kind === "game") return '<div class="c g" title="' + esc(c.name || "Game") + '" style="left:' + p(c.startedAt) + '%"></div>';
-          return '<div class="c" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
+          return '<div class="c' + (c.kind === "win" ? " w" : "") + '" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
         }).join("");
         return '<div class="cv-session"><div class="cv-session-head"><b>' + esc(s.id) + "</b> " + (sp.live ? '<span style="color:#ff4d4d">● recording</span> ' : sp.paused ? '<span style="color:var(--accent, #e8b923)">' + esc(tr("rec.pauseGap", "⏸ paused")) + "</span> " : "") + '<span class="dim">' + esc(len(total)) + " · " + n + " file" + (n === 1 ? "" : "s") + "</span>" +
+          '<button class="cv-wins" data-id="' + esc(s.id) + '"' + (winsBusy ? " disabled" : "") + ' title="' + esc(tr("rec.winButtonTitle", "A 30-second clip of the winning shot of every game won during this recording: winning shot [player] vs [player]-[game]-[score]")) + '">' + esc(tr("rec.winButton", "🏆 Winning shots")) + "</button>" +
           '<button class="cv-del" data-del="session" data-id="' + esc(s.id) + '"' + (sp.live || sp.paused ? ' disabled title="Stop the recording first"' : ' title="Move this recording to the Trash, with its cues (exported clips are kept)"') + ">🗑 Delete</button></div>" +
           '<div class="cv-tl" data-s="' + sp.start + '" data-e="' + sp.end + '">' + marks + '<div class="h" hidden></div></div></div>';
       }).join("");
@@ -908,6 +985,8 @@
     root.addEventListener("click", function (e) {
       var del = e.target.closest('.cv-sess button.cv-del[data-del="session"]');
       if (del) { if (!del.disabled) deleteSession(del.getAttribute("data-id")); return; }
+      var winsBtn = e.target.closest(".cv-sess button.cv-wins");
+      if (winsBtn) { if (!winsBtn.disabled) winningShots(winsBtn.getAttribute("data-id")); return; }
       var tl = e.target.closest(".cv-tl");
       if (!tl) return;
       var r = tl.getBoundingClientRect(), s = +tl.getAttribute("data-s"), en = +tl.getAttribute("data-e");
@@ -920,9 +999,9 @@
         ffmpeg = !!r[0].ffmpeg;
         sessions = r[1].sessions || [];
         folder = r[1].folder || "";
-        var games = cues.filter(function (c) { return c.kind === "game"; }).length, own = cues.length - games;
-        q(".cv-info").innerHTML = esc(own + " cue" + (own === 1 ? "" : "s") + (games ? " · " + games + " game mark" + (games === 1 ? "" : "s") : "") + (ffmpeg ? "" : " · exporting needs ffmpeg on the computer")) +
-          '<span class="cv-legend"><span class="lg" style="background:var(--accent, #e8b923)"></span>⭐ your cues<span class="lg" style="background:#3fa9f5"></span>🎱 a game starts</span>';
+        var games = cues.filter(function (c) { return c.kind === "game"; }).length, wins = cues.filter(function (c) { return c.kind === "win"; }).length, own = cues.length - games - wins;
+        q(".cv-info").innerHTML = esc(own + " cue" + (own === 1 ? "" : "s") + (games ? " · " + games + " game mark" + (games === 1 ? "" : "s") : "") + (wins ? " · " + tr("rec.winCount", "🏆 {{n}}", { n: wins }) : "") + (ffmpeg ? "" : " · exporting needs ffmpeg on the computer")) +
+          '<span class="cv-legend"><span class="lg" style="background:var(--accent, #e8b923)"></span>⭐ your cues<span class="lg" style="background:#3fa9f5"></span>🎱 a game starts<span class="lg" style="background:#4fd18b"></span>' + esc(tr("rec.winLegend", "🏆 winning shots")) + "</span>";
         // the cue being viewed: kept as edited; picked up again if it was still being marked
         if (sel) {
           var fresh = cues.filter(function (c) { return c.id === sel.id; })[0];

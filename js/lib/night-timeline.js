@@ -70,9 +70,13 @@
     // another time - the same sides, the same game, and that saved one with
     // no open entry of its own - is that game again, not one more (seen on a
     // real night: the last rack, filed at 5:00 p.m. and still open at 8:02).
+    // Only when the open session was filed already (some of its entries
+    // saved under their own time): a new session after a saved one starts
+    // with nothing filed, and the same game again in it is one more.
     var live = (src.gameHistory || []).filter(function (e) {
       return e && typeof e !== "string" && e.ts && e.winnerNames && poolDay(e.ts) === dayKey;
     });
+    var filed = live.some(function (e) { return saved[e.ts]; });
     var liveTs = {}, orphans = {};
     live.forEach(function (e) { liveTs[e.ts] = true; });
     Object.keys(byTs).forEach(function (ts) {
@@ -81,7 +85,7 @@
       orphans[k] = (orphans[k] || 0) + 1;
     });
     live.forEach(function (e) {
-      if (!saved[e.ts]) {
+      if (filed && !saved[e.ts]) {
         var k = sameGame(e.winnerNames, e.opponentNames || [], e.gameLabel);
         if (orphans[k] > 0) { orphans[k] -= 1; return; }
       }

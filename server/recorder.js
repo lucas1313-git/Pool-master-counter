@@ -574,7 +574,8 @@ function attachRecorderRoutes(app) {
 
   // (kind: "game" - a game mark, the moment a game started; none - a cue)
   // (keep: 📌 kept for good - its clip cut, never cleaned up, not deleted with its recording)
-  var CUE_FIELDS = ["name", "kind", "keep", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter"];
+  // (kind: "win" - 🏆 a game's winning shot, winAt the moment the win was entered - js/cue-viewer.js)
+  var CUE_FIELDS = ["name", "kind", "keep", "winAt", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter"];
   function pickCue(b, into) {
     CUE_FIELDS.forEach(function (k) {
       if (b[k] === undefined) return;

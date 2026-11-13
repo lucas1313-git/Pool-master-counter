@@ -178,8 +178,20 @@ test("saved and still open: a game in both is one game - also when the open entr
   assert.equal(r.rackCount, 2);
   assert.equal(r.matches.length, 2);
   // ...but a real second win by the same sides, filed nowhere yet, counts
-  const more = N.build("2026-11-08", { playerStats: ps, gameHistory: [Object.assign({}, again, { ts: new Date(Date.parse(again.ts) + 60000).toISOString() }), again] });
+  const more = N.build("2026-11-08", { playerStats: ps, gameHistory: [Object.assign({}, again, { ts: new Date(Date.parse(again.ts) + 60000).toISOString() }), again, n.live[1]] });
   assert.equal(more.rackCount, 3);
+});
+
+test("a new session after a saved one: the same game again in it is one more", () => {
+  const n = night();
+  n.rack({ w: ["Luc"], l: ["Bob"] });
+  n.rack({ w: ["Kim"], l: ["Jo"] });
+  const ps = copies(n.live);
+  // (saved, and the open session emptied - startNewSession); then Luc beats Bob again
+  const n2 = night();
+  n2.rack({ w: ["Luc"], l: ["Bob"], gap: 60 });
+  const r = N.build("2026-11-08", { playerStats: ps, gameHistory: n2.live.map((e) => Object.assign({}, e, { ts: new Date(Date.parse(e.ts) + 25 * 60000).toISOString() })) });
+  assert.equal(r.rackCount, 3);
 });
 
 test("the pool day: a rack after midnight is the evening's; another day's games stay out", () => {
