@@ -53,6 +53,10 @@
     "nightMap.reset": "Reset the view",
     "nightMap.savePicture": "🖼️ Save as picture",
     "nightMap.chipStats": "{{played}} played · {{won}} won",
+    "nightMap.qScore": "Rating",
+    "nightMap.qScoreTitle": "Rating {{rating}} at the end of that day ({{change}} that day)",
+    "nightMap.infoQ": "Rating: {{list}}",
+    "nightMap.keyQ": "Numbers: the rating, and what a match did to it",
     "nightMap.keyTrunk": "White line: the table, match after match",
     "nightMap.keyPlay": "Solid: playing that match",
     "nightMap.keyAside": "Faint: not playing it",
@@ -80,9 +84,12 @@
     ".pmc-nm{display:block;font:inherit;color:var(--text,#f6efe9)}",
     ".pmc-nm-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}",
     ".pmc-nm-legend{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 300px;min-width:0}",
-    ".pmc-nm-chip{display:grid;grid-template-columns:auto auto;column-gap:8px;align-items:center;text-align:left;margin:0;font:inherit;color:var(--text,#f6efe9);background:var(--bg-card,#2e1414);border:1px solid var(--border,#4a1e1e);border-radius:12px;padding:5px 12px 5px 9px;min-height:44px;cursor:pointer;box-shadow:none}",
+    ".pmc-nm-chip{display:grid;grid-template-columns:auto auto auto;column-gap:8px;align-items:center;text-align:left;margin:0;font:inherit;color:var(--text,#f6efe9);background:var(--bg-card,#2e1414);border:1px solid var(--border,#4a1e1e);border-radius:12px;padding:5px 12px 5px 9px;min-height:44px;cursor:pointer;box-shadow:none}",
     ".pmc-nm-chip i{grid-row:1 / span 2;width:10px;height:30px;border-radius:5px;display:block}",
     ".pmc-nm-chip b{font-weight:800;line-height:1.15}.pmc-nm-chip small{color:var(--text-dim,#c9a2a2);font-size:.8rem;line-height:1.15;font-variant-numeric:tabular-nums}",
+    ".pmc-nm-q{grid-column:3;grid-row:1 / span 2;display:grid;justify-items:end;margin-left:6px;padding-left:10px;border-left:1px solid var(--border,#4a1e1e);font-variant-numeric:tabular-nums;line-height:1.15}",
+    ".pmc-nm-q em{font-style:normal;font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-dim,#c9a2a2)}.pmc-nm-q strong{font-weight:800;font-size:1.05rem}",
+    ".pmc-nm-q span{font-size:.8rem;font-weight:800}.pmc-nm-q .pmc-nm-up{color:#3fbf6b}.pmc-nm-q .pmc-nm-down{color:#f0605d}.pmc-nm-q .pmc-nm-flat{color:var(--text-dim,#c9a2a2)}",
     ".pmc-nm-chip.pmc-nm-on{border-color:var(--accent,#e8b923);box-shadow:inset 0 0 0 1px var(--accent,#e8b923)}.pmc-nm-chip.pmc-nm-off{opacity:.5}",
     ".pmc-nm-btn{font:inherit;font-weight:800;min-height:44px;min-width:44px;padding:0 12px;border-radius:12px;border:1px solid var(--border,#4a1e1e);background:var(--bg-card,#2e1414);color:var(--text,#f6efe9);cursor:pointer;box-shadow:none}",
     ".pmc-nm-btn.pmc-nm-on{border-color:var(--accent,#e8b923);background:var(--accent,#e8b923);color:var(--on-accent,#241a00)}",
@@ -103,7 +110,7 @@
     ".pmc-nm-key span{display:inline-flex;align-items:center;gap:6px}.pmc-nm-key i{display:inline-block;box-sizing:border-box;flex:none}",
     ".pmc-nm-k-line{width:24px;height:4px;border-radius:2px;background:var(--text,#f6efe9);opacity:.6}.pmc-nm-k-gold{width:24px;height:6px;border-radius:3px;background:#e8b923}",
     ".pmc-nm-k-ball{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#bfe0ff,#5aa9ff 55%,#2b5c96)}",
-    ".pmc-nm-k-faint{width:14px;height:14px;border-radius:50%;background:#5aa9ff;opacity:.25}",
+    ".pmc-nm-k-q{font-style:normal;font-weight:800;font-size:.8rem;color:#3fbf6b}.pmc-nm-k-q::before{content:\"+4\"}.pmc-nm-k-faint{width:14px;height:14px;border-radius:50%;background:#5aa9ff;opacity:.25}",
     ".pmc-nm-empty{color:var(--text-dim,#c9a2a2);padding:14px 0}"
   ].join("\n");
 
@@ -122,6 +129,7 @@
     var m = /T(\d\d):(\d\d)/.exec(iso || "");
     return m ? m[1] + ":" + m[2] : "";
   }
+  function signed(n) { return n > 0 ? "+" + n : n < 0 ? "−" + -n : "±0"; } // (a change, with its sign)
   function rgb(h) { h = h.replace("#", ""); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)]; }
   function rgba(h, a) { var c = rgb(h); return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; }
   function mix(h1, h2, u) { var a = rgb(h1), b = rgb(h2); return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * u) + "," + Math.round(a[1] + (b[1] - a[1]) * u) + "," + Math.round(a[2] + (b[2] - a[2]) * u) + ")"; }
@@ -193,7 +201,7 @@
       });
       players.forEach(function (p) {
         var id = p.id, plays = sideOf[id] !== undefined, won = plays && m.winner === sideOf[id], from = before[id];
-        var nd = node({ kind: "player", id: id, k: k, ghost: !plays, p: off(k, seat[id][0] * INNER, seat[id][1] * INNER), r: 12, winner: won, first: k === 0, last: k === N - 1 });
+        var nd = node({ kind: "player", id: id, k: k, m: m, ghost: !plays, p: off(k, seat[id][0] * INNER, seat[id][1] * INNER), r: 12, winner: won, first: k === 0, last: k === N - 1 });
         // from the slice before: solid while they play, fading where they stop or come back, faint while they don't
         if (from) line(from.p, nd.p, { kind: "path", k: k, ids: [id], a0: from.played ? 1 : GHOST, a1: plays ? 1 : GHOST, w: from.played && plays ? 3.6 : 3 });
         if (plays) line(nd.p, meet[sideOf[id]].p, { kind: "join", k: k, ids: [id], winner: won, w: 3.6 });
@@ -378,7 +386,13 @@
           ball(q[0], q[1], nd.ghost ? r * 0.8 : r, col, nd.ghost ? a : a * fg);
           hits.push({ x: q[0], y: q[1], r: Math.max(16, r + 6), player: nd.id });
           // the name over it: in the first and the last slice (faint with the ball); in between for who plays, when followed or from near enough to read it
-          if (ends || (!nd.ghost && (hi === nd.id || r >= 12.5))) labels.push({ x: q[0], y: q[1] - r - 4, text: pl.short || pl.name, col: col, a: nd.ghost ? Math.max(0.45, a) * (dimmed([nd.id]) ? 0.3 : 1) : a, d: q[2], bold: true, rank: nd.ghost ? 2.5 : ends ? 1 : hi === nd.id ? 1 : 3 });
+          // ...and their Q-Score: going into the night in the first slice, at its end in the last; in between, what that match did to it
+          if (ends || (!nd.ghost && (hi === nd.id || r >= 12.5))) {
+            var qs = pl.qScore, mq = nd.m.qScores && nd.m.qScores[nd.id], extra = "", extraCol = "#f6efe9";
+            if (ends && qs) extra = String(nd.first ? qs.start : qs.end);
+            else if (!ends && mq) { extra = signed(mq.delta); extraCol = mq.delta > 0 ? "#5fd98a" : mq.delta < 0 ? "#ff7a76" : "#c9a2a2"; }
+            labels.push({ x: q[0], y: q[1] - r - 4, text: pl.short || pl.name, extra: extra, extraCol: extraCol, col: col, a: nd.ghost ? Math.max(0.45, a) * (dimmed([nd.id]) ? 0.3 : 1) : a, d: q[2], bold: true, rank: nd.ghost ? 2.5 : ends ? 1 : hi === nd.id ? 1 : 3 });
+          }
         } else if (nd.kind === "side") {
           if (hi !== null && nd.ids.indexOf(hi) === -1) a = 0.15;
           ball(q[0], q[1], r, nd.winner ? GOLD : GREY, a * fg);
@@ -403,7 +417,7 @@
       labels.forEach(function (lb) {
         var size = lb.small ? 11 : 13;
         ctx.font = (lb.bold ? "800 " : "600 ") + size + "px " + (getComputedStyle(root).fontFamily || "sans-serif");
-        var w = ctx.measureText(lb.text).width + 10, h = size + 6;
+        var wt = ctx.measureText(lb.text).width, we = lb.extra ? ctx.measureText(lb.extra).width + 5 : 0, w = wt + we + 10, h = size + 6;
         var x = lb.x - w / 2, y = lb.top ? lb.y : lb.y - h;
         if (taken.some(function (t) { return x < t[0] + t[2] && x + w > t[0] && y < t[1] + t[3] && y + h > t[1]; })) return;
         taken.push([x, y, w, h]);
@@ -411,6 +425,7 @@
         roundRect(x, y, w, h, 6); ctx.fill();
         ctx.globalAlpha = lb.a; ctx.fillStyle = lb.col; ctx.textBaseline = "middle"; ctx.textAlign = "left";
         ctx.fillText(lb.text, x + 5, y + h / 2 + 0.5);
+        if (lb.extra) { ctx.fillStyle = lb.extraCol; ctx.fillText(lb.extra, x + 5 + wt + 5, y + h / 2 + 0.5); }
         ctx.globalAlpha = 1;
       });
     }
@@ -469,6 +484,11 @@
       if (m.stoppedEarly) extra.push(T("nightMap.stoppedEarly"));
       if (m.tournament) extra.push(T("nightMap.tournament"));
       if (extra.length) el("div", "", info).textContent = extra.join(" · ");
+      if (m.qScores) {
+        var qlist = [];
+        m.sides.forEach(function (s) { s.players.forEach(function (id) { if (m.qScores[id]) qlist.push(namesOf([id]) + " " + signed(m.qScores[id].delta)); }); });
+        if (qlist.length) el("div", "", info).textContent = T("nightMap.infoQ", { list: qlist.join(" · ") });
+      }
       var ch = [];
       if (m.changes) {
         if (m.changes["in"].length) ch.push(T("nightMap.changeIn", { names: namesOf(m.changes["in"]) }));
@@ -501,12 +521,21 @@
         el("i", "", b).style.background = p.color;
         el("b", "", b).textContent = p.name;
         el("small", "", b).textContent = T("nightMap.chipStats", { played: p.played, won: p.won });
+        if (p.qScore) {
+          // their Q-Score at the day's end, and what the day did to it
+          var q = el("span", "pmc-nm-q", b), ch = p.qScore.change;
+          el("em", "", q).textContent = T("nightMap.qScore");
+          el("strong", "", q).textContent = p.qScore.end;
+          el("span", ch > 0 ? "pmc-nm-up" : ch < 0 ? "pmc-nm-down" : "pmc-nm-flat", q).textContent = (ch > 0 ? "▲ " : ch < 0 ? "▼ " : "") + signed(ch).replace(/^[+−]/, ch ? "" : "±");
+          q.title = T("nightMap.qScoreTitle", { rating: p.qScore.end, change: signed(ch) });
+        }
         b.addEventListener("click", function () { highlight(hi === p.id ? null : p.id); });
         chips.push({ id: p.id, el: b });
       });
       paintChips();
       key.innerHTML = "";
-      [["line", "nightMap.keyTrunk"], ["ball", "nightMap.keyPlay"], ["faint", "nightMap.keyAside"], ["gold", "nightMap.keyGold"]].forEach(function (k) {
+      [["line", "nightMap.keyTrunk"], ["ball", "nightMap.keyPlay"], ["faint", "nightMap.keyAside"], ["gold", "nightMap.keyGold"], ["q", "nightMap.keyQ"]].forEach(function (k) {
+        if (k[0] === "q" && !(model && model.night.players.some(function (p) { return p.qScore; }))) return;
         var s = el("span", "", key);
         el("i", "pmc-nm-k-" + k[0], s);
         s.appendChild(document.createTextNode(T(k[1])));

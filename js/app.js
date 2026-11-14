@@ -13535,7 +13535,7 @@
   var night3dDaySelect = document.getElementById("night3d-day");
   var night3d = { day: null, picked: false, view: "map", sig: null, night: null, map: null, braid: null, shown: {} };
   function night3dSource() {
-    return { playerStats: PLAYER_STATS, gameHistory: state.gameHistory || [], tournamentResults: TOURNAMENT_RESULTS, dayNotes: DAY_NOTES };
+    return { playerStats: PLAYER_STATS, gameHistory: state.gameHistory || [], tournamentResults: TOURNAMENT_RESULTS, dayNotes: DAY_NOTES, ratings: PLAYER_RATINGS };
   }
   function night3dClock(localIso) {
     try {
@@ -13578,7 +13578,7 @@
       facts.textContent = [countPhrase("players", night.players.length), countPhrase("games", night.rackCount), night3dClock(night.matches[0].endedAt) + " – " + night3dClock(last.endedAt)].join(" · ");
     }
     // (the same night as drawn: left as it is - a map turned or a player followed isn't reset by a redraw)
-    var sig = night ? [night.day, night.rackCount, night.matches.length, night.matches[night.matches.length - 1].endedAt, night.players.map(function (p) { return p.name; }).join("|")].join("#") : "";
+    var sig = night ? [night.day, night.rackCount, night.matches.length, night.matches[night.matches.length - 1].endedAt, night.players.map(function (p) { return p.name + (p.qScore ? ":" + p.qScore.end : ""); }).join("|")].join("#") : "";
     night3d.sig = sig;
     night3d.night = night;
     showNight3dView();

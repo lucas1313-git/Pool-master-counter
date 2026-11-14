@@ -6,21 +6,26 @@
 // PMCLib.nightTimeline (loaded before it), the unit tests load it in Node.
 //
 // build(dayKey, src, opts) -> { day, title, note, players, matches, rackCount, warnings }
-//   src = { playerStats, gameHistory, tournamentResults, dayNotes } - the app's
-//     PLAYER_STATS, state.gameHistory, TOURNAMENT_RESULTS and DAY_NOTES, or the
-//     same keys of a backup file ({ playerStats, state.gameHistory, ... }).
+//   src = { playerStats, gameHistory, tournamentResults, dayNotes, ratings } -
+//     the app's PLAYER_STATS, state.gameHistory, TOURNAMENT_RESULTS, DAY_NOTES
+//     and PLAYER_RATINGS, or the same keys of a backup file ({ playerStats,
+//     state.gameHistory, ... }). ratings is optional: with it, the Q-Scores.
 //   opts = { mergeOpenPlay (default true: the same sides again with no race set
 //     are one match, "2-0"), locale (the title's), gameLabel(gameType, label) }
-//   players[] = { id, name, short, color, played, won } - id is a slug of the
-//     name (a saved game carries names only), short the first name when that
-//     tells everyone apart, played / won the racks (games), as on the board.
+//   players[] = { id, name, short, color, played, won, qScore } - id is a slug
+//     of the name (a saved game carries names only), short the first name when
+//     that tells everyone apart, played / won the racks (games), as on the
+//     board. qScore { start, end, change }: their Q-Score (rating) going into
+//     that day and at its end, as the Day Report counts it - null when unknown.
 //   matches[] = { n, startedAt, endedAt (local "YYYY-MM-DDTHH:MM:SS"),
 //     startEstimated, mode "teams" | "individual", freeForAll, rotatingTeams,
 //     game, gameType, raceTo, finished, sides[{ players[ids], score, points,
 //     raceTo, board }], winner (index, or null: level when it stopped),
 //     skunk, ballsLeft, stoppedEarly, tournament, sidesMerged,
 //     changes { in, out, stayed, keptSides, winnerStayed, gapMinutes,
-//     partnersSwitched } (null for the first), racks[] }
+//     partnersSwitched } (null for the first), racks[], qScores { id: { delta,
+//     after } } - what the match did to each of its players' Q-Score (its
+//     racks' changes added up), where the rating's own history has them }
 // What the stored games can't say: the order of the waiting line, a player
 // subbed in mid-game, and - mostly - when a game started (only when its
 // first shot was timed; else the match before's end, startEstimated).
@@ -78,12 +83,13 @@
     Object.keys(byTs).forEach(function (ts) {
       if (liveTs[ts]) return;
       var k = sameGame(byTs[ts].winners, byTs[ts].losers, byTs[ts].g.gameLabel);
-      orphans[k] = (orphans[k] || 0) + 1;
+      (orphans[k] = orphans[k] || []).push(ts);
     });
     live.forEach(function (e) {
       if (!saved[e.ts]) {
         var k = sameGame(e.winnerNames, e.opponentNames || [], e.gameLabel);
-        if (orphans[k] > 0) { orphans[k] -= 1; return; }
+        // (its other time is kept: the Q-Scores' history has the game under the open entry's)
+        if (orphans[k] && orphans[k].length) { var kept = byTs[orphans[k].shift()]; (kept.also = kept.also || []).push(e.ts); return; }
       }
       put(e.ts, 3, e, e.winnerNames, e.opponentNames || []);
     });
@@ -134,7 +140,7 @@
       var hasPoints = !!g.scores && !(g.unit === "rack" && (g.target || 1) <= 1);
       var endMs = Date.parse(ts);
       return {
-        endMs: endMs, startMs: typeof g.durationMs === "number" && g.durationMs > 0 ? endMs - g.durationMs : null,
+        endMs: endMs, alsoMs: (r.also || []).map(function (t) { return Date.parse(t); }), startMs: typeof g.durationMs === "number" && g.durationMs > 0 ? endMs - g.durationMs : null,
         mode: isTeam ? "teams" : sides.length > 2 ? "freeForAll" : "individual", rotatingTeams: !!g.rotatingTeams, sidesMerged: merged,
         gameType: g.gameType || null, game: g.gameLabel || g.gameType || "", target: g.target || null,
         raceTarget: g.raceTarget > 1 ? g.raceTarget : null, endsRace: !!(g.wonRace || g.raceInterrupted), interrupted: !!g.raceInterrupted,
@@ -237,6 +243,37 @@
       p.short = firsts[nameKey(f)] === 1 ? f : p.name;
       p.color = COLORS[i % COLORS.length];
     });
+
+    // the Q-Scores: every rating keeps its own history, a change per rated game, under the game's time
+    if (src.ratings) {
+      var ratingOf = {};
+      Object.keys(src.ratings).forEach(function (name) { ratingOf[nameKey(name)] = src.ratings[name]; });
+      players.forEach(function (p) {
+        var entry = ratingOf[nameKey(p.name)], history = entry && entry.history || [], start = null, end = null, byMs = {};
+        p.qScore = null;
+        history.forEach(function (h) {
+          if (!h || typeof h.rating !== "number") return;
+          var day = poolDay(h.ts);
+          if (day < dayKey) { start = h.rating; end = h.rating; }
+          else if (day === dayKey) {
+            if (start === null) start = h.rating - (h.delta || 0);
+            end = h.rating;
+            byMs[new Date(h.ts).getTime()] = h;
+          }
+        });
+        if (start === null && entry && typeof entry.rating === "number" && !history.length) { start = entry.rating; end = entry.rating; }
+        if (start !== null) p.qScore = { start: Math.round(start), end: Math.round(end), change: Math.round(end) - Math.round(start) };
+        groups.forEach(function (m, i) {
+          if ([].concat.apply([], m.sides).indexOf(p.id) === -1) return;
+          var delta = 0, after = null;
+          m.racks.forEach(function (rk) {
+            [rk.endMs].concat(rk.alsoMs).forEach(function (ms) { var h = byMs[ms]; if (h) { delta += h.delta || 0; after = h.rating; } });
+          });
+          if (after === null) return;
+          (matches[i].qScores = matches[i].qScores || {})[p.id] = { delta: Math.round(delta), after: Math.round(after) };
+        });
+      });
+    }
 
     var title = dayKey;
     try { title = new Date(dayKey + "T12:00:00").toLocaleDateString(opts.locale || "en", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); } catch (e) {}

@@ -204,3 +204,27 @@ test("the game's name through the app's own labels, and the day's note", () => {
   assert.equal(r.matches[0].game, "Bola 8");
   assert.equal(r.note, "Good pool.");
 });
+
+test("the Q-Scores: each player's going in and at the day's end, and what each match did to them (its racks added up)", () => {
+  const n = night();
+  const a = n.rack({ w: ["Ann"], l: ["Bo"] }), b = n.rack({ w: ["Ann"], l: ["Bo"] }), c = n.rack({ w: ["Cy"], l: ["Ann"], gl: "9-Ball", gt: "9ball" });
+  const before = new Date(2026, 10, 7, 20, 0).toISOString();
+  const ratings = {
+    ann: { rating: 419, history: [{ ts: before, rating: 410, delta: 10, fromGame: true }, { ts: a.ts, rating: 418, delta: 8 }, { ts: b.ts, rating: 425, delta: 7 }, { ts: c.ts, rating: 419, delta: -6 }] }, // (another casing of the name)
+    Bo: { rating: 385, history: [{ ts: a.ts, rating: 392, delta: -8 }, { ts: b.ts, rating: 385, delta: -7 }] }, // (no history before: the day's first change says where it started)
+    Cy: { rating: 400, history: [] } // (a game that wasn't rated: nothing for that match)
+  };
+  const out = N.build("2026-11-08", { gameHistory: n.live, ratings });
+  const q = Object.fromEntries(out.players.map((p) => [p.name, p.qScore]));
+  assert.deepEqual(q, { Ann: { start: 410, end: 419, change: 9 }, Bo: { start: 400, end: 385, change: -15 }, Cy: { start: 400, end: 400, change: 0 } });
+  assert.deepEqual(out.matches.map((m) => m.qScores), [{ ann: { delta: 15, after: 425 }, bo: { delta: -15, after: 385 } }, { ann: { delta: -6, after: 419 } }]);
+  // a game filed under one time and still open under another (rated under the open entry's): its change is found all the same
+  const filed = Object.assign({}, c, { ts: new Date(Date.parse(c.ts) - 2 * 60000).toISOString() });
+  const twice = N.build("2026-11-08", { playerStats: copies([a, b, filed]), gameHistory: [c], ratings });
+  assert.equal(twice.matches.length, 2);
+  assert.deepEqual(twice.matches[1].qScores, { ann: { delta: -6, after: 419 } });
+  // without the ratings: none
+  const bare = N.build("2026-11-08", { gameHistory: n.live });
+  assert.equal(bare.players[0].qScore, undefined);
+  assert.equal(bare.matches[0].qScores, undefined);
+});
