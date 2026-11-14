@@ -13523,8 +13523,9 @@
 
   // ---- 🧊 The night in 3D ----
   // A day's games as a diagram in space to turn and move like a map
-  // (js/night-map.js: every player a node at every match, joining in sides
-  // and the sides in the match, the losers going aside) and as one flat
+  // (js/night-map.js: every player a ball at every match - solid when they
+  // play it, very faint when they don't - joining in sides and the sides in
+  // the match) and as one flat
   // picture (js/night-braid.js: every player a ribbon, every match a
   // block). Either is shared as a PNG. Both draw what js/lib/night-timeline.js rebuilds from the
   // saved games (each player's own log, and the open session). The day: the

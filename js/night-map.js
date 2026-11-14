@@ -2,16 +2,15 @@
 // 🗺️ The map, in 🧊 The night in 3D: a night as a diagram in space, to turn
 // and move around like a map - nothing plays, nothing walks.
 // The white line is the table: a ball for every match, in order. Each
-// match is a slice across it, and everything in the slice is that match:
-// on a plate round the ball, a ball for each player in it (every player
-// their own direction from the table, all night), joined to their side's
-// node and the sides to the match's ball; and below, on the bench (two
-// rails under the table, marked "Sitting out"), a square for each player
-// sitting it out. Gold is the winning side (its node, its way into the
-// ball, a ring round its players). From slice to slice a line takes every
-// player on: along (still playing, or still sitting), down to the bench
-// (out - a loser's way down is dashed) or up from it (in). So who plays a
-// match is who stands on its plate, and a player's whole night is one path.
+// match is a slice across it: round the match's ball, a ball for every
+// player of the night (each their own direction from the table, all
+// night) - solid for who plays that match, very faint for who doesn't.
+// Who plays is joined to their side's node, and the sides to the match's
+// ball; gold is the winning side (its node, its way into the ball, a ring
+// round its players). From slice to slice a line takes every player to
+// their next ball: solid while they play, fading out where they stop and
+// in where they come back. So a match is its solid balls, and a player's
+// night one line - there where it is solid.
 // Two shapes: 🌀 spiral (the table's line winds round and up - compact, the
 // whole night at a glance) and ➖ straight (the order of things, left to
 // right; top to bottom in a narrow box).
@@ -55,12 +54,9 @@
     "nightMap.savePicture": "🖼️ Save as picture",
     "nightMap.chipStats": "{{played}} played · {{won}} won",
     "nightMap.keyTrunk": "White line: the table, match after match",
-    "nightMap.keyPlay": "Ball, on a match's plate: playing it",
-    "nightMap.keyAside": "Square, on the bench below: sitting out",
+    "nightMap.keyPlay": "Solid: playing that match",
+    "nightMap.keyAside": "Faint: not playing it",
     "nightMap.keyGold": "Gold: the winning side",
-    "nightMap.keyLost": "Dashes: lost, and down to the bench",
-    "nightMap.labelTable": "Playing",
-    "nightMap.labelBench": "Sitting out",
     "nightMap.keyTap": "Tap a player to follow them, a ball for its match.",
     "nightMap.matchNo": "Match {{n}}",
     "nightMap.versus": "{{a}} v {{b}}",
@@ -107,13 +103,13 @@
     ".pmc-nm-key span{display:inline-flex;align-items:center;gap:6px}.pmc-nm-key i{display:inline-block;box-sizing:border-box;flex:none}",
     ".pmc-nm-k-line{width:24px;height:4px;border-radius:2px;background:var(--text,#f6efe9);opacity:.6}.pmc-nm-k-gold{width:24px;height:6px;border-radius:3px;background:#e8b923}",
     ".pmc-nm-k-ball{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#bfe0ff,#5aa9ff 55%,#2b5c96)}",
-    ".pmc-nm-k-ring{width:13px;height:13px;border-radius:3px;border:2px solid #5aa9ff;background:#1c2a3d}.pmc-nm-k-dash{width:24px;height:0;border-top:3px dashed #5aa9ff}",
+    ".pmc-nm-k-faint{width:14px;height:14px;border-radius:50%;background:#5aa9ff;opacity:.25}",
     ".pmc-nm-empty{color:var(--text-dim,#c9a2a2);padding:14px 0}"
   ].join("\n");
 
   var GOLD = "#e8b923", GREY = "#8f7f7f";
   // the space: a step along the table per match, the ring of seats, the sides' nodes between
-  var DX = 150, INNER = 80, SIDE = 38, DROP = 215, LANE = 32;
+  var DX = 150, INNER = 84, SIDE = 38, GHOST = 0.13; // (GHOST: how faint a player is in a match they don't play)
   // the game's ball: [number or "", colour, striped]
   var BALLS = { "8ball": [8, "#16161a", 0], "8ballrotation": [8, "#16161a", 0], "8ballpunishment": [8, "#16161a", 0], "9ball": [9, "#f2c21c", 1], "10ball": [10, "#2a62c9", 1], "15ballrotation": [15, "#7a2230", 1], "straight": [14, "#1f8a4c", 1], "onepocket": [1, "#f2c21c", 0], "snooker": ["", "#c62828", 0] };
 
@@ -132,26 +128,23 @@
   function el(tag, cls, parent) { var e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; }
 
   // ---- the night as nodes and lines in space ----
-  // Along the table's line: the matches, in order - each a slice across it, and everything in a slice is
-  // that match. In the slice: the match's ball on the line; round it, on a plate, a ball for each player
-  // in it (every player their own direction from the table, all night), joined to their side's node and
-  // the sides to the match's ball; and below, on the bench (two rails under the table, a place of their
-  // own for everybody), a square for each player sitting it out. From slice to slice a line takes every
-  // player from their node to their next: along (still playing, or still sitting), down to the bench
-  // (out - dashed after a loss) or up from it (in).
+  // Along the table's line: the matches, in order - each a slice across it. In every slice the match's
+  // ball on the line and, round it, a ball for every player of the night (each their own direction from
+  // the table, all night): solid for who plays that match - joined to their side's node, and the sides to
+  // the match's ball - and very faint for who doesn't. From slice to slice a line takes every player to
+  // their next ball: solid while they play, fading out as they stop and in as they come back.
   // Two shapes: "spiral" - the table's line winds up and round, a turn of some dozen matches (compact: the
   // whole night at a glance, to walk around), and "line" - straight (the order of things, left to right).
   function build(night, shape) {
     var players = night.players, n = players.length, N = night.matches.length;
-    var seat = {}, idx = {}, lane = {};
+    var seat = {}, idx = {};
     players.forEach(function (p, i) {
       var a = -Math.PI / 2 + 2 * Math.PI * i / Math.max(3, n); // (the first on top; two players: not on one line through the table)
       seat[p.id] = [-Math.sin(a), Math.cos(a)]; // (up, and across: outwards on a spiral)
-      lane[p.id] = (i - (n - 1) / 2) * LANE;
       idx[p.id] = i;
     });
     // where the table's line is at match t (halves too), and the two ways across it there
-    var perTurn = Math.max(9, Math.min(14, N + 1)), big = perTurn * DX / (2 * Math.PI), rise = N > perTurn ? DROP + INNER + 170 : 150;
+    var perTurn = Math.max(9, Math.min(14, N + 1)), big = perTurn * DX / (2 * Math.PI), rise = N > perTurn ? 2 * INNER + 190 : 150;
     function frame(t) {
       if (shape !== "spiral") return { o: [(t - (N - 1) / 2) * DX, 0, 0], u: [0, 1, 0], v: [0, 0, 1] };
       var f = -Math.PI / 2 + 2 * Math.PI * t / perTurn; // (it starts at the front, and goes round to the right)
@@ -173,16 +166,11 @@
       pts.push(off(to, a, b));
       return pts;
     }
-    var before = {}, half = (n - 1) / 2 * LANE + 18; // player -> their node in the slice before: { p, played, lost }
+    var before = {}; // player -> their ball in the slice before: { p, played }
     for (var k = 0; k < N; k++) {
-      var m = night.matches[k], sideOf = {}, ids = [];
-      m.sides.forEach(function (s, si) { s.players.forEach(function (id) { sideOf[id] = si; ids.push(id); }); });
+      var m = night.matches[k], sideOf = {};
+      m.sides.forEach(function (s, si) { s.players.forEach(function (id) { sideOf[id] = si; }); });
       var ball = node({ kind: "match", m: m, k: k, p: off(k, 0, 0), r: 17 });
-      // the plate the match is played on, and the bench's rung under it
-      var plate = [];
-      for (var a = 0; a < 40; a++) plate.push(off(k, Math.sin(a / 40 * 2 * Math.PI) * (INNER + 24), Math.cos(a / 40 * 2 * Math.PI) * (INNER + 24)));
-      shapes.push({ kind: "plate", k: k, ids: ids, pts: plate });
-      shapes.push({ kind: "rung", pts: [off(k, -DROP, -half), off(k, -DROP, half)] });
       // each side's node: towards its players; two sides that would sit together are pushed apart
       var dirs = m.sides.map(function (s) {
         var y = 0, z = 0;
@@ -205,22 +193,14 @@
       });
       players.forEach(function (p) {
         var id = p.id, plays = sideOf[id] !== undefined, won = plays && m.winner === sideOf[id], from = before[id];
-        var nd = node({ kind: plays ? "player" : "bench", id: id, k: k, p: plays ? off(k, seat[id][0] * INNER, seat[id][1] * INNER) : off(k, -DROP, lane[id]), r: plays ? 12 : 9, winner: won, first: k === 0, last: k === N - 1 });
-        if (from) {
-          // from the slice before: still playing, down to the bench (a loser's way down is dashed), up from it, still sitting
-          if (from.played) line(from.p, nd.p, { kind: plays ? "stay" : "out", k: k, ids: [id], lost: from.lost, w: plays ? 3.4 : 2.8 });
-          else line(from.p, nd.p, { kind: plays ? "in" : "seat", k: k, ids: [id], w: plays ? 3.4 : 1.6 });
-        }
-        if (plays) line(nd.p, meet[sideOf[id]].p, { kind: "join", k: k, ids: [id], winner: won, w: 3.4 });
-        before[id] = { p: nd.p, played: plays, lost: plays && m.winner !== null && !won };
+        var nd = node({ kind: "player", id: id, k: k, ghost: !plays, p: off(k, seat[id][0] * INNER, seat[id][1] * INNER), r: 12, winner: won, first: k === 0, last: k === N - 1 });
+        // from the slice before: solid while they play, fading where they stop or come back, faint while they don't
+        if (from) line(from.p, nd.p, { kind: "path", k: k, ids: [id], a0: from.played ? 1 : GHOST, a1: plays ? 1 : GHOST, w: from.played && plays ? 3.6 : 3 });
+        if (plays) line(nd.p, meet[sideOf[id]].p, { kind: "join", k: k, ids: [id], winner: won, w: 3.6 });
+        before[id] = { p: nd.p, played: plays };
       });
     }
-    // the table's line and the bench's two rails, each with its word at the start
     lines.push({ kind: "table", ids: [], w: 2.4, pts: along(0, 0, -0.6, N - 0.4) });
-    lines.push({ kind: "rail", ids: [], w: 1.4, pts: along(-DROP, -half, -0.6, N - 0.4) });
-    lines.push({ kind: "rail", ids: [], w: 1.4, pts: along(-DROP, half, -0.6, N - 0.4) });
-    node({ kind: "word", key: "nightMap.labelTable", p: off(-0.6, 0, 0), r: 0 });
-    node({ kind: "word", key: "nightMap.labelBench", p: off(-0.6, -DROP, 0), r: 0 });
     // a spiral stands on a floor: three faint circles under it - they turn with it, and say which way is up
     if (shape === "spiral") {
       var low = Infinity;
@@ -247,7 +227,7 @@
   // the ready views, as [turn, tilt]: for the table running left to right (a wide box), and top to bottom (a narrow one)
   var VIEWS = { "3d": [0.5, 0.34], side: [0, 0], end: [Math.PI / 2 - 0.0001, 0] };
   var VIEWS_TALL = { "3d": [0.6, 0.3], side: [0, 0], end: [0, -Math.PI / 2 + 0.0001] };
-  var VIEWS_SPIRAL = { "3d": [0.3, 0.62], side: [0, 0.1], end: [0, Math.PI / 2 - 0.0001] }; // ("end": from above)
+  var VIEWS_SPIRAL = { "3d": [0.3, 0.72], side: [0, 0.1], end: [0, Math.PI / 2 - 0.0001] }; // ("end": from above)
 
   function mount(root, night, opts) {
     opts = opts || {};
@@ -354,11 +334,11 @@
       model.shapes.forEach(function (sh) {
         var pr = sh.pts.map(project), d = 0;
         pr.forEach(function (q) { d += q[2]; });
-        items.push({ d: d / pr.length + (sh.kind === "floor" ? 4000 : 3), shape: sh, pr: pr }); // (a plate: just behind what stands on it)
+        items.push({ d: d / pr.length + 4000, shape: sh, pr: pr });
       });
       model.lines.forEach(function (ln) {
         var pr = ln.pts.map(project);
-        for (var s = 0; s < pr.length - 1; s++) items.push({ d: (pr[s][2] + pr[s + 1][2]) / 2, a: pr[s], b: pr[s + 1], ln: ln });
+        for (var s = 0; s < pr.length - 1; s++) items.push({ d: (pr[s][2] + pr[s + 1][2]) / 2, a: pr[s], b: pr[s + 1], ln: ln, u: (s + 0.5) / (pr.length - 1) });
       });
       model.nodes.forEach(function (nd) { var q = project(nd.p); nd.q = q; items.push({ d: q[2] - 1, nd: nd }); });
       items.sort(function (a, b) { return b.d - a.d; });
@@ -366,62 +346,39 @@
       var labels = [];
       items.forEach(function (it) {
         if (it.shape) {
-          var sh = it.shape, fs = fog(it.d);
           ctx.beginPath();
           it.pr.forEach(function (q, i) { if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
-          if (sh.kind === "plate") {
-            // the plate a match is played on: who stands on it plays it
-            var on = hi === null || sh.ids.indexOf(hi) !== -1;
-            ctx.closePath();
-            ctx.fillStyle = "rgba(246,239,233," + (on ? 0.07 : 0.025) * fs + ")"; ctx.fill();
-            ctx.strokeStyle = "rgba(246,239,233," + (on ? 0.3 : 0.1) * fs + ")"; ctx.lineWidth = 1.2; ctx.stroke();
-          } else {
-            ctx.strokeStyle = sh.kind === "floor" ? "rgba(232,185,35,0.1)" : "rgba(246,239,233," + 0.2 * fs + ")"; ctx.lineWidth = 1.2; ctx.stroke();
-          }
+          ctx.strokeStyle = "rgba(232,185,35,0.1)"; ctx.lineWidth = 1.2; ctx.stroke();
           return;
         }
         if (it.ln) {
           var ln = it.ln, f = fog(it.d), sc = (it.a[3] + it.b[3]) / 2, col, alpha = 1;
           if (ln.kind === "table") { col = "#f6efe9"; alpha = 0.34; }
-          else if (ln.kind === "rail") { col = "#f6efe9"; alpha = 0.3; }
           else if (ln.kind === "sideIn") { col = ln.winner ? GOLD : GREY; alpha = ln.winner ? 1 : 0.85; }
-          else if (ln.kind === "seat") { col = colourOf(ln.ids[0]); alpha = hi === ln.ids[0] ? 0.7 : 0.32; }
-          else if (ln.kind === "out") { col = colourOf(ln.ids[0]); alpha = 0.75; }
+          else if (ln.kind === "path") { col = colourOf(ln.ids[0]); alpha = ln.a0 + (ln.a1 - ln.a0) * it.u; if (hi === ln.ids[0]) alpha = Math.max(alpha, 0.4); } // (followed: their faint stretches a little clearer)
           else { col = colourOf(ln.ids[0]); alpha = 1; }
           if (ln.ids.length && dimmed(ln.ids)) { alpha *= 0.1; }
           else if (hi !== null && !ln.ids.length) alpha *= 0.5;
-          ctx.lineCap = "round";
+          ctx.lineCap = alpha < 0.5 ? "butt" : "round"; // (faint pieces end to end: round ends would show as beads)
           ctx.beginPath(); ctx.moveTo(it.a[0], it.a[1]); ctx.lineTo(it.b[0], it.b[1]);
-          if (ln.kind === "out" && ln.lost) ctx.setLineDash([Math.max(2, 5 * sc), Math.max(3, 8 * sc)]); else ctx.setLineDash([]);
           ctx.globalAlpha = alpha * f;
           ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.8, ln.w * sc);
           ctx.stroke();
-          ctx.globalAlpha = 1; ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
           return;
         }
         var nd = it.nd, q = nd.q, r = Math.max(2.5, nd.r * q[3]), fg = fog(q[2]), a = 1;
-        if (nd.kind === "word") {
-          // "Playing", "Sitting out": where the table's line and the bench start
-          labels.push({ x: q[0], y: q[1] - 6, text: T(nd.key), col: "#f6efe9", a: 0.9, d: q[2], bold: true, rank: 0, plain: true });
-        } else if (nd.kind === "player" || nd.kind === "bench") {
+        if (nd.kind === "player") {
           var pl = model.night.players[model.idx[nd.id]], col = colourOf(nd.id), ends = nd.first || nd.last;
-          if (dimmed([nd.id])) a = 0.13;
-          if (nd.kind === "player") {
-            // on the plate: a ball of their colour - a gold ring: won this one
-            if (nd.winner) { ctx.globalAlpha = a * fg; ctx.beginPath(); ctx.arc(q[0], q[1], r + Math.max(1.5, 2.6 * q[3]), 0, Math.PI * 2); ctx.fillStyle = GOLD; ctx.fill(); ctx.globalAlpha = 1; }
-            ball(q[0], q[1], r, col, a * fg);
-          } else {
-            // on the bench: a square, dark, their colour round it
-            ctx.globalAlpha = a * fg;
-            roundRect(q[0] - r, q[1] - r, r * 2, r * 2, r * 0.3);
-            ctx.fillStyle = mix(col, "#140707", 0.78); ctx.fill();
-            ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.2, 2.2 * q[3]); ctx.stroke(); ctx.globalAlpha = 1;
-          }
+          // in a match they don't play: very faint (a little clearer when followed)
+          if (nd.ghost) a = hi === nd.id ? 0.4 : GHOST;
+          if (dimmed([nd.id])) a *= 0.13;
+          // a ball of their colour - a gold ring: won this one
+          if (nd.winner) { ctx.globalAlpha = a * fg; ctx.beginPath(); ctx.arc(q[0], q[1], r + Math.max(1.5, 2.6 * q[3]), 0, Math.PI * 2); ctx.fillStyle = GOLD; ctx.fill(); ctx.globalAlpha = 1; }
+          ball(q[0], q[1], nd.ghost ? r * 0.8 : r, col, nd.ghost ? a : a * fg);
           hits.push({ x: q[0], y: q[1], r: Math.max(16, r + 6), player: nd.id });
-          // the name: under a square on the bench, always (who sits a match out is the one thing its plate doesn't say);
-          // over a ball in the first and the last slice - in between when followed, or from near enough to read it
-          if (nd.kind === "bench") labels.push({ x: q[0], y: q[1] + r + 4, text: pl.short || pl.name, col: col, a: a, d: q[2], bold: true, top: true, rank: ends || hi === nd.id ? 1 : 2.5 });
-          else if (ends || hi === nd.id || r >= 12.5) labels.push({ x: q[0], y: q[1] - r - 4, text: pl.short || pl.name, col: col, a: a, d: q[2], bold: true, rank: ends ? 1 : hi === nd.id ? 1 : 3 });
+          // the name over it: in the first and the last slice (faint with the ball); in between for who plays, when followed or from near enough to read it
+          if (ends || (!nd.ghost && (hi === nd.id || r >= 12.5))) labels.push({ x: q[0], y: q[1] - r - 4, text: pl.short || pl.name, col: col, a: nd.ghost ? Math.max(0.45, a) * (dimmed([nd.id]) ? 0.3 : 1) : a, d: q[2], bold: true, rank: nd.ghost ? 2.5 : ends ? 1 : hi === nd.id ? 1 : 3 });
         } else if (nd.kind === "side") {
           if (hi !== null && nd.ids.indexOf(hi) === -1) a = 0.15;
           ball(q[0], q[1], r, nd.winner ? GOLD : GREY, a * fg);
@@ -439,7 +396,7 @@
           labels.push({ x: q[0], y: q[1] + r + 6, text: String(m.n) + (sc2 ? "  " + sc2 : ""), col: sc2 ? GOLD : "#f6efe9", a: a, d: q[2], bold: !!sc2, top: true, small: !sc2, rank: 2 });
         }
       });
-      // names and numbers on top: the two words first, the players' names at the ends and the followed player's,
+      // names and numbers on top: the players' names at the ends and the followed player's first,
       // the matches', the rest - the near ones first; one that would sit on another is left out (zoom in: there's room)
       labels.sort(function (a, b) { return a.rank - b.rank || a.d - b.d; });
       var taken = [];
@@ -452,7 +409,6 @@
         taken.push([x, y, w, h]);
         ctx.globalAlpha = lb.a * 0.82; ctx.fillStyle = "#140707";
         roundRect(x, y, w, h, 6); ctx.fill();
-        if (lb.plain) { ctx.globalAlpha = lb.a * 0.5; ctx.strokeStyle = "#f6efe9"; ctx.lineWidth = 1; ctx.stroke(); }
         ctx.globalAlpha = lb.a; ctx.fillStyle = lb.col; ctx.textBaseline = "middle"; ctx.textAlign = "left";
         ctx.fillText(lb.text, x + 5, y + h / 2 + 0.5);
         ctx.globalAlpha = 1;
@@ -550,7 +506,7 @@
       });
       paintChips();
       key.innerHTML = "";
-      [["line", "nightMap.keyTrunk"], ["ball", "nightMap.keyPlay"], ["ring", "nightMap.keyAside"], ["gold", "nightMap.keyGold"], ["dash", "nightMap.keyLost"]].forEach(function (k) {
+      [["line", "nightMap.keyTrunk"], ["ball", "nightMap.keyPlay"], ["faint", "nightMap.keyAside"], ["gold", "nightMap.keyGold"]].forEach(function (k) {
         var s = el("span", "", key);
         el("i", "pmc-nm-k-" + k[0], s);
         s.appendChild(document.createTextNode(T(k[1])));
