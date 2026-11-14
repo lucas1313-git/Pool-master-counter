@@ -7968,7 +7968,11 @@
   var boardMenuOverlay = document.getElementById("board-menu-overlay");
   var boardMenuPage = null;
 
-  function boardMenuItems() {
+  // The first page in sections by the kind of task, each in its own
+  // border under its name (the user, 2026-11-13: "easier to read, arrange
+  // the buttons by type of tasks ... name the sections"); a page under a
+  // "›" row is its own short list.
+  function boardMenuSections() {
     var panel = function (id) {
       return function () { closeBoardMenu(); expandAndScrollToPanel(id, "btn-toggle-" + id); };
     };
@@ -7977,52 +7981,104 @@
     };
     var notGuest = function () { return !document.body.classList.contains("network-guest-mode"); };
     return [
-      { icon: "▶️", key: "menu.newGame", primary: true, when: notGuest, run: function () { closeBoardMenu(); openQuickGameModal(); } },
-      { icon: "🌙", key: "menu.endNight", run: openEndNight },
-      { icon: "⏹", key: "menu.stopRace", when: function () { return notGuest() && isRacing() && !quickCounterMode && state.gameHistory.length > 0; }, run: function () { openStopSheet("race"); } },
-      // (straight to them - also under 📊 Stats / the full page)
-      { icon: "📋", key: "menu.standings", run: panel("standings-panel") },
-      { icon: "🔍", key: "menu.allSettings", run: function () { closeBoardMenu(); setFocusMode(false); window.scrollTo(0, 0); } },
-      { icon: "👥", key: "menu.players", children: [
-        { icon: "👥", key: "menu.playersRoster", run: panel("players-panel") },
-        { icon: "↕️", key: "menu.arrange", run: function () { closeBoardMenu(); setArrangeMode(true); } },
-        { icon: "👋", key: "menu.welcomePlayer", when: notGuest, run: click("btn-test-onboarding") },
-        { icon: "📇", key: "menu.contactSheet", run: click("btn-open-contact-sheet") }
+      { key: "menu.secPlay", items: [
+        { icon: "▶️", key: "menu.newGame", primary: true, when: notGuest, run: function () { closeBoardMenu(); openQuickGameModal(); } },
+        { icon: "⏹", key: "menu.stopRace", when: function () { return notGuest() && isRacing() && !quickCounterMode && state.gameHistory.length > 0; }, run: function () { openStopSheet("race"); } },
+        { icon: "👥", key: "menu.players", children: [
+          { icon: "👥", key: "menu.playersRoster", run: panel("players-panel") },
+          { icon: "↕️", key: "menu.arrange", run: function () { closeBoardMenu(); setArrangeMode(true); } },
+          { icon: "👋", key: "menu.welcomePlayer", when: notGuest, run: click("btn-test-onboarding") },
+          { icon: "📇", key: "menu.contactSheet", run: click("btn-open-contact-sheet") }
+        ] }
       ] },
-      { icon: "🏆", key: "menu.tournament", run: click("btn-open-tournament") },
-      { icon: "🏅", key: "menu.league", run: click("btn-open-league") },
-      { icon: "📊", key: "menu.stats", children: [
-        { icon: "🏆", key: "menu.leaderboard", run: click("btn-open-leaderboard") },
-        { icon: "📊", key: "menu.allPlayers", run: click("btn-open-global-stats") },
+      { key: "menu.secCompete", items: [
+        { icon: "🏆", key: "menu.tournament", run: click("btn-open-tournament") },
+        { icon: "🏅", key: "menu.league", run: click("btn-open-league") },
+        { icon: "☁️", key: "menu.challonge", run: panel("challonge-panel") }
+      ] },
+      { key: "menu.secScores", items: [
+        // (straight to them - also under 📊 Stats / the full page)
         { icon: "📋", key: "menu.standings", run: panel("standings-panel") },
-        { icon: "🕘", key: "menu.recentGames", run: panel("history-panel") }
+        { icon: "📊", key: "menu.stats", children: [
+          { icon: "🏆", key: "menu.leaderboard", run: click("btn-open-leaderboard") },
+          { icon: "📊", key: "menu.allPlayers", run: click("btn-open-global-stats") },
+          { icon: "📋", key: "menu.standings", run: panel("standings-panel") },
+          { icon: "🕘", key: "menu.recentGames", run: panel("history-panel") }
+        ] },
+        { icon: "📝", key: "menu.dayReport", children: [
+          { icon: "📝", key: "menu.todaysReport", run: panel("day-notes-panel") },
+          { icon: "🗂️", key: "menu.pastReports", run: panel("report-archive-panel") },
+          { icon: "🧊", key: "menu.night3d", run: panel("night-3d-panel") }
+        ] },
+        // (tonight in one sheet: the standings, the MVP, Share)
+        { icon: "🌙", key: "menu.endNight", run: openEndNight }
       ] },
-      { icon: "📝", key: "menu.dayReport", children: [
-        { icon: "📝", key: "menu.todaysReport", run: panel("day-notes-panel") },
-        { icon: "🗂️", key: "menu.pastReports", run: panel("report-archive-panel") },
-        { icon: "🧊", key: "menu.night3d", run: panel("night-3d-panel") }
+      { key: "menu.secVideo", items: [
+        { icon: "📷", key: "menu.camera", run: click("btn-open-camera-wizard-header") },
+        { icon: "🎬", key: "menu.recording", run: click("btn-open-recorder") },
+        { icon: "✨", key: "menu.highlights", run: openHighlightsSheet }
       ] },
-      { icon: "💾", key: "menu.backup", run: panel("backup-panel") },
-      { icon: "📷", key: "menu.camera", run: click("btn-open-camera-wizard-header") },
-      { icon: "🎬", key: "menu.recording", run: click("btn-open-recorder") },
-      { icon: "✨", key: "menu.highlights", run: openHighlightsSheet },
-      { icon: "🎤", key: "menu.voice", page: "voice" },
-      { icon: "🔊", key: "menu.sounds", page: "sounds" },
-      { icon: "☁️", key: "menu.challonge", run: panel("challonge-panel") },
-      { icon: "❓", key: "menu.help", run: click("btn-open-help") },
-      { icon: "🎨", key: "menu.theme", select: "theme-select" },
-      { icon: "🌐", key: "menu.language", select: "language-select" },
-      { icon: "➕", key: "menu.more", children: [
-        { icon: "🧙", key: "menu.wizard", when: notGuest, run: click("btn-open-wizard") },
+      { key: "menu.secSettings", items: [
+        { icon: "🎤", key: "menu.voice", page: "voice" },
+        { icon: "🔊", key: "menu.sounds", page: "sounds" },
+        { icon: "🎨", key: "menu.theme", select: "theme-select" },
+        { icon: "🌐", key: "menu.language", select: "language-select" }
+      ] },
+      { key: "menu.secData", items: [
+        { icon: "💾", key: "menu.backup", run: panel("backup-panel") },
         { icon: "🎯", key: "menu.multiTables", run: click("btn-open-group-session") },
-        { icon: "📱", key: "menu.pairedDevices", when: function () { return !document.getElementById("pairing-panel").classList.contains("hidden"); }, run: panel("pairing-panel") }
+        { icon: "📱", key: "menu.pairedDevices", when: function () { return !document.getElementById("pairing-panel").classList.contains("hidden"); }, run: panel("pairing-panel") },
+        { icon: "🧙", key: "menu.wizard", when: notGuest, run: click("btn-open-wizard") },
+        { icon: "❓", key: "menu.help", run: click("btn-open-help") },
+        { icon: "🔍", key: "menu.allSettings", run: function () { closeBoardMenu(); setFocusMode(false); window.scrollTo(0, 0); } }
       ] }
     ];
+  }
+
+  function boardMenuEntry(it) {
+    var li = document.createElement("li");
+    if (it.select) {
+      // the menu's own copy of the header's Theme / Language
+      li.className = "board-menu-select-item";
+      var src = document.getElementById(it.select);
+      var row = document.createElement("label");
+      row.className = "board-menu-row board-menu-select-row";
+      var text = document.createElement("span");
+      text.textContent = it.icon + " " + T(it.key);
+      var sel = document.createElement("select");
+      sel.id = "menu-" + it.select;
+      sel.innerHTML = src.innerHTML;
+      sel.value = src.value;
+      sel.addEventListener("change", function () {
+        src.value = sel.value;
+        fireChange(src);
+      });
+      row.appendChild(text);
+      row.appendChild(sel);
+      li.appendChild(row);
+      return li;
+    }
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "board-menu-row" + (it.primary ? " is-primary" : "") + (it.children || it.page ? " has-children" : "");
+    btn.dataset.menuKey = it.key;
+    btn.textContent = it.icon + " " + T(it.key);
+    btn.addEventListener("click", function () {
+      if (it.children || it.page) {
+        boardMenuPage = it;
+        renderBoardMenu();
+        return;
+      }
+      it.run();
+    });
+    li.appendChild(btn);
+    return li;
   }
 
   function renderBoardMenu() {
     var list = document.getElementById("board-menu-list");
     var page = boardMenuPage;
+    var shown = function (it) { return !it.when || it.when(); };
     list.innerHTML = "";
     document.getElementById("btn-board-menu-back").classList.toggle("hidden", !page);
     document.getElementById("board-menu-title").textContent = page ? page.icon + " " + T(page.key) : T("board.menu");
@@ -8030,44 +8086,29 @@
     document.getElementById("menu-voice-box").classList.toggle("hidden", !voice);
     document.getElementById("menu-sound-box").classList.toggle("hidden", !sounds);
     list.classList.toggle("hidden", voice || sounds);
+    list.classList.toggle("is-sections", !page);
     if (sounds) renderSoundSettings();
     if (voice || sounds) return;
-    (page ? page.children : boardMenuItems()).filter(function (it) { return !it.when || it.when(); }).forEach(function (it) {
+    if (page) {
+      page.children.filter(shown).forEach(function (it) { list.appendChild(boardMenuEntry(it)); });
+      return;
+    }
+    boardMenuSections().forEach(function (sec) {
+      var items = sec.items.filter(shown);
+      if (!items.length) return;
       var li = document.createElement("li");
-      if (it.select) {
-        // the menu's own copy of the header's Theme / Language
-        var src = document.getElementById(it.select);
-        var row = document.createElement("label");
-        row.className = "board-menu-row board-menu-select-row";
-        var text = document.createElement("span");
-        text.textContent = it.icon + " " + T(it.key);
-        var sel = document.createElement("select");
-        sel.id = "menu-" + it.select;
-        sel.innerHTML = src.innerHTML;
-        sel.value = src.value;
-        sel.addEventListener("change", function () {
-          src.value = sel.value;
-          fireChange(src);
-        });
-        row.appendChild(text);
-        row.appendChild(sel);
-        li.appendChild(row);
-      } else {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "board-menu-row" + (it.primary ? " is-primary" : "") + (it.children || it.page ? " has-children" : "");
-        btn.dataset.menuKey = it.key;
-        btn.textContent = it.icon + " " + T(it.key);
-        btn.addEventListener("click", function () {
-          if (it.children || it.page) {
-            boardMenuPage = it;
-            renderBoardMenu();
-            return;
-          }
-          it.run();
-        });
-        li.appendChild(btn);
-      }
+      li.className = "board-menu-section";
+      li.dataset.menuSection = sec.key;
+      var box = document.createElement("fieldset");
+      var name = document.createElement("legend");
+      name.className = "board-menu-section-name";
+      name.textContent = T(sec.key);
+      box.appendChild(name);
+      var ul = document.createElement("ul");
+      ul.className = "board-menu-section-list";
+      items.forEach(function (it) { ul.appendChild(boardMenuEntry(it)); });
+      box.appendChild(ul);
+      li.appendChild(box);
       list.appendChild(li);
     });
   }

@@ -4,8 +4,8 @@
 // - 🎱 Game: one sheet, nothing changes until Apply (Cancel leaves it all); Apply sets Straight
 //   Pool, race to 7 and Winner Stays together, says so in the banner, and the line follows;
 //   rotation chips (8/9 alternate, 8/9/10), Teams split A/B (2/2), timed, shot clock, practice;
-// - ☰ Menu: ▶️ New game, then Players, Tournament, League, Stats, Day Report, Backup & Restore,
-//   Camera, Recording, Voice, Challonge, Resets, Help, Theme, Language (and More); a panel item
+// - ☰ Menu: the tasks by kind, each in a border under its name - Play (▶️ New game first),
+//   Tournaments & leagues, Scores & reports, Camera & video, Settings, Data & help; a panel item
 //   opens that panel where it can be seen; Tournament opens its page; Theme changes the theme;
 //   Voice holds the speaking switch and its voice;
 // - one primary: nothing running, the board's only primary is ▶️ New game; the header too;
@@ -168,11 +168,19 @@ function board(opts) {
   await open(board());
   await page.click("#btn-board-menu");
   await sleep(300);
-  const menu = await page.evaluate(() => [...document.querySelectorAll("#board-menu-list > li")].map((li) => ({ text: li.textContent.trim().replace(/\s+/g, " "), primary: !!li.querySelector(".is-primary"), h: Math.round(li.firstElementChild.getBoundingClientRect().height) })));
-  // (resets live in Backup & Restore since P17; End night joined the menu)
-  const want = ["End night", "Players", "Tournament", "League", "Stats", "Day Report", "Backup & Restore", "Camera", "Recording", "Voice", "Challonge", "Help", "Theme", "Language"];
-  const has = want.filter((w) => menu.some((m) => m.text.indexOf(w) !== -1));
-  check("☰ Menu: ▶️ New game first (the primary), then End night, Players … Language (60 px rows)", menu[0].primary && /New game/.test(menu[0].text) && has.length === want.length && menu.every((m) => m.h >= 60), { menu, missing: want.filter((w) => has.indexOf(w) === -1) });
+  // (2026-11-13: the tasks by kind, each kind in its own border under its name)
+  const menu = await page.evaluate(() => [...document.querySelectorAll("#board-menu-list > li.board-menu-section")].map((li) => {
+    const box = li.querySelector("fieldset"), cs = getComputedStyle(box);
+    return {
+      name: li.querySelector("legend").textContent, border: parseFloat(cs.borderTopWidth) >= 1 && cs.borderTopStyle !== "none",
+      rows: [...li.querySelectorAll(".board-menu-row")].map((r) => ({ text: r.textContent.trim().replace(/\s+/g, " "), primary: r.classList.contains("is-primary"), h: Math.round(r.getBoundingClientRect().height) }))
+    };
+  }));
+  // (resets live in Backup & Restore since P17)
+  const want = { "Play": ["New game", "Players"], "Tournaments & leagues": ["Tournament", "League", "Challonge"], "Scores & reports": ["Standings", "Stats", "Day Report", "End night"],
+    "Camera & video": ["Camera", "Recording", "Tonight's highlights"], "Settings": ["Voice", "Sounds", "Theme", "Language"], "Data & help": ["Backup & Restore", "Multi Tables", "Game Setup Wizard", "Help", "See all"] };
+  const sorted = menu.map((m) => m.name).join("|") === Object.keys(want).join("|") && menu.every((m) => m.border && want[m.name].every((w, i) => m.rows[i] && m.rows[i].text.indexOf(w) !== -1) && m.rows.length === want[m.name].length);
+  check("☰ Menu: " + menu.map((m) => m.name).join(" · ") + " - each in a border under its name, ▶️ New game first (the primary), 60 px rows", sorted && menu[0].rows[0].primary && menu.every((m) => m.rows.every((r) => r.h >= 60)), menu);
   if (OUT) await page.screenshot({ path: path.join(OUT, "layout_menu.png") });
   await menuClick("menu.backup");
   await sleep(900);

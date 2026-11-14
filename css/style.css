@@ -11465,7 +11465,10 @@ body.win-banner-up .page-toast {
   padding: 16px 18px;
 }
 .board-menu-sheet {
-  max-width: 760px;
+  max-width: 1040px;
+  /* (the screen's height, all of its sections in view on a tablet) */
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
 }
 .board-sheet-head {
   display: flex;
@@ -11626,8 +11629,45 @@ body.win-banner-up .page-toast {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 8px;
 }
-.board-menu-list li:has(.is-primary) {
+.board-menu-list > li:has(> .is-primary) {
   grid-column: 1 / -1;
+}
+/* the first page: the tasks by kind, each kind in its own border under
+   its name - two side by side when there's room; in each, as many
+   buttons a row as fit (one on a phone) */
+.board-menu-list.is-sections {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 10px 14px;
+}
+.board-menu-section fieldset {
+  height: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0 12px 10px;
+  border: 2px solid var(--border);
+  border: 2px solid color-mix(in srgb, var(--text) 30%, transparent);
+  border-radius: 14px;
+}
+.board-menu-section-name {
+  padding: 0 8px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+.board-menu-section-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+.board-menu-section-list > li:has(> .is-primary) {
+  grid-column: 1 / -1;
+}
+.board-menu-section .board-menu-select-row {
+  padding-left: 8px;
+  padding-right: 8px;
 }
 .board-menu-row {
   width: 100%;
