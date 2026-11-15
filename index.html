@@ -379,8 +379,10 @@
       <!-- 🔍 Show all: the full page (🎱 Back to the board returns) -->
       <button type="button" id="btn-board-show-all" class="board-topbar-btn" data-i18n-aria-label="board.showAllAria" aria-label="Show all - the full page"><span aria-hidden="true">🔍</span><span class="board-topbar-label" data-i18n="board.showAll">Show all</span></button>
       <div class="board-status" id="board-status"></div>
-      <!-- actions that belong at the table, only while they can be used: talk, the recording's cues, Done arranging -->
+      <!-- actions that belong at the table, only while they can be used: stop the race, talk, the recording's cues, Done arranging -->
       <div class="board-actions" id="board-actions">
+        <!-- ⏹ Stop the race: while a race has games in it - the same sheet as ☰ Menu › Stop the race… (js/app.js renderStopRaceButtons) -->
+        <button type="button" id="btn-board-stop-race" class="btn board-stop-race-btn hidden" data-i18n="stop.titleRace">⏹ Stop the race</button>
         <span class="voice-control-group voice-command-group hidden" id="voice-command-group">
           <button type="button" id="btn-voice-hold" class="btn voice-hold-btn" data-i18n="voice.holdToTalk" data-i18n-aria-label="voice.holdHint" aria-label="Hold to talk - tap for the sentences">🎤 Talk</button>
         </span>

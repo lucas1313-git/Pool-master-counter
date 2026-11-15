@@ -11283,6 +11283,24 @@ body.win-banner-up .page-toast {
 .board-actions .btn {
   min-height: 52px;
 }
+/* ⏹ Stop the race: on the board and beside "Racing to" - plain, not a + to hit by mistake */
+.board-stop-race-btn,
+.now-playing-stop-race {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 2px solid var(--danger);
+  font-weight: 800;
+  white-space: nowrap;
+}
+.now-playing-stop-race {
+  min-height: 44px;
+  font-size: 1rem;
+  letter-spacing: normal;
+}
+body.network-guest-mode .board-stop-race-btn,
+body.network-guest-mode .now-playing-stop-race {
+  display: none;
+}
 .board-actions:not(:has(> :not(.hidden))) {
   display: none;
 }
