@@ -7603,12 +7603,14 @@
   // seated and Winner Stays off, every rack would put everyone else down
   // as losers (and lower their ratings) - so Winner Stays goes on by
   // itself, two at the table and the rest in line, and the banner says so.
-  // (15 Ball Rotation and Custom can be played by more.)
+  // (15 Ball Rotation and Custom can be played by more.) Winner Stays already
+  // on with more than two seated - Teams to Individual with it on: nobody in
+  // line, so nobody ever came in - is two at the table too, whatever the game.
   var TWO_PLAYER_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "10ball", "straight", "onepocket", "snooker"];
   function needsTwoAtTheTable() {
-    return !quickCounterMode && state.currentGame.mode === "individual" && !state.currentGame.queueEnabled &&
+    return !quickCounterMode && state.currentGame.mode === "individual" &&
       !state.secondRace && !secondRaceAsking && // (🏁 two races: who sits down is the players' call)
-      TWO_PLAYER_GAME_TYPES.indexOf(state.currentGame.gameType) !== -1 && activePlayers().length > 2;
+      (!!state.currentGame.queueEnabled || TWO_PLAYER_GAME_TYPES.indexOf(state.currentGame.gameType) !== -1) && activePlayers().length > 2;
   }
   // ...and teams the same: a two-sided game with three teams or more at the
   // table (or Winner Stays on with more than two seated, or fewer than two
@@ -7724,6 +7726,7 @@
   // (Winner Stays as the sheet opened: changed only if its box was - it can
   // go on by itself while the sheet's other changes apply, see needsTwoAtTheTable)
   var gsOpenedWinnerStays = null;
+  var gsOpenedRace = null;
   function openGameSheet() {
     var typeSelect = gsEl("gs-game-type");
     typeSelect.innerHTML = "";
@@ -7747,6 +7750,7 @@
     gsRadio("gs-mode", state.currentGame.mode === "teams" ? "teams" : "individual");
     gsEl("gs-winner-stays").checked = !!state.currentGame.queueEnabled;
     gsOpenedWinnerStays = !!state.currentGame.queueEnabled;
+    gsOpenedRace = state.raceToWinsTarget;
     gsEl("gs-max-streak").value = state.currentGame.queueMaxStreak || 0;
     gsEl("gs-timed").checked = !!state.currentGame.timedTournamentEnabled;
     gsEl("gs-timed-minutes").value = state.currentGame.timedTournamentMinutes || timedTournamentMinutesInput.value || 60;
@@ -7886,8 +7890,11 @@
       trackingChanged = true;
     }
     // Winner Stays with a race: a race for each pairing, chosen here (see
-    // the Winner Stays switch, which drops a race chosen before it)
-    state.currentGame.queueRaceChosen = want.winnerStays && want.race > 1;
+    // the Winner Stays switch, which drops a race chosen before it) - the
+    // race set or Winner Stays ticked here, not a race left as it was (Teams'
+    // race to 7, then Individual: one rack each pairing, the loser out)
+    var raceTouched = want.race !== gsOpenedRace || want.winnerStays !== gsOpenedWinnerStays;
+    state.currentGame.queueRaceChosen = want.winnerStays && want.race > 1 && (raceTouched || !!state.currentGame.queueRaceChosen);
 
     if (want.practice !== noStatsMode) {
       setPracticeMode(want.practice);
@@ -7938,7 +7945,9 @@
       if (gameChanged) changes.push(boardStatusParts()[0].text);
     }
 
-    if (want.race !== state.raceToWinsTarget) {
+    // (a race left as it was isn't put back: Winner Stays seating two from
+    // the new lineup may have just dropped it - see seatTwoAtTheTable)
+    if (want.race !== gsOpenedRace && want.race !== state.raceToWinsTarget) {
       setRaceTargetFromSheet(want.race);
       changes.push(want.race > 1 ? T("board.statusRace", { n: want.race }) : T("gameSheet.single"));
     }

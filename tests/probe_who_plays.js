@@ -14,6 +14,8 @@
 //   0 – 0 Jo & Bob" over them, no member cards, no
 //   scrolling at 1180x820; the team's + with nobody picked: the team's rack, nobody credited;
 //   Kim picked: Kim credited;
+// - Teams (race to 7, Winner Stays on) to Individual in 🎱 Game: two at the table, the others in line,
+//   one rack each (not each pairing's race to 7); a rack sends the loser to the back;
 // - no page errors.
 // Its own file server on 4268.
 // usage: node tests/probe_who_plays.js [screenshot dir]
@@ -181,6 +183,24 @@ function board(opts) {
   await sleep(900);
   s = await st();
   check("...Team A's + with nobody picked: Team A's rack, nobody credited; with Kim picked: credited to Kim", r1.teamA === 1 && Object.keys(r1.mvp || {}).length === 0 && /Kim & Ann 1 – 0 Jo & Bob/.test(r1.header) && s.teamWins.A === 2 && s.teamMvpWins[s.players.find((p) => p.name === "Kim").id] === 1 && Object.keys(s.teamMvpWins).length === 1, { r1, wins: s.teamWins, mvp: s.teamMvpWins });
+
+  // ---- Teams (race to 7, Winner Stays on from before) -> Individual ----
+  // (2026-11-15: "why are the player not swapping automatically anymore" - all four stayed at the
+  // table with nobody in line, and the teams' race became each pairing's race to 7)
+  const teamsBoard = JSON.parse(board({ game: { mode: "teams", queueEnabled: true }, race: 7 }));
+  teamsBoard.players.forEach((p, i) => { p.teamId = i % 2 ? "B" : "A"; });
+  await open(JSON.stringify(teamsBoard));
+  await page.click("#btn-board-game");
+  await sleep(300);
+  await page.click('input[name="gs-mode"][value="individual"]');
+  await page.click("#btn-game-sheet-apply");
+  await sleep(800);
+  s = await st();
+  const toInd = { seated: await seated(), line: await line(), race: s.raceToWinsTarget, banner: await banner(), status: await page.evaluate(() => document.getElementById("board-status").textContent) };
+  check("Teams (race to 7, Winner Stays on) to Individual: two at the table, the others in line, one rack each - not each pairing's race to 7", toInd.seated.join() === "Kim,Jo" && /Next up: Ann \(then Bob\)/.test(toInd.line) && toInd.race === 1 && /two at a time/.test(toInd.banner) && !/Race to 7/.test(toInd.status), toInd);
+  await plusFor("Kim");
+  const swapped = { seated: await seated(), line: await line() };
+  check("...a rack: Jo to the back of the line, Ann in", swapped.seated.join() === "Kim,Ann" && /Next up: Bob \(then Jo\)/.test(swapped.line), swapped);
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();
