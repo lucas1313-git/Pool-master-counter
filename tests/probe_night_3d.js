@@ -1,7 +1,8 @@
 // 🧊 The night in 3D (☰ Menu › Day Report): a night played here - three players at 8-Ball, so Winner
 // Stays brings the next one in - then the panel: the day it picks, the night rebuilt from the saved
-// games (who came in, who sat down, the tally), 🗺️ Map drawn, turned by a drag, a ready view, the other
-// shape, a player followed, a match's ball tapped for its words, its picture; 🧵 The whole night with a
+// games (who came in, who sat down, the tally), 🗺️ Map drawn, each player's rating on their chip, turned
+// by a drag, a ready view, the other shape, a player followed, a match's ball tapped for its words (the
+// ratings' changes among them), its picture; 🧵 The whole night with a
 // player followed, its picture made within the tap (a PNG, saved as a download on a computer and
 // through the share sheet on a tablet), a light theme, no page errors.
 // usage: node tests/probe_night_3d.js http://localhost:4339/ [screenshot dir]
@@ -115,6 +116,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const ink = await inked();
   check("🗺️ Map: drawn (" + (cv && cv.w + "x" + cv.h) + "), 3 matches, 3 players, a spiral in 3D", st.view === "map" && st.map && st.map.matches === 3 && st.map.players === 3 && st.map.nodes > 9 && st.map.shape === "spiral" && st.map.view === "3d" && st.map.width > 300 && cv && cv.shown && cv.w > 300 && ink > 50, { map: st.map, cv, ink });
   if (OUT) await (await page.$("#night-3d-panel")).screenshot({ path: path.join(OUT, "night_3d_map.png") });
+  // the ratings: on every chip the day's end and what the day did to it - the same as the board's own
+  const rated = await page.evaluate(() => [...document.querySelectorAll("#night3d-map .pmc-nm-chip")].map((c) => ({ name: c.querySelector("b").textContent, q: c.querySelector(".pmc-nm-q strong") ? Number(c.querySelector(".pmc-nm-q strong").textContent) : null, change: (c.querySelector(".pmc-nm-q span") || {}).textContent })));
+  check("...each player's Q-Score on their chip (" + rated.map((r) => r.name + " " + r.q + " " + r.change).join(", ") + "): the day's end, and what the day did to it", rated.length === 3 && night.players.every((p) => { const r = rated.find((x) => x.name === p.name); return r && r.q === p.rating && (p.rating > p.ratingBefore ? /^▲ \d+$/ : p.rating < p.ratingBefore ? /^▼ \d+$/ : /^±0$/).test(r.change) && r.change.replace(/\D/g, "") === String(Math.abs(p.rating - p.ratingBefore)); }) && by[w1].rating > 400 && by[in2].rating < 400, { rated, players: night.players.map((p) => [p.name, p.ratingBefore, p.rating]) });
   let box = await boxOf();
   const before = st.map;
   await page.mouse.move(box.x + box.w * 0.5, box.y + box.h * 0.75);
@@ -132,8 +136,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.evaluate(() => [...document.querySelectorAll("#night3d-map .pmc-nm-shapes button")].find((b) => /Straight/.test(b.textContent)).click());
   st = await state();
   check("...➖ Straight: the other shape, the same night, back in 3D", st.map.shape === "line" && st.map.matches === 3 && st.map.view === "3d" && (await inked()) > 50, st.map);
-  const chipNames = await page.evaluate(() => [...document.querySelectorAll("#night3d-map .pmc-nm-chip b")].map((b) => b.textContent));
-  check("...the chips: each name with its Q-Score as the night ended (" + chipNames.join(", ") + ")", chipNames.length === 3 && night.players.every((p, i) => chipNames[i] === p.name + " " + p.rating), chipNames);
   await page.click("#night3d-map .pmc-nm-chip");
   check("...a player's chip tapped: their path followed", (await state()).map.highlight === night.players[0].id, (await state()).map);
   await page.click("#night3d-map .pmc-nm-chip");
@@ -142,7 +144,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.mouse.click(box.x + spot.x, box.y + spot.y);
   await sleep(300);
   const info = await page.evaluate(() => { const i = document.querySelector("#night3d-map .pmc-nm-info"); return { shown: !i.hidden, text: i.textContent }; });
-  check("...match 2's ball tapped: its words (" + info.text.slice(0, 60) + "...)", (await state()).map.selected === 1 && info.shown && /Match 2/.test(info.text) && info.text.indexOf(in2) !== -1 && /Won by/.test(info.text) && info.text.indexOf("In: " + in2) !== -1, info);
+  check("...match 2's ball tapped: its words (" + info.text.slice(0, 60) + "...)", (await state()).map.selected === 1 && info.shown && /Match 2/.test(info.text) && info.text.indexOf(in2) !== -1 && /Won by/.test(info.text) && /Rating: /.test(info.text) && info.text.indexOf("In: " + in2) !== -1, info);
   if (OUT) await (await page.$("#night-3d-panel")).screenshot({ path: path.join(OUT, "night_3d_map_match.png") });
   const mapPic = await page.evaluate(() => { const url = window.PMCNight3d.map().pictureDataUrl(), bin = atob(url.split(",")[1]); return { png: /^data:image\/png;base64,/.test(url) && bin.charCodeAt(1) === 80 && bin.charCodeAt(2) === 78 && bin.charCodeAt(3) === 71, bytes: bin.length }; });
   await page.evaluate(() => [...document.querySelectorAll("#night3d-map button")].find((b) => /Save as picture/.test(b.textContent)).click());

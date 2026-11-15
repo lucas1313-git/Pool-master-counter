@@ -1,16 +1,20 @@
 // js/night-map.js
 // 🗺️ The map, in 🧊 The night in 3D: a night as a diagram in space, to turn
 // and move around like a map - nothing plays, nothing walks.
-// The white line is the table: a ball for every match, in order. Every
-// player has their own direction from it, all night, and before every match
-// a node there: a ball of their colour near the table when they play it, an
-// empty ring further out - aside - when they sit it out. The players of a
-// side join in the side's node, the sides in the match's ball; gold is the
-// winning side (its node, its way into the ball, a ring round its players).
-// From the ball everyone goes on to their node for the next match: in
-// again, or out to the ring - a loser's way out is dashed. So a player's
-// whole night is one path through it, and who mixes with whom shows in
-// where the lines meet.
+// The white line is the table: a ball for every match, in order. Each
+// match is a slice across it: round the match's ball, a ball for every
+// player of the night (each their own direction from the table, all
+// night) - solid for who plays that match, very faint for who doesn't.
+// Who plays is joined to their side's node, and the sides to the match's
+// ball; gold is the winning side (its node, its way into the ball, a ring
+// round its players). From slice to slice a line takes every player to
+// their next ball: solid while they play, fading out where they stop and
+// in where they come back. So a match is its solid balls, and a player's
+// night one line - there where it is solid.
+// The Q-Scores (ratings), when the night comes with them (p.ratingBefore,
+// p.rating, m.ratings[id] - js/app.js addNight3dRatings): on every chip the
+// day's end and what the day did to it; by a name, the score just after
+// that match and what the match did to it; in a match's words, the same.
 // Two shapes: 🌀 spiral (the table's line winds round and up - compact, the
 // whole night at a glance) and ➖ straight (the order of things, left to
 // right; top to bottom in a narrow box).
@@ -53,11 +57,14 @@
     "nightMap.reset": "Reset the view",
     "nightMap.savePicture": "🖼️ Save as picture",
     "nightMap.chipStats": "{{played}} played · {{won}} won",
+    "nightMap.qScore": "Rating",
+    "nightMap.qScoreTitle": "Rating {{rating}} at the end of that day ({{change}} that day)",
+    "nightMap.infoQ": "Rating: {{list}}",
+    "nightMap.keyQ": "Numbers: the rating, and what a match did to it",
     "nightMap.keyTrunk": "White line: the table, match after match",
-    "nightMap.keyPlay": "Ball: playing",
-    "nightMap.keyAside": "Ring: sitting out, aside",
+    "nightMap.keyPlay": "Solid: playing that match",
+    "nightMap.keyAside": "Faint: not playing it",
     "nightMap.keyGold": "Gold: the winning side",
-    "nightMap.keyLost": "Dashes: lost, and out",
     "nightMap.keyTap": "Tap a player to follow them, a ball for its match.",
     "nightMap.matchNo": "Match {{n}}",
     "nightMap.versus": "{{a}} v {{b}}",
@@ -81,9 +88,12 @@
     ".pmc-nm{display:block;font:inherit;color:var(--text,#f6efe9)}",
     ".pmc-nm-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}",
     ".pmc-nm-legend{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 300px;min-width:0}",
-    ".pmc-nm-chip{display:grid;grid-template-columns:auto auto;column-gap:8px;align-items:center;text-align:left;margin:0;font:inherit;color:var(--text,#f6efe9);background:var(--bg-card,#2e1414);border:1px solid var(--border,#4a1e1e);border-radius:12px;padding:5px 12px 5px 9px;min-height:44px;cursor:pointer;box-shadow:none}",
+    ".pmc-nm-chip{display:grid;grid-template-columns:auto auto auto;column-gap:8px;align-items:center;text-align:left;margin:0;font:inherit;color:var(--text,#f6efe9);background:var(--bg-card,#2e1414);border:1px solid var(--border,#4a1e1e);border-radius:12px;padding:5px 12px 5px 9px;min-height:44px;cursor:pointer;box-shadow:none}",
     ".pmc-nm-chip i{grid-row:1 / span 2;width:10px;height:30px;border-radius:5px;display:block}",
     ".pmc-nm-chip b{font-weight:800;line-height:1.15}.pmc-nm-chip small{color:var(--text-dim,#c9a2a2);font-size:.8rem;line-height:1.15;font-variant-numeric:tabular-nums}",
+    ".pmc-nm-q{grid-column:3;grid-row:1 / span 2;display:grid;justify-items:end;margin-left:6px;padding-left:10px;border-left:1px solid var(--border,#4a1e1e);font-variant-numeric:tabular-nums;line-height:1.15}",
+    ".pmc-nm-q em{font-style:normal;font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-dim,#c9a2a2)}.pmc-nm-q strong{font-weight:800;font-size:1.05rem}",
+    ".pmc-nm-q span{font-size:.8rem;font-weight:800}.pmc-nm-q .pmc-nm-up{color:#3fbf6b}.pmc-nm-q .pmc-nm-down{color:#f0605d}.pmc-nm-q .pmc-nm-flat{color:var(--text-dim,#c9a2a2)}",
     ".pmc-nm-chip.pmc-nm-on{border-color:var(--accent,#e8b923);box-shadow:inset 0 0 0 1px var(--accent,#e8b923)}.pmc-nm-chip.pmc-nm-off{opacity:.5}",
     ".pmc-nm-btn{font:inherit;font-weight:800;min-height:44px;min-width:44px;padding:0 12px;border-radius:12px;border:1px solid var(--border,#4a1e1e);background:var(--bg-card,#2e1414);color:var(--text,#f6efe9);cursor:pointer;box-shadow:none}",
     ".pmc-nm-btn.pmc-nm-on{border-color:var(--accent,#e8b923);background:var(--accent,#e8b923);color:var(--on-accent,#241a00)}",
@@ -104,13 +114,13 @@
     ".pmc-nm-key span{display:inline-flex;align-items:center;gap:6px}.pmc-nm-key i{display:inline-block;box-sizing:border-box;flex:none}",
     ".pmc-nm-k-line{width:24px;height:4px;border-radius:2px;background:var(--text,#f6efe9);opacity:.6}.pmc-nm-k-gold{width:24px;height:6px;border-radius:3px;background:#e8b923}",
     ".pmc-nm-k-ball{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#bfe0ff,#5aa9ff 55%,#2b5c96)}",
-    ".pmc-nm-k-ring{width:12px;height:12px;border-radius:50%;border:2px solid #5aa9ff}.pmc-nm-k-dash{width:24px;height:0;border-top:3px dashed #5aa9ff}",
+    ".pmc-nm-k-q{font-style:normal;font-weight:800;font-size:.8rem;color:#3fbf6b}.pmc-nm-k-q::before{content:\"+4\"}.pmc-nm-k-faint{width:14px;height:14px;border-radius:50%;background:#5aa9ff;opacity:.25}",
     ".pmc-nm-empty{color:var(--text-dim,#c9a2a2);padding:14px 0}"
   ].join("\n");
 
   var GOLD = "#e8b923", GREY = "#8f7f7f";
   // the space: a step along the table per match, the ring of seats, the sides' nodes between
-  var DX = 150, INNER = 74, OUTER = 150, SIDE = 34;
+  var DX = 150, INNER = 84, SIDE = 38, GHOST = 0.13; // (GHOST: how faint a player is in a match they don't play)
   // the game's ball: [number or "", colour, striped]
   var BALLS = { "8ball": [8, "#16161a", 0], "8ballrotation": [8, "#16161a", 0], "8ballpunishment": [8, "#16161a", 0], "9ball": [9, "#f2c21c", 1], "10ball": [10, "#2a62c9", 1], "15ballrotation": [15, "#7a2230", 1], "straight": [14, "#1f8a4c", 1], "onepocket": [1, "#f2c21c", 0], "snooker": ["", "#c62828", 0] };
 
@@ -123,37 +133,37 @@
     var m = /T(\d\d):(\d\d)/.exec(iso || "");
     return m ? m[1] + ":" + m[2] : "";
   }
+  function signed(n) { return n > 0 ? "+" + n : n < 0 ? "−" + -n : "±0"; } // (a change, with its sign)
   function rgb(h) { h = h.replace("#", ""); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)]; }
   function rgba(h, a) { var c = rgb(h); return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; }
   function mix(h1, h2, u) { var a = rgb(h1), b = rgb(h2); return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * u) + "," + Math.round(a[1] + (b[1] - a[1]) * u) + "," + Math.round(a[2] + (b[2] - a[2]) * u) + ")"; }
   function el(tag, cls, parent) { var e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; }
 
   // ---- the night as nodes and lines in space ----
-  // x: the matches, in order. y, z: around the table - every player their own direction from it, all night.
-  // Before every match, a plane with a node for everybody: near the table (INNER) who plays it, aside (OUTER)
-  // who sits it out. The players' nodes join in their side's node, the sides in the match's ball. From the
-  // ball everyone goes on to their node in the next plane: in again, or out - aside.
+  // Along the table's line: the matches, in order - each a slice across it. In every slice the match's
+  // ball on the line and, round it, a ball for every player of the night (each their own direction from
+  // the table, all night): solid for who plays that match - joined to their side's node, and the sides to
+  // the match's ball - and very faint for who doesn't. From slice to slice a line takes every player to
+  // their next ball: solid while they play, fading out as they stop and in as they come back.
   // Two shapes: "spiral" - the table's line winds up and round, a turn of some dozen matches (compact: the
   // whole night at a glance, to walk around), and "line" - straight (the order of things, left to right).
   function build(night, shape) {
     var players = night.players, n = players.length, N = night.matches.length;
-    var seat = {}, idx = {}, tag = {};
+    var seat = {}, idx = {};
     players.forEach(function (p, i) {
       var a = -Math.PI / 2 + 2 * Math.PI * i / Math.max(3, n); // (the first on top; two players: not on one line through the table)
       seat[p.id] = [-Math.sin(a), Math.cos(a)]; // (up, and across: outwards on a spiral)
       idx[p.id] = i;
     });
     // where the table's line is at match t (halves too), and the two ways across it there
-    var perTurn = Math.max(9, Math.min(14, N + 1)), big = perTurn * DX / (2 * Math.PI), rise = N > perTurn ? 2 * OUTER + 110 : 150;
+    var perTurn = Math.max(9, Math.min(14, N + 1)), big = perTurn * DX / (2 * Math.PI), rise = N > perTurn ? 2 * INNER + 190 : 150;
     function frame(t) {
       if (shape !== "spiral") return { o: [(t - (N - 1) / 2) * DX, 0, 0], u: [0, 1, 0], v: [0, 0, 1] };
       var f = -Math.PI / 2 + 2 * Math.PI * t / perTurn; // (it starts at the front, and goes round to the right)
       return { o: [big * Math.cos(f), rise * (t / perTurn - N / perTurn / 2), big * Math.sin(f)], u: [0, 1, 0], v: [Math.cos(f), 0, Math.sin(f)] };
     }
     function off(t, a, b) { var f = frame(t); return [f.o[0] + f.u[0] * a + f.v[0] * b, f.o[1] + f.u[1] * a + f.v[1] * b, f.o[2] + f.u[2] * a + f.v[2] * b]; }
-    function planeT(k) { return k < N ? k - 0.5 : N - 1 + 0.55; }
-    function spot(id, t, r) { return off(t, seat[id][0] * r, seat[id][1] * r); }
-    var nodes = [], lines = [];
+    var nodes = [], lines = [], shapes = [];
     function node(o) { o.i = nodes.length; nodes.push(o); return o; }
     // (a line: straight, in a few pieces - each is drawn at its own depth)
     function line(a, b, o) {
@@ -162,66 +172,69 @@
       o.pts = pts;
       lines.push(o);
     }
-    var before = {}; // player -> where their line comes from: { p, played, won } (the ball of the match before, or their node aside)
-    for (var k = 0; k <= N; k++) {
-      var m = k < N ? night.matches[k] : null, pt = planeT(k), sideOf = {};
-      if (m) m.sides.forEach(function (s, si) { s.players.forEach(function (id) { sideOf[id] = si; }); });
-      var ball = m ? node({ kind: "match", m: m, k: k, p: off(k, 0, 0), r: 17 }) : null;
+    function along(a, b, from, to) { // (a line along the table's, at a, b across it)
+      var pts = [];
+      for (var t = from; t < to; t += 0.25) pts.push(off(t, a, b));
+      pts.push(off(to, a, b));
+      return pts;
+    }
+    var before = {}; // player -> their ball in the slice before: { p, played }
+    // The Q-Scores (ratings) the night comes with: p.ratingBefore as the day began, p.rating as it ended,
+    // m.ratings[id] just after match m (js/app.js addNight3dRatings). What a match did to a player's:
+    // that, less what they had before it.
+    var had = {}, change = [];
+    players.forEach(function (p) { if (typeof p.ratingBefore === "number") had[p.id] = p.ratingBefore; });
+    night.matches.forEach(function (m, k) {
+      change[k] = {};
+      Object.keys(m.ratings || {}).forEach(function (id) {
+        var after = m.ratings[id];
+        if (typeof after !== "number") return;
+        change[k][id] = { after: after, delta: typeof had[id] === "number" ? after - had[id] : null };
+        had[id] = after;
+      });
+    });
+    for (var k = 0; k < N; k++) {
+      var m = night.matches[k], sideOf = {};
+      m.sides.forEach(function (s, si) { s.players.forEach(function (id) { sideOf[id] = si; }); });
+      var ball = node({ kind: "match", m: m, k: k, p: off(k, 0, 0), r: 17 });
       // each side's node: towards its players; two sides that would sit together are pushed apart
-      var meet = [];
-      if (m) {
-        var dirs = m.sides.map(function (s) {
-          var y = 0, z = 0;
-          s.players.forEach(function (id) { y += seat[id][0]; z += seat[id][1]; });
-          var d = Math.sqrt(y * y + z * z);
-          if (d < 0.2) { y = -seat[s.players[0]][1]; z = seat[s.players[0]][0]; d = 1; }
-          return [y / d, z / d];
-        });
-        if (dirs.length === 2 && dirs[0][0] * dirs[1][0] + dirs[0][1] * dirs[1][1] > 0.6) {
-          var qy = -dirs[0][1], qz = dirs[0][0];
-          dirs[0] = [dirs[0][0] * 0.6 + qy * 0.8, dirs[0][1] * 0.6 + qz * 0.8];
-          dirs[1] = [dirs[1][0] * 0.6 - qy * 0.8, dirs[1][1] * 0.6 - qz * 0.8];
-        }
-        m.sides.forEach(function (s, si) {
-          var winner = m.winner === si;
-          if (s.players.length < 2) { meet.push(ball); return; }
-          var t = node({ kind: "side", m: m, k: k, side: si, p: off(k - 0.24, dirs[si][0] * SIDE, dirs[si][1] * SIDE), r: 8, winner: winner, ids: s.players });
-          line(t.p, ball.p, { kind: "sideIn", k: k, ids: s.players, winner: winner, w: winner ? 7 : 4 });
-          meet.push(t);
-        });
+      var dirs = m.sides.map(function (s) {
+        var y = 0, z = 0;
+        s.players.forEach(function (id) { y += seat[id][0]; z += seat[id][1]; });
+        var d = Math.sqrt(y * y + z * z);
+        if (d < 0.2) { y = -seat[s.players[0]][1]; z = seat[s.players[0]][0]; d = 1; }
+        return [y / d, z / d];
+      });
+      if (dirs.length === 2 && dirs[0][0] * dirs[1][0] + dirs[0][1] * dirs[1][1] > 0.6) {
+        var qy = -dirs[0][1], qz = dirs[0][0];
+        dirs[0] = [dirs[0][0] * 0.6 + qy * 0.8, dirs[0][1] * 0.6 + qz * 0.8];
+        dirs[1] = [dirs[1][0] * 0.6 - qy * 0.8, dirs[1][1] * 0.6 - qz * 0.8];
       }
+      var meet = m.sides.map(function (s, si) {
+        var winner = m.winner === si;
+        if (s.players.length < 2) return ball;
+        var t = node({ kind: "side", m: m, k: k, side: si, p: off(k, dirs[si][0] * SIDE, dirs[si][1] * SIDE), r: 8, winner: winner, ids: s.players });
+        line(t.p, ball.p, { kind: "sideIn", k: k, ids: s.players, winner: winner, w: winner ? 7 : 4 });
+        return t;
+      });
       players.forEach(function (p) {
         var id = p.id, plays = sideOf[id] !== undefined, won = plays && m.winner === sideOf[id], from = before[id];
-        var nd = node({ kind: plays ? "player" : "bench", id: id, k: k, p: spot(id, pt, plays ? INNER : OUTER), r: plays ? 11 : k === N ? 10 : 6, winner: won, first: k === 0, last: k === N });
-        if (from) {
-          // on from the match before (in again; or out - a loser's way out is dashed), or from aside (in; or still aside)
-          if (from.played) line(from.p, nd.p, { kind: plays ? "stay" : "out", k: k, ids: [id], lost: from.lost, w: plays ? 3.4 : 2.6 });
-          else line(from.p, nd.p, { kind: plays ? "in" : "seat", k: k, ids: [id], w: plays ? 3.4 : 1.6 });
-        }
-        if (plays) line(nd.p, meet[sideOf[id]].p, { kind: "join", k: k, ids: [id], winner: won, w: 3.4 });
-        before[id] = plays ? { p: ball.p, played: true, lost: m.winner !== null && !won } : { p: nd.p, played: false };
+        var nd = node({ kind: "player", id: id, k: k, m: m, score: change[k][id] || null, ghost: !plays, p: off(k, seat[id][0] * INNER, seat[id][1] * INNER), r: 12, winner: won, first: k === 0, last: k === N - 1 });
+        // from the slice before: solid while they play, fading where they stop or come back, faint while they don't
+        if (from) line(from.p, nd.p, { kind: "path", k: k, ids: [id], a0: from.played ? 1 : GHOST, a1: plays ? 1 : GHOST, w: from.played && plays ? 3.6 : 3 });
+        if (plays) line(nd.p, meet[sideOf[id]].p, { kind: "join", k: k, ids: [id], winner: won, w: 3.6 });
+        before[id] = { p: nd.p, played: plays };
       });
     }
-    // the table's line, and two faint rings at every plane: near the table, and aside
-    var trunk = [];
-    for (var t = planeT(0); t < planeT(N); t += 0.25) trunk.push(off(t, 0, 0));
-    trunk.push(off(planeT(N), 0, 0));
-    lines.push({ kind: "table", ids: [], w: 2, pts: trunk });
-    var rings = [];
-    for (var r = 0; r <= N; r++) [INNER, OUTER].forEach(function (rad) {
-      if (r === N && rad === INNER) return;
-      var ring = [];
-      for (var a = 0; a <= 40; a++) ring.push(off(planeT(r), Math.sin(a / 40 * 2 * Math.PI) * rad, Math.cos(a / 40 * 2 * Math.PI) * rad));
-      rings.push({ pts: ring, inner: rad === INNER });
-    });
+    lines.push({ kind: "table", ids: [], w: 2.4, pts: along(0, 0, -0.6, N - 0.4) });
     // a spiral stands on a floor: three faint circles under it - they turn with it, and say which way is up
     if (shape === "spiral") {
       var low = Infinity;
       nodes.forEach(function (nd) { low = Math.min(low, nd.p[1]); });
-      [big - OUTER, big, big + OUTER].forEach(function (rad) {
+      [big - INNER - 40, big, big + INNER + 40].forEach(function (rad) {
         var ring = [];
-        for (var a = 0; a <= 72; a++) ring.push([Math.cos(a / 72 * 2 * Math.PI) * rad, low - 46, Math.sin(a / 72 * 2 * Math.PI) * rad]);
-        rings.push({ pts: ring, floor: true });
+        for (var a = 0; a <= 72; a++) ring.push([Math.cos(a / 72 * 2 * Math.PI) * rad, low - 60, Math.sin(a / 72 * 2 * Math.PI) * rad]);
+        shapes.push({ kind: "floor", pts: ring });
       });
     }
     // all of it about its own middle (the view turns about it)
@@ -232,15 +245,15 @@
     function all(pts) { pts.forEach(function (q) { if (seen.indexOf(q) === -1) { seen.push(q); centre(q); } }); }
     nodes.forEach(function (nd) { all([nd.p]); });
     lines.forEach(function (ln) { all(ln.pts); });
-    rings.forEach(function (rg) { all(rg.pts); });
+    shapes.forEach(function (sh) { all(sh.pts); });
     nodes.forEach(function (nd) { size = Math.max(size, Math.sqrt(nd.p[0] * nd.p[0] + nd.p[1] * nd.p[1] + nd.p[2] * nd.p[2])); });
-    return { night: night, shape: shape === "spiral" ? "spiral" : "line", nodes: nodes, lines: lines, rings: rings, idx: idx, size: size + 40 };
+    return { night: night, change: change, shape: shape === "spiral" ? "spiral" : "line", nodes: nodes, lines: lines, shapes: shapes, idx: idx, size: size + 40 };
   }
 
   // the ready views, as [turn, tilt]: for the table running left to right (a wide box), and top to bottom (a narrow one)
   var VIEWS = { "3d": [0.5, 0.34], side: [0, 0], end: [Math.PI / 2 - 0.0001, 0] };
   var VIEWS_TALL = { "3d": [0.6, 0.3], side: [0, 0], end: [0, -Math.PI / 2 + 0.0001] };
-  var VIEWS_SPIRAL = { "3d": [0.3, 0.8], side: [0, 0.1], end: [0, Math.PI / 2 - 0.0001] }; // ("end": from above)
+  var VIEWS_SPIRAL = { "3d": [0.3, 0.72], side: [0, 0.1], end: [0, Math.PI / 2 - 0.0001] }; // ("end": from above)
 
   function mount(root, night, opts) {
     opts = opts || {};
@@ -310,7 +323,7 @@
         var q = project(nd.p);
         minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]);
       });
-      var padX = tall ? 34 : Math.min(84, W * 0.1), padY = tall ? 52 : 44;
+      var padX = tall ? 34 : Math.min(84, W * 0.1), padY = tall ? 56 : 54;
       var z = Math.min((W - 2 * padX) / Math.max(1, maxX - minX), (H - 2 * padY) / Math.max(1, maxY - minY));
       cam.zoom = Math.max(0.05, z);
       cam.panX = -((minX + maxX) / 2 - W / 2) * cam.zoom;
@@ -344,63 +357,68 @@
       ctx.clearRect(0, 0, W, H);
       var items = [], range = model.size;
       function fog(d) { return Math.max(0.3, Math.min(1, 1 - (d + range * 0.25) / (range * 2.4))); }
-      model.rings.forEach(function (ring) {
-        var pr = ring.pts.map(project), d = 0;
+      model.shapes.forEach(function (sh) {
+        var pr = sh.pts.map(project), d = 0;
         pr.forEach(function (q) { d += q[2]; });
-        items.push({ d: d / pr.length + (ring.floor ? 4000 : 2000), ring: pr, inner: ring.inner, floor: ring.floor });
+        items.push({ d: d / pr.length + 4000, shape: sh, pr: pr });
       });
       model.lines.forEach(function (ln) {
         var pr = ln.pts.map(project);
-        for (var s = 0; s < pr.length - 1; s++) items.push({ d: (pr[s][2] + pr[s + 1][2]) / 2, a: pr[s], b: pr[s + 1], ln: ln });
+        for (var s = 0; s < pr.length - 1; s++) items.push({ d: (pr[s][2] + pr[s + 1][2]) / 2, a: pr[s], b: pr[s + 1], ln: ln, u: (s + 0.5) / (pr.length - 1) });
       });
       model.nodes.forEach(function (nd) { var q = project(nd.p); nd.q = q; items.push({ d: q[2] - 1, nd: nd }); });
       items.sort(function (a, b) { return b.d - a.d; });
       hits = [];
       var labels = [];
       items.forEach(function (it) {
-        if (it.ring) {
+        if (it.shape) {
           ctx.beginPath();
-          it.ring.forEach(function (q, i) { if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
-          ctx.strokeStyle = it.floor ? "rgba(232,185,35,0.13)" : it.inner ? "rgba(246,239,233,0.1)" : "rgba(246,239,233,0.055)"; ctx.lineWidth = it.floor ? 1.5 : 1; ctx.stroke();
+          it.pr.forEach(function (q, i) { if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
+          ctx.strokeStyle = "rgba(232,185,35,0.1)"; ctx.lineWidth = 1.2; ctx.stroke();
           return;
         }
         if (it.ln) {
           var ln = it.ln, f = fog(it.d), sc = (it.a[3] + it.b[3]) / 2, col, alpha = 1;
-          if (ln.kind === "table") { col = "#f6efe9"; alpha = 0.3; }
+          if (ln.kind === "table") { col = "#f6efe9"; alpha = 0.34; }
           else if (ln.kind === "sideIn") { col = ln.winner ? GOLD : GREY; alpha = ln.winner ? 1 : 0.85; }
-          else if (ln.kind === "seat") { col = colourOf(ln.ids[0]); alpha = hi === ln.ids[0] ? 0.7 : 0.32; }
-          else if (ln.kind === "out") { col = colourOf(ln.ids[0]); alpha = 0.75; }
+          else if (ln.kind === "path") { col = colourOf(ln.ids[0]); alpha = ln.a0 + (ln.a1 - ln.a0) * it.u; if (hi === ln.ids[0]) alpha = Math.max(alpha, 0.4); } // (followed: their faint stretches a little clearer)
           else { col = colourOf(ln.ids[0]); alpha = 1; }
           if (ln.ids.length && dimmed(ln.ids)) { alpha *= 0.1; }
-          else if (hi !== null && ln.kind === "table") alpha *= 0.5;
-          ctx.lineCap = "round";
+          else if (hi !== null && !ln.ids.length) alpha *= 0.5;
+          ctx.lineCap = alpha < 0.5 ? "butt" : "round"; // (faint pieces end to end: round ends would show as beads)
           ctx.beginPath(); ctx.moveTo(it.a[0], it.a[1]); ctx.lineTo(it.b[0], it.b[1]);
-          if (ln.kind === "out" && ln.lost) ctx.setLineDash([Math.max(2, 5 * sc), Math.max(3, 8 * sc)]); else ctx.setLineDash([]);
           ctx.globalAlpha = alpha * f;
           ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.8, ln.w * sc);
           ctx.stroke();
-          ctx.globalAlpha = 1; ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
           return;
         }
         var nd = it.nd, q = nd.q, r = Math.max(2.5, nd.r * q[3]), fg = fog(q[2]), a = 1;
-        if (nd.kind === "player" || nd.kind === "bench") {
-          var pl = model.night.players[model.idx[nd.id]], col = colourOf(nd.id), ends = nd.first || nd.last, up = stands(), beside = ends && shape === "line" && !up;
-          if (dimmed([nd.id])) a = 0.13;
-          if (nd.kind === "player" || nd.last) {
-            // at the table (and everyone at the night's end): a ball of their colour, their letter on it - a gold ring: won this one
-            if (nd.winner) { ctx.globalAlpha = a * fg; ctx.beginPath(); ctx.arc(q[0], q[1], r + Math.max(1.5, 2.6 * q[3]), 0, Math.PI * 2); ctx.fillStyle = GOLD; ctx.fill(); ctx.globalAlpha = 1; }
-            ball(q[0], q[1], r, col, a * fg);
-          } else {
-            // aside: a ring, empty
-            ctx.globalAlpha = a * fg * 0.9;
-            ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, Math.PI * 2); ctx.fillStyle = "#140707"; ctx.fill();
-            ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, 2 * q[3]); ctx.stroke(); ctx.globalAlpha = 1;
-          }
+        if (nd.kind === "player") {
+          var pl = model.night.players[model.idx[nd.id]], col = colourOf(nd.id), ends = nd.first || nd.last;
+          // in a match they don't play: very faint (a little clearer when followed)
+          if (nd.ghost) a = hi === nd.id ? 0.4 : GHOST;
+          if (dimmed([nd.id])) a *= 0.13;
+          // a ball of their colour - a gold ring: won this one
+          if (nd.winner) { ctx.globalAlpha = a * fg; ctx.beginPath(); ctx.arc(q[0], q[1], r + Math.max(1.5, 2.6 * q[3]), 0, Math.PI * 2); ctx.fillStyle = GOLD; ctx.fill(); ctx.globalAlpha = 1; }
+          ball(q[0], q[1], nd.ghost ? r * 0.8 : r, col, nd.ghost ? a : a * fg);
           hits.push({ x: q[0], y: q[1], r: Math.max(16, r + 6), player: nd.id });
-          // the name: beside the node at the two ends of a table that runs across, else over it (under it at the foot of one that stands)
-          // (the names in between: when followed, or from near enough to read them)
-          if (ends || (nd.kind === "player" && (hi === nd.id || r >= 12.5))) labels.push({ x: q[0], y: nd.last && up ? q[1] + r + 4 : q[1] - r - 4, text: nameTag(nd, pl), col: col, a: a, d: q[2], bold: true, top: !!(nd.last && up), rank: nd.last ? 0 : nd.first ? 1 : hi === nd.id ? 1 : 3,
-            align: beside ? (nd.first ? "right" : "left") : "center", dx: beside ? (nd.first ? -r - 5 : r + 5) : 0, dy: beside ? r + 13 : 0 });
+          // the name over it: in the first and the last slice (faint with the ball); in between for who plays, when followed or from near enough to read it
+          // ...and their Q-Score beside it: just after the match and what it did to it ("Luc 491 +3") for who played it;
+          // for who didn't, in the first slice and the last, as the day began and as it ended
+          if (ends || (!nd.ghost && (hi === nd.id || r >= 12.5))) {
+            var extra = "", extraCol = "#f6efe9", extra2 = "", extra2Col = "";
+            if (nd.score && !nd.ghost) {
+              // who played it: the Q-Score just after, and what the match did to it
+              extra = String(nd.score.after);
+              if (nd.score.delta !== null) { extra2 = signed(nd.score.delta); extra2Col = nd.score.delta > 0 ? "#5fd98a" : nd.score.delta < 0 ? "#ff7a76" : "#c9a2a2"; }
+            } else if (ends) {
+              // who didn't, in the first slice and the last: as the day began, as it ended
+              var at = nd.first ? pl.ratingBefore : pl.rating;
+              if (typeof at === "number") extra = String(at);
+            }
+            labels.push({ x: q[0], y: q[1] - r - 4, text: pl.short || pl.name, extra: extra, extraCol: extraCol, extra2: extra2, extra2Col: extra2Col, col: col, a: nd.ghost ? Math.max(0.45, a) * (dimmed([nd.id]) ? 0.3 : 1) : a, d: q[2], bold: true, rank: nd.ghost ? 2.5 : ends ? 1 : hi === nd.id ? 1 : 3 });
+          }
         } else if (nd.kind === "side") {
           if (hi !== null && nd.ids.indexOf(hi) === -1) a = 0.15;
           ball(q[0], q[1], r, nd.winner ? GOLD : GREY, a * fg);
@@ -418,21 +436,23 @@
           labels.push({ x: q[0], y: q[1] + r + 6, text: String(m.n) + (sc2 ? "  " + sc2 : ""), col: sc2 ? GOLD : "#f6efe9", a: a, d: q[2], bold: !!sc2, top: true, small: !sc2, rank: 2 });
         }
       });
-      // names and numbers on top: the players' names at the ends first, then the followed player's, the matches',
-      // the rest - the near ones first; one that would sit on another is left out (zoom in: there's room)
+      // names and numbers on top: the players' names at the ends and the followed player's first,
+      // the matches', the rest - the near ones first; one that would sit on another is left out (zoom in: there's room)
       labels.sort(function (a, b) { return a.rank - b.rank || a.d - b.d; });
       var taken = [];
       labels.forEach(function (lb) {
         var size = lb.small ? 11 : 13;
         ctx.font = (lb.bold ? "800 " : "600 ") + size + "px " + (getComputedStyle(root).fontFamily || "sans-serif");
-        var w = ctx.measureText(lb.text).width + 10, h = size + 6;
-        var x = lb.x + (lb.dx || 0) - (lb.align === "left" ? 0 : lb.align === "right" ? w : w / 2), y = lb.top ? lb.y : lb.y - h + (lb.dy || 0);
+        var wt = ctx.measureText(lb.text).width, we = lb.extra ? ctx.measureText(lb.extra).width + 5 : 0, we2 = lb.extra2 ? ctx.measureText(lb.extra2).width + 5 : 0, w = wt + we + we2 + 10, h = size + 6;
+        var x = lb.x - w / 2, y = lb.top ? lb.y : lb.y - h;
         if (taken.some(function (t) { return x < t[0] + t[2] && x + w > t[0] && y < t[1] + t[3] && y + h > t[1]; })) return;
         taken.push([x, y, w, h]);
         ctx.globalAlpha = lb.a * 0.82; ctx.fillStyle = "#140707";
         roundRect(x, y, w, h, 6); ctx.fill();
         ctx.globalAlpha = lb.a; ctx.fillStyle = lb.col; ctx.textBaseline = "middle"; ctx.textAlign = "left";
         ctx.fillText(lb.text, x + 5, y + h / 2 + 0.5);
+        if (lb.extra) { ctx.fillStyle = lb.extraCol; ctx.fillText(lb.extra, x + 5 + wt + 5, y + h / 2 + 0.5); }
+        if (lb.extra2) { ctx.fillStyle = lb.extra2Col; ctx.fillText(lb.extra2, x + 5 + wt + we + 5, y + h / 2 + 0.5); }
         ctx.globalAlpha = 1;
       });
     }
@@ -459,16 +479,6 @@
         ctx.fillText(String(b[0]), x, y + 0.5);
       }
       ctx.globalAlpha = 1;
-    }
-    // the name, its Q-Score beside it (just after this match; as the night began, at the first node aside; as it ended, at the last)
-    // and + / − for this match won or lost: "Luc 424 +"
-    function nameTag(nd, pl) {
-      var m = nd.kind === "player" ? model.night.matches[nd.k] : null;
-      var q = m ? (m.ratings || {})[nd.id] : nd.last ? pl.rating : nd.first ? pl.ratingBefore : undefined;
-      var text = pl.short || pl.name;
-      if (typeof q === "number") text += " " + q;
-      if (m && m.winner !== null) text += nd.winner ? " +" : " −";
-      return text;
     }
     // "2–0", "8–6" - a single rack with no points is just a win: no score
     function scoreText(m) {
@@ -501,6 +511,9 @@
       if (m.stoppedEarly) extra.push(T("nightMap.stoppedEarly"));
       if (m.tournament) extra.push(T("nightMap.tournament"));
       if (extra.length) el("div", "", info).textContent = extra.join(" · ");
+      var mq = model.change[k] || {}, qlist = [];
+      m.sides.forEach(function (s) { s.players.forEach(function (id) { if (mq[id]) qlist.push(namesOf([id]) + " " + mq[id].after + (mq[id].delta !== null ? " (" + signed(mq[id].delta) + ")" : "")); }); });
+      if (qlist.length) el("div", "", info).textContent = T("nightMap.infoQ", { list: qlist.join(" · ") });
       var ch = [];
       if (m.changes) {
         if (m.changes["in"].length) ch.push(T("nightMap.changeIn", { names: namesOf(m.changes["in"]) }));
@@ -531,14 +544,23 @@
         var b = el("button", "pmc-nm-chip", legend);
         b.type = "button";
         el("i", "", b).style.background = p.color;
-        el("b", "", b).textContent = p.name + (typeof p.rating === "number" ? " " + p.rating : ""); // (the Q-Score as the night ended)
+        el("b", "", b).textContent = p.name;
         el("small", "", b).textContent = T("nightMap.chipStats", { played: p.played, won: p.won });
+        if (typeof p.rating === "number") {
+          // their Q-Score as the day ended, and what the day did to it
+          var q = el("span", "pmc-nm-q", b), ch = typeof p.ratingBefore === "number" ? p.rating - p.ratingBefore : 0;
+          el("em", "", q).textContent = T("nightMap.qScore");
+          el("strong", "", q).textContent = p.rating;
+          el("span", ch > 0 ? "pmc-nm-up" : ch < 0 ? "pmc-nm-down" : "pmc-nm-flat", q).textContent = (ch > 0 ? "▲ " : ch < 0 ? "▼ " : "") + signed(ch).replace(/^[+−]/, ch ? "" : "±");
+          q.title = T("nightMap.qScoreTitle", { rating: p.rating, change: signed(ch) });
+        }
         b.addEventListener("click", function () { highlight(hi === p.id ? null : p.id); });
         chips.push({ id: p.id, el: b });
       });
       paintChips();
       key.innerHTML = "";
-      [["line", "nightMap.keyTrunk"], ["ball", "nightMap.keyPlay"], ["ring", "nightMap.keyAside"], ["gold", "nightMap.keyGold"], ["dash", "nightMap.keyLost"]].forEach(function (k) {
+      [["line", "nightMap.keyTrunk"], ["ball", "nightMap.keyPlay"], ["faint", "nightMap.keyAside"], ["gold", "nightMap.keyGold"], ["q", "nightMap.keyQ"]].forEach(function (k) {
+        if (k[0] === "q" && !(model && model.night.players.some(function (p) { return typeof p.rating === "number"; }))) return;
         var s = el("span", "", key);
         el("i", "pmc-nm-k-" + k[0], s);
         s.appendChild(document.createTextNode(T(k[1])));
