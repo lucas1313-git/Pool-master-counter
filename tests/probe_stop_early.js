@@ -1,10 +1,12 @@
 // ⏹ Stop a race or a tournament early, a winner picked (2026-10-30 request). Its own server on 4300:
+// - the board's own ⏹ Stop the race (top bar): not there before a game of the race, there after one;
+//   the same button beside "Racing to" in the Now playing line of the full page;
 // - a race to 5, Kim 3 – Jo 2 (Jo won the last two): ☰ › ⏹ Stop the race… - who wins: No winner,
 //   Most games won: Kim (3) (picked to start), In Fire 🔥: Jo (2 in a row); who decides: All
 //   players, Kim, Jo;
 // - In Fire, decided by Kim: the race-won screen for Jo, "⏹ Interrupted by Kim - in fire"; the
 //   session archived; the Day Report: "Interrupted results by Kim: Jo wins the race to 5 (in fire)";
-// - a new race, 1 – 1, No winner by All players: no race-won screen, the session ends; the Day
+// - a new race, 1 – 1, stopped from the board's button, No winner by All players: no race-won screen, the session ends; the Day
 //   Report: "Interrupted results by all players: no winner (race to 5)";
 // - a tournament (single elimination, 4, race to 2), Ann a rack up: ⋯ More › ⏹ Stop and pick the
 //   winner - Most games won (Ann), by Ben: Ann champion, "⏹ Stopped early by Ben - most games won";
@@ -83,8 +85,15 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
       return page.evaluate(() => window.__copied[window.__copied.length - 1] || "");
     };
 
+    // ---- the board's own ⏹ Stop the race: there once the race has a game in it ----
+    const stopBtn = () => page.evaluate(() => { const b = document.getElementById("btn-board-stop-race"), r = b.getBoundingClientRect(); return { shown: !b.classList.contains("hidden") && r.width > 0 && r.height >= 44, text: b.textContent, inBar: !!b.closest("#board-topbar") }; });
+    const none = await stopBtn();
+    await win("Kim");
+    const one = await stopBtn();
+    check("the board: no ⏹ Stop the race before a game of the race is played; there (in the top bar) after one", !none.shown && one.shown && one.inBar && one.text === "⏹ Stop the race", { none, one });
+
     // ---- a race: Kim 3 – Jo 2, Jo the last two ----
-    for (const n of ["Kim", "Kim", "Kim", "Jo", "Jo"]) await win(n);
+    for (const n of ["Kim", "Kim", "Jo", "Jo"]) await win(n);
     const opened = await menu("menu.stopRace");
     let s = await sheet();
     if (OUT) await page.screenshot({ path: path.join(OUT, "stop_race_sheet.png") });
@@ -100,9 +109,17 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
     check("...the Day Report: \"Interrupted results by Kim: Jo wins the race to 5 (in fire)\"", /⏹ .*Interrupted results by Kim: Jo wins the race to 5 \(in fire\)/.test(text), text.slice(0, 1200));
 
     // ---- a new race, 1 – 1, no winner ----
+    const gone = await stopBtn(); // (the race just stopped: a new one, nothing in it yet)
     await win("Kim");
     await win("Jo");
-    await menu("menu.stopRace");
+    await page.click("#btn-board-stop-race");
+    await sleep(400);
+    s = await sheet();
+    if (OUT) await page.screenshot({ path: path.join(OUT, "stop_race_board_button.png") });
+    check("the board's ⏹ Stop the race: gone with the stopped race, back in the next one - and it opens the same sheet (Kim 1 – Jo 1)", !gone.shown && s.shown && /Kim 1 – Jo 1/.test(s.standing) && s.by.join() === "All players,Kim,Jo", { gone, s });
+    // ...and beside "Racing to" on the full page
+    const full = await page.evaluate(() => { const b = document.getElementById("btn-now-playing-stop-race"); return { there: !!b, text: b && b.textContent, besideRace: !!(b && b.parentElement.querySelector(".racing-to-live")) }; });
+    check("...the same button beside \"Racing to\" in the Now playing line (the full page)", full.there && full.text === "⏹ Stop the race" && full.besideRace, full);
     await pick("none", "*");
     await sleep(1200);
     const after = await page.evaluate(() => ({ up: !document.getElementById("milestone-overlay").classList.contains("hidden"), games: JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).gameHistory.length, banner: document.getElementById("win-banner").textContent }));

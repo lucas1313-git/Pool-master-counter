@@ -1254,6 +1254,17 @@
     return list.map(function (s) { return s.names.join(" & "); }).join(" & ");
   }
 
+  // A race can be stopped while it has games in it (not a guest's to stop,
+  // not the quick counter's) - the rule of ☰ Menu › Stop the race…, of the
+  // board's ⏹ Stop the race and of the one beside "Racing to" on the full page.
+  function canStopRace() {
+    return !document.body.classList.contains("network-guest-mode") && isRacing() && !quickCounterMode && state.gameHistory.length > 0;
+  }
+  // (the board's button: there only while it can be used - see renderBoardStatus)
+  function renderStopRaceButtons() {
+    var btn = document.getElementById("btn-board-stop-race");
+    if (btn) btn.classList.toggle("hidden", !canStopRace());
+  }
   function openStopSheet(kind) {
     closeBoardMenu();
     var t = TOURNAMENT;
@@ -6918,6 +6929,19 @@
       racingToWrap.appendChild(racingToInput);
       racingToWrap.appendChild(document.createTextNode(raceParts[1] || ""));
       durationRow.appendChild(racingToWrap);
+      // ⏹ Stop the race, beside the race it stops - once it has games in it
+      if (canStopRace()) {
+        var stopRaceBtn = document.createElement("button");
+        stopRaceBtn.type = "button";
+        stopRaceBtn.className = "btn now-playing-stop-race";
+        stopRaceBtn.id = "btn-now-playing-stop-race";
+        stopRaceBtn.textContent = T("stop.titleRace");
+        stopRaceBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          openStopSheet("race");
+        });
+        durationRow.appendChild(stopRaceBtn);
+      }
     }
 
     nowPlayingBanner.appendChild(durationRow);
@@ -7534,6 +7558,7 @@
     time.id = "board-status-time";
     el.appendChild(time);
     updateBoardStatusTime();
+    renderStopRaceButtons();
   }
 
   // (the game's own clock, from its first shot - see markFirstShot)
@@ -7951,6 +7976,8 @@
     if (changes.length) showBannerNotice(T("gameSheet.applied", { changes: changes.join(" · ") }));
   }
 
+  document.getElementById("btn-board-stop-race").addEventListener("click", function () { openStopSheet("race"); });
+
   // ---- ☰ Menu ----
   var boardMenuOverlay = document.getElementById("board-menu-overlay");
   var boardMenuPage = null;
@@ -7966,7 +7993,7 @@
     return [
       { icon: "▶️", key: "menu.newGame", primary: true, when: notGuest, run: function () { closeBoardMenu(); openQuickGameModal(); } },
       { icon: "🌙", key: "menu.endNight", run: openEndNight },
-      { icon: "⏹", key: "menu.stopRace", when: function () { return notGuest() && isRacing() && !quickCounterMode && state.gameHistory.length > 0; }, run: function () { openStopSheet("race"); } },
+      { icon: "⏹", key: "menu.stopRace", when: canStopRace, run: function () { openStopSheet("race"); } },
       // (straight to them - also under 📊 Stats / the full page)
       { icon: "📋", key: "menu.standings", run: panel("standings-panel") },
       { icon: "🔍", key: "menu.allSettings", run: function () { closeBoardMenu(); setFocusMode(false); window.scrollTo(0, 0); } },
