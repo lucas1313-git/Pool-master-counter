@@ -5,8 +5,8 @@
 // - Winner Stays: no race (one rack each), the board shows "🔥 Kim: 3 in a row" and "Next up: …",
 //   seat changes in the banner (no popup), never "on the hill";
 // - "most wins in a row" (🎱 Game): 2 - Kim's second win in a row sends Kim to the line too;
-// - a race for each pairing (🎱 Game: Winner Stays + Race to 2): Kim beats Jo 2-0, Jo goes, the
-//   new pairing starts at 0-0, the session goes on (no race-won screen);
+// - Winner Stays + Race to 3 (🎱 Game): one race for everyone - Kim beats Jo (Jo to the back, Ann in,
+//   1 / 3), Ann (on the hill, Bob in, the wins kept), Bob: 3 of 3, the race-won screen;
 // - the Setup Wizard: two players added there are Playing - it reaches Start without the Standby
 //   warning;
 // - Teams (four playing 15 Ball Rotation, then Teams): split 2/2 (Kim, Ann - Jo, Bob); each team
@@ -15,7 +15,9 @@
 //   scrolling at 1180x820; the team's + with nobody picked: the team's rack, nobody credited;
 //   Kim picked: Kim credited;
 // - Teams (race to 7, Winner Stays on) to Individual in 🎱 Game: two at the table, the others in line,
-//   one rack each (not each pairing's race to 7); a rack sends the loser to the back;
+//   the race to 7 everyone's; a rack sends the loser to the back;
+// - a rack game: tapping a player's number wins them the rack; a points game: it picks the
+//   player, no point;
 // - no page errors.
 // Its own file server on 4268.
 // usage: node tests/probe_who_plays.js [screenshot dir]
@@ -117,23 +119,27 @@ function board(opts) {
   const maxed = { seated: await seated(), banner: await banner(), max: s.currentGame.queueMaxStreak };
   check("most wins in a row 2: Kim's second win in a row sends Kim to the line too (the banner says so)", maxed.max === 2 && !maxed.seated.includes("Kim") && /2 in a row and sits out/.test(maxed.banner), maxed);
 
-  // ---- a race for each pairing ----
+  // ---- Winner Stays + a race: one race for everyone (2026-11-15: "bob just won 7 of a race to 7 ...
+  // when he got 6 games he didn't get the popup on the hill, when he won 7 the race didn't finish") ----
   await open(board());
   await page.click("#btn-board-game");
   await sleep(300);
   await page.click('input[name="gs-race"][value="race"]');
-  await page.evaluate(() => { const i = document.getElementById("gs-race-to"); i.value = "2"; i.dispatchEvent(new Event("change", { bubbles: true })); });
+  await page.evaluate(() => { const i = document.getElementById("gs-race-to"); i.value = "3"; i.dispatchEvent(new Event("change", { bubbles: true })); });
   await sleep(100);
-  const note = await page.evaluate(() => !document.getElementById("gs-pairing-note").classList.contains("hidden"));
+  const note = await page.evaluate(() => document.getElementById("gs-pairing-note").classList.contains("hidden") ? "" : document.getElementById("gs-pairing-note").textContent);
   await page.click("#btn-game-sheet-apply");
   await sleep(700);
-  await plusFor("Kim");
-  const mid = { seated: await seated(), value: await page.evaluate(() => [...document.querySelectorAll("#scoreboard .stat-value")].map((v) => v.textContent.replace(/\s+/g, " ").trim())) };
-  await plusFor("Kim");
-  s = await st();
-  const pair = { seated: await seated(), value: await page.evaluate(() => [...document.querySelectorAll("#scoreboard .stat-value")].map((v) => v.textContent.replace(/\s+/g, " ").trim())), milestone: await page.evaluate(() => !document.getElementById("milestone-overlay").classList.contains("hidden")), games: s.gameHistory.length, race: s.raceToWinsTarget };
-  check("a race for each pairing (Winner Stays + Race to 2, said in the sheet): 1-0 Kim, still Kim v Jo", note && mid.seated.join() === "Kim,Jo" && mid.value[0] === "1 / 2", { note, mid });
-  check("...2-0: Jo goes, Ann in, the new pairing at 0-0 - and the session goes on (no race-won screen)", pair.seated.join() === "Kim,Ann" && pair.value.join("|") === "0 / 2|0 / 2" && !pair.milestone && pair.games === 2 && pair.race === 2, pair);
+  const values = () => page.evaluate(() => [...document.querySelectorAll("#scoreboard .player-panel")].map((c) => c.querySelector(".player-name").textContent.replace(/\d.*$/, "").trim() + " " + c.querySelector(".stat-value").textContent.replace(/\s+/g, " ").trim()).join(", "));
+  await plusFor("Kim"); // Kim beats Jo - Ann comes in
+  const w1 = { seated: await seated(), values: await values(), line: await line() };
+  check("Winner Stays + Race to 3, one race for everyone (said in the sheet: \"" + note + "\"): Kim beats Jo - Jo to the back, Ann in, Kim 1 / 3", /race is everyone's/.test(note) && w1.seated.join() === "Kim,Ann" && w1.values === "Kim 1 / 3, Ann 0 / 3" && /Next up: Bob \(then Jo\)/.test(w1.line), w1);
+  await plusFor("Kim"); // Kim beats Ann - Bob comes in, Kim on the hill
+  const w2 = { seated: await seated(), values: await values(), banner: await banner(), hill: await page.evaluate(() => !!document.querySelector("#scoreboard .player-panel.is-on-hill")) };
+  check("...Kim beats Ann: 2 / 3 - \"on the hill\" in the banner and on the card, Bob in (the wins add up, not 0 - 0)", w2.seated.join() === "Kim,Bob" && w2.values === "Kim 2 / 3, Bob 0 / 3" && /on the hill/i.test(w2.banner) && w2.hill, w2);
+  await plusFor("Kim"); // Kim beats Bob - 3 of 3
+  const w3 = { milestone: await page.evaluate(() => document.getElementById("milestone-overlay").classList.contains("hidden") ? "" : document.getElementById("milestone-overlay").textContent.replace(/\s+/g, " ").trim().slice(0, 80)) };
+  check("...Kim beats Bob: 3 of 3 - the race is won (the race-won screen), not left open", /Kim/.test(w3.milestone) && /Congratulations|won/i.test(w3.milestone), w3);
 
   // ---- the Setup Wizard ----
   await open(null);
@@ -197,10 +203,27 @@ function board(opts) {
   await sleep(800);
   s = await st();
   const toInd = { seated: await seated(), line: await line(), race: s.raceToWinsTarget, banner: await banner(), status: await page.evaluate(() => document.getElementById("board-status").textContent) };
-  check("Teams (race to 7, Winner Stays on) to Individual: two at the table, the others in line, one rack each - not each pairing's race to 7", toInd.seated.join() === "Kim,Jo" && /Next up: Ann \(then Bob\)/.test(toInd.line) && toInd.race === 1 && /two at a time/.test(toInd.banner) && !/Race to 7/.test(toInd.status), toInd);
+  check("Teams (race to 7, Winner Stays on) to Individual: two at the table, the others in line, the race to 7 everyone's", toInd.seated.join() === "Kim,Jo" && /Next up: Ann \(then Bob\)/.test(toInd.line) && toInd.race === 7 && /two at a time/.test(toInd.banner) && /Race to 7/.test(toInd.status), toInd);
   await plusFor("Kim");
   const swapped = { seated: await seated(), line: await line() };
   check("...a rack: Jo to the back of the line, Ann in", swapped.seated.join() === "Kim,Ann" && /Next up: Bob \(then Jo\)/.test(swapped.line), swapped);
+
+  // ---- a player's number tapped in a rack game wins the rack (2026-11-15: "clicking a player number should
+  // make the player win the rack"); a points game keeps picking the player ----
+  await open(board());
+  await page.evaluate(() => [...document.querySelectorAll("#scoreboard .player-panel")].find((c) => /Jo/.test(c.querySelector(".player-name").textContent)).querySelector(".stat-value").click());
+  await sleep(900);
+  s = await st();
+  const tapped = { winner: s.gameHistory[0] && s.gameHistory[0].winnerNames, seated: await seated() };
+  check("8-Ball: tapping Jo's number wins Jo the rack (Kim to the line, Ann in)", JSON.stringify(tapped.winner) === '["Jo"]' && tapped.seated.join() === "Jo,Ann", tapped);
+  const twoUp = JSON.parse(board({ game: { gameType: "straight", target: 25, unit: "points" } }));
+  twoUp.players.slice(2).forEach((p) => { p.playing = false; });
+  await open(JSON.stringify(twoUp));
+  await page.evaluate(() => document.querySelectorAll("#scoreboard .player-panel .stat-value")[1].click());
+  await sleep(500);
+  s = await st();
+  const points = { balls: s.players.map((p) => p.balls || 0), selected: await page.evaluate(() => [...document.querySelectorAll("#scoreboard .player-panel.is-keypad-selected .player-name")].map((n) => n.textContent.replace(/\d.*$/, "").trim())) };
+  check("...Straight Pool: tapping Jo's number picks Jo, no point", points.balls.every((b) => b === 0) && points.selected.join() === "Jo", points);
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

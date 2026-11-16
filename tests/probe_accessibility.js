@@ -4,7 +4,7 @@
 //   back on ☰; End night (no Escape before) closes on Escape too;
 // - honest labels: a rack game's + "Win the rack for Kim"; a points game's "Add a point for Kim" /
 //   "Take a point from Kim";
-// - the score is a real button: Tab to Jo's, Enter, Jo selected (aria-pressed);
+// - the score is a real button (a rack game: "Win the rack for Jo"): Tab to Jo's, Enter, Jo wins the rack;
 // - one polite live region: "Kim won rack 1 ... Score: Kim 1, Jo 0" after the +, the win banner
 //   no longer a second one; a points game's + read out too;
 // - reduced motion: the score flash's 0.6 s animation drops to nothing;
@@ -123,8 +123,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.evaluate(() => [...document.querySelectorAll("#scoreboard button.stat-value")].find((b) => /Jo/.test(b.getAttribute("aria-label"))).focus());
   await page.keyboard.press("Enter");
   await sleep(400);
-  const picked = await page.evaluate(() => { const b = [...document.querySelectorAll("#scoreboard button.stat-value")].find((x) => /Jo/.test(x.getAttribute("aria-label"))); return { pressed: b && b.getAttribute("aria-pressed"), panel: b && b.closest(".player-panel").className }; });
-  check("the score is a button (\"Select Jo (0 / 5)\"): Enter on it picks Jo", scoreButtons.length === 2 && scoreButtons.every((b) => b.tag === "BUTTON") && scoreButtons.some((b) => /^Select Jo \(0 \/ 5\)$/.test(b.label)) && picked.pressed === "true" && /is-keypad-selected/.test(picked.panel), { scoreButtons, picked });
+  const picked = await page.evaluate(() => { const h = JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).gameHistory; return { games: h.length, last: h[0] && h[0].winnerNames }; });
+  // (a rack game: the score wins the rack, as the + - 2026-11-15)
+  check("the score is a button (\"Win the rack for Jo\"): Enter on it wins Jo the rack", scoreButtons.length === 2 && scoreButtons.every((b) => b.tag === "BUTTON") && scoreButtons.some((b) => b.label === "Win the rack for Jo") && picked.games === 2 && JSON.stringify(picked.last) === '["Jo"]', { scoreButtons, picked });
   if (OUT) await page.screenshot({ path: path.join(OUT, "a11y_board.png") });
 
   // ---- a points game, reduced motion ----

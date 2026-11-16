@@ -13,6 +13,8 @@
 // - ten playing, Teams: five teams of two (A to E), two at the table, "Next up: … (then …)", the
 //   team buttons A to F, "Team D" in the standings' names when nobody's on it… (labels for D on);
 // - four playing, Teams: two teams (A B A B as before), no Winner Stays line;
+// - three teams, Winner Stays, a race to 2: A wins - B out, C in, A on the hill; A wins again: the
+//   race is won (one race for every team, not each pairing's);
 // - no page errors.
 // Its own file server on 4306.
 // usage: node tests/probe_team_rotation.js [screenshot dir]
@@ -168,6 +170,22 @@ function board(names, extra) {
     plus: document.querySelectorAll("#roster-list .team-toggle .team-new").length
   }));
   check("...＋ tapped: that player on Team C (" + afterNew.teams.join(", ") + "), A B C on every row, no ＋ left (six: not enough for a 4th pair)", afterNew.teams.filter((t) => /:C$/.test(t)).length === 1 && afterNew.letters.length === 6 && afterNew.letters.every((l) => l === "ABC") && afterNew.plus === 0, { firstName, afterNew });
+
+  // ---- three teams, Winner Stays, a race to 2: one race for every team (2026-11-15) ----
+  await open(board(["Luigi", "Luc", "Ann", "Bob", "Cat", "Dan"]));
+  await sheet("teams", "8ball");
+  await page.evaluate(() => document.getElementById("btn-board-game").click());
+  await sleep(300);
+  await page.evaluate(() => { document.querySelector('input[name="gs-race"][value="race"]').click(); const i = document.getElementById("gs-race-to"); i.value = "2"; i.dispatchEvent(new Event("change", { bubbles: true })); });
+  await page.evaluate(() => document.getElementById("btn-game-sheet-apply").click());
+  await sleep(900);
+  const said1 = await teamWin("A");
+  const r1 = Object.assign(await look(), { wins: (await st()).teamWins });
+  check("race to 2, three teams: A wins a rack - B out, C in (" + r1.cards.join(" v ") + "), A 1, \"on the hill\"", r1.cards.join() === "A,C" && r1.wins.A === 1 && /on the hill/i.test(said1), { r1, said1 });
+  await page.evaluate((id) => document.querySelector('#scoreboard .team-card[data-team-id="' + id + '"] .btn-ball.plus').click(), "A");
+  await sleep(1200);
+  const raceWon = await page.evaluate(() => document.getElementById("milestone-overlay").classList.contains("hidden") ? "" : document.getElementById("milestone-overlay").textContent.replace(/\s+/g, " ").trim().slice(0, 90));
+  check("...A wins again: 2 of 2 - the race is won (\"" + raceWon + "\"), not left open", /Luigi & Bob/.test(raceWon), raceWon);
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

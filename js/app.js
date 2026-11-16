@@ -917,20 +917,19 @@
   function isRacing() {
     return state.raceToWinsTarget > 1;
   }
-  // Winner Stays: two at the table, the rest in line - a race there is
-  // each pairing's (see creditWin), and the board shows the winner's
-  // streak and who's next instead.
+  // Winner Stays: two at the table, the rest in line, and the board shows
+  // the winner's streak and who's next.
   function winnerStaysOn() {
     return !quickCounterMode && state.currentGame.mode === "individual" && !!state.currentGame.queueEnabled;
   }
-  // Winner Stays with one race for the whole line (queueRaceKind "line" -
-  // 🏁 the race everyone plays once the other's over, see resumeOtherRace):
-  // every rack the winner stays and the loser goes to the back, the wins add
-  // up for everyone (never back to 0 - 0 for a new pairing), and the first
-  // to the race wins it, as any race. (Otherwise a race with Winner Stays is
-  // each pairing's own.)
+  // Winner Stays with a race is one race for the whole line (2026-11-15:
+  // "it should be done when a player gets to 7 of 7"): every rack the winner
+  // stays and the loser goes to the back, the wins add up for everyone
+  // (never back to 0 - 0 for a new pairing), on the hill one short, and the
+  // first to the race wins it, as any race. (Before, each pairing raced on
+  // its own and the night's race never ended.)
   function lineRaceOn() {
-    return winnerStaysOn() && isRacing() && state.currentGame.queueRaceKind === "line";
+    return winnerStaysOn() && isRacing();
   }
 
   // Winner Stays for teams (2026-11-01 request): three teams or more - two
@@ -1116,8 +1115,6 @@
     });
     if (line.length) {
       state.currentGame.queueEnabled = true;
-      state.currentGame.queueRaceChosen = true;
-      state.currentGame.queueRaceKind = "line";
       state.currentGame.queueStreak = null;
       queueModeCheckbox.checked = true;
       saveQueue(line);
@@ -1147,8 +1144,7 @@
   // Everyone at or past their race right now (individual: every player,
   // seated or waiting; teams: A and B), most wins first.
   function racePassedSides() {
-    // (Winner Stays races are per pairing - see creditWin - never the session's)
-    if (!isRacing() || (winnerStaysOn() && !lineRaceOn()) || teamWinnerStaysOn()) return [];
+    if (!isRacing()) return [];
     var sides = [];
     if (state.currentGame.mode === "teams") {
       TEAM_IDS.forEach(function (k) {
@@ -4083,6 +4079,14 @@
   function isKeypadScoreEntryGame() {
     return !quickCounterMode && state.currentGame.gameType === "15ballrotation";
   }
+  // A rack game, one player a card: a click on the big number on a player's
+  // card wins them the rack, as their + does (2026-11-15: "clicking a player
+  // number should make the player win the rack"). A points game keeps
+  // picking the player; their name picks them in any game, and so does their
+  // number key (the shooter for the recording's cues, the shot clock).
+  function numberWinsTheRack() {
+    return !quickCounterMode && state.currentGame.mode === "individual" && state.currentGame.unit === "rack";
+  }
 
   function cancelKeypadEntry() {
     keypadEntryMode = false;
@@ -6469,6 +6473,12 @@
     value.className = "stat-value keypad-select-trigger";
     value.setAttribute("aria-pressed", keypadSelectedPlayerId === player.id ? "true" : "false");
     value.addEventListener("click", function () {
+      // (a rack game: the number wins them the rack, as their + - see numberWinsTheRack)
+      if (numberWinsTheRack()) {
+        var plus = panel.querySelector(".card-plus-zone .btn-ball.plus");
+        if (plus && !plus.disabled) plus.click();
+        return;
+      }
       selectKeypadPlayer(player.id, null, true);
       window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
@@ -6495,7 +6505,7 @@
       value.textContent = player.balls || 0;
       applyScoreFlash(value, player);
     }
-    value.setAttribute("aria-label", T("aria.selectPlayerScore", { name: player.name, score: value.textContent.replace(/\s+/g, " ").trim() }));
+    value.setAttribute("aria-label", numberWinsTheRack() ? scoreButtonAria(1, player.name, "rack", isSingleRackGame) : T("aria.selectPlayerScore", { name: player.name, score: value.textContent.replace(/\s+/g, " ").trim() }));
     block.appendChild(value);
 
     // The score, then the + zone under it - buildBallControls' own two
@@ -7726,7 +7736,6 @@
   // (Winner Stays as the sheet opened: changed only if its box was - it can
   // go on by itself while the sheet's other changes apply, see needsTwoAtTheTable)
   var gsOpenedWinnerStays = null;
-  var gsOpenedRace = null;
   function openGameSheet() {
     var typeSelect = gsEl("gs-game-type");
     typeSelect.innerHTML = "";
@@ -7750,7 +7759,6 @@
     gsRadio("gs-mode", state.currentGame.mode === "teams" ? "teams" : "individual");
     gsEl("gs-winner-stays").checked = !!state.currentGame.queueEnabled;
     gsOpenedWinnerStays = !!state.currentGame.queueEnabled;
-    gsOpenedRace = state.raceToWinsTarget;
     gsEl("gs-max-streak").value = state.currentGame.queueMaxStreak || 0;
     gsEl("gs-timed").checked = !!state.currentGame.timedTournamentEnabled;
     gsEl("gs-timed-minutes").value = state.currentGame.timedTournamentMinutes || timedTournamentMinutesInput.value || 60;
@@ -7889,13 +7897,6 @@
       changes.push(T("events.chBreak." + want.breakRule));
       trackingChanged = true;
     }
-    // Winner Stays with a race: a race for each pairing, chosen here (see
-    // the Winner Stays switch, which drops a race chosen before it) - the
-    // race set or Winner Stays ticked here, not a race left as it was (Teams'
-    // race to 7, then Individual: one rack each pairing, the loser out)
-    var raceTouched = want.race !== gsOpenedRace || want.winnerStays !== gsOpenedWinnerStays;
-    state.currentGame.queueRaceChosen = want.winnerStays && want.race > 1 && (raceTouched || !!state.currentGame.queueRaceChosen);
-
     if (want.practice !== noStatsMode) {
       setPracticeMode(want.practice);
       changes.push(T(want.practice ? "gameSheet.chPracticeOn" : "gameSheet.chPracticeOff"));
@@ -7945,9 +7946,7 @@
       if (gameChanged) changes.push(boardStatusParts()[0].text);
     }
 
-    // (a race left as it was isn't put back: Winner Stays seating two from
-    // the new lineup may have just dropped it - see seatTwoAtTheTable)
-    if (want.race !== gsOpenedRace && want.race !== state.raceToWinsTarget) {
+    if (want.race !== state.raceToWinsTarget) {
       setRaceTargetFromSheet(want.race);
       changes.push(want.race > 1 ? T("board.statusRace", { n: want.race }) : T("gameSheet.single"));
     }
@@ -9424,13 +9423,12 @@
       }
       summary = teamLabelLive(key) + " won " + typeLabel + targetSuffix;
       takeRaceTally();
-      // Winner Stays for teams: each rack decides who stays - or each
-      // pairing's race (the session's race never ends here)
-      var teamStays = teamWinnerStaysOn();
-      if (teamStays && (!isRacing() || newTeamWins >= effectiveRaceTarget(key))) teamSwap = { loser: otherActiveTeamIds(key)[0] || null };
+      // Winner Stays for teams: each rack decides who stays - with a race,
+      // one race for every team, the first to it wins (see lineRaceOn)
+      if (teamWinnerStaysOn()) teamSwap = { loser: otherActiveTeamIds(key)[0] || null };
       // (reaching OR passing the race ends it - a race left open by a
       // reload, or a target lowered under someone's wins, still closes)
-      if (!teamStays && raceReached(newTeamWins, key)) {
+      if (raceReached(newTeamWins, key)) {
         milestoneNames = winnerNames.join(" & ");
         milestoneCount = newTeamWins;
       } else if (isRacing() && target > 1 && newTeamWins === target - 1) {
@@ -9451,12 +9449,10 @@
       var newPlayerWins = (state.playerWins[key] || 0) + 1;
       state.playerWins[key] = newPlayerWins;
       summary = getPlayer(key).name + " won " + typeLabel + targetSuffix;
-      // Winner Stays: each rack decides who stays - or, with a race chosen
-      // for it, each pairing's race (the session's race never ends here)
+      // Winner Stays: each rack decides who stays - with a race, one race
+      // for the whole line, the first to it wins (see lineRaceOn)
       var winnerStays = winnerStaysOn();
-      var lineRace = lineRaceOn();
-      var pairingWon = winnerStays && (!isRacing() || lineRace || newPlayerWins >= effectiveRaceTarget(key));
-      if ((!winnerStays || lineRace) && raceReached(newPlayerWins, key)) {
+      if (raceReached(newPlayerWins, key)) {
         milestoneNames = getPlayer(key).name;
         milestoneCount = newPlayerWins;
       } else if (isRacing() && target > 1 && newPlayerWins === target - 1) {
@@ -9490,7 +9486,7 @@
       // togglePlaying and the enable-checkbox logic), so opponentNames
       // above is already just the one real opponent - no change needed
       // to the win-crediting/rating math itself.
-      if (winnerStays && pairingWon) {
+      if (winnerStays) {
         // the winner's streak: pairings (racks) won in a row at the table
         var streak = state.currentGame.queueStreak;
         streak = streak && streak.id === key ? { id: key, count: streak.count + 1 } : { id: key, count: 1 };
@@ -9523,11 +9519,6 @@
               state.currentGame.queueStreak = null;
             }
             saveQueue(waitingQueue);
-            // a race each pairing: the new pairing starts at 0 - 0 (one race
-            // for the whole line: everyone's wins kept)
-            if (isRacing() && !lineRace) {
-              activePlayers().forEach(function (p) { state.playerWins[p.id] = 0; });
-            }
           }
         }
       }
@@ -9640,12 +9631,6 @@
           state.currentGame.queueStreak = null;
         }
         state.teamQueue = teamLine;
-        // a race each pairing: the new pairing starts at 0 - 0
-        if (isRacing()) {
-          syncTeamCombos();
-          seatedTeamIds().forEach(function (id) { state.teamWins[id] = 0; });
-          syncTeamCombos();
-        }
       }
     }
 
@@ -39856,17 +39841,8 @@
   queueModeCheckbox.addEventListener("change", function () {
     state.currentGame.queueEnabled = queueModeCheckbox.checked;
     state.currentGame.queueStreak = null;
-    // Winner Stays plays one rack each pairing unless a race for each
-    // pairing was chosen with it (🎱 Game: Winner Stays + Race to n) -
-    // a race set before was a race between two players, not this
-    if (queueModeCheckbox.checked && state.raceToWinsTarget > 1 && !state.currentGame.queueRaceChosen) {
-      lastRaceToWinsTarget = state.raceToWinsTarget;
-      state.raceToWinsTarget = 1;
-      state.fairRaceTargets = null;
-      syncRaceModeRadios();
-      renderRaceMode();
-    }
-    if (!queueModeCheckbox.checked) { state.currentGame.queueRaceChosen = false; state.currentGame.queueRaceKind = null; }
+    // (a race already set stays: with Winner Stays it's the whole line's -
+    // see lineRaceOn)
     if (!quickCounterMode && state.currentGame.mode === "teams") {
       // (Winner Stays for teams: two teams seated, the rest in line - off: everyone back)
       if (queueModeCheckbox.checked) settleTeamSeats();

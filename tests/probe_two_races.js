@@ -88,7 +88,7 @@ const STATE = JSON.stringify({
     Object.keys(s.playerWins || {}).forEach((id) => { if (s.playerWins[id]) wins[name(id)] = s.playerWins[id]; });
     const chooser = document.getElementById("tournament-chooser-overlay");
     return {
-      seated: s.players.filter((p) => p.playing).map((p) => p.name), wins, queue: s.currentGame.queueEnabled, race: s.raceToWinsTarget, kind: s.currentGame.queueRaceKind || null,
+      seated: s.players.filter((p) => p.playing).map((p) => p.name), wins, queue: s.currentGame.queueEnabled, race: s.raceToWinsTarget,
       line: (s.queue || []).map(name).filter(Boolean),
       second: s.secondRace ? { active: s.secondRace.active, parked: Object.keys(s.secondRace.parked.playerWins || {}).filter((id) => s.secondRace.parked.playerWins[id]).map((id) => name(id) + " " + s.secondRace.parked.playerWins[id]).join(", ") } : null,
       status: document.getElementById("board-status").textContent,
@@ -122,7 +122,7 @@ const STATE = JSON.stringify({
   const won = await win("Kim", true);
   await sleep(800);
   let e = await look();
-  check("Kim wins race 1 (3 – 1): the race-won screen (\"" + e.milestone.slice(0, 40) + "\"); race 2 for everyone, Winner Stays - Kim stays, Luc (next in line) in: " + e.seated.join(" v ") + ", line " + e.line.join(", ") + ", race 2's score kept " + JSON.stringify(e.wins) + " (\"" + e.status + "\")", /Kim/.test(e.milestone) && e.seated.join() === "Kim,Luc" && e.line[0] === "Jo" && JSON.stringify(e.wins) === '{"Luc":1}' && !e.second && e.queue === true && e.kind === "line" && e.race === 3 && /Winner stays/.test(e.status) && !/🏁/.test(e.status), { e, won });
+  check("Kim wins race 1 (3 – 1): the race-won screen (\"" + e.milestone.slice(0, 40) + "\"); race 2 for everyone, Winner Stays - Kim stays, Luc (next in line) in: " + e.seated.join(" v ") + ", line " + e.line.join(", ") + ", race 2's score kept " + JSON.stringify(e.wins) + " (\"" + e.status + "\")", /Kim/.test(e.milestone) && e.seated.join() === "Kim,Luc" && e.line[0] === "Jo" && JSON.stringify(e.wins) === '{"Luc":1}' && !e.second && e.queue === true && e.race === 3 && /Winner stays/.test(e.status) && !/🏁/.test(e.status), { e, won });
   const goesOn = await page.evaluate(() => document.getElementById("win-banner").textContent);
   check("...the banner: \"" + (goesOn.match(/🏁 Race 2 for everyone[^🏁✕]*/) || [""])[0].trim() + "\"", /🏁 Race 2 for everyone now, Winner Stays: Kim v Luc, Jo next \(Kim 0 – 1 Luc, race to 3\)/.test(goesOn), goesOn);
 
@@ -158,7 +158,7 @@ const STATE = JSON.stringify({
   await win("Kim", true);
   await sleep(800);
   let w2 = await look();
-  check("...Kim wins race 1: not a fresh 0 - 0 with Kim v Jo - race 2 for everyone: Kim stays, Luc (next in line) in (" + w2.seated.join(" v ") + ", line " + w2.line.join(", ") + "), Winner Stays", /Kim/.test(w2.milestone) && w2.seated.join() === "Kim,Luc" && w2.line[0] === "Jo" && w2.queue === true && w2.kind === "line" && !w2.second, w2);
+  check("...Kim wins race 1: not a fresh 0 - 0 with Kim v Jo - race 2 for everyone: Kim stays, Luc (next in line) in (" + w2.seated.join(" v ") + ", line " + w2.line.join(", ") + "), Winner Stays", /Kim/.test(w2.milestone) && w2.seated.join() === "Kim,Luc" && w2.line[0] === "Jo" && w2.queue === true && !w2.second, w2);
 
   // Luc set Playing in the roster (three at the table): a race 2 against either
   await open();

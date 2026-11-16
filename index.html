@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261115b">
+<link rel="stylesheet" href="css/style.css?v=20261115c">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -1454,7 +1454,7 @@
         <span class="gs-stepper"><button type="button" class="gs-step" data-for="gs-max-streak" data-step="-1" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-max-streak" class="gs-number" min="0" max="20" inputmode="numeric"><button type="button" class="gs-step" data-for="gs-max-streak" data-step="1" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
         <span class="gs-unit-word" data-i18n="gameSheet.maxStreakHint">(0: no limit)</span>
       </div>
-      <p class="gs-note hidden" id="gs-pairing-note" data-i18n="gameSheet.racePerPairing">With Winner Stays, the race is each pairing's: the first to it stays, the other goes to the back of the line.</p>
+      <p class="gs-note hidden" id="gs-pairing-note" data-i18n="gameSheet.racePerPairing">With Winner Stays the race is everyone's: the loser of each rack goes to the back of the line, the wins add up, and the first to the race wins it.</p>
       <div class="gs-row">
         <label class="gs-toggle"><input type="checkbox" id="gs-timed"> <span data-i18n="gameSheet.timed">⏰ Timed</span></label>
         <span class="gs-stepper" id="gs-timed-stepper"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="-5" aria-label="Less" data-i18n-aria-label="common.stepDown">−</button><input type="number" id="gs-timed-minutes" class="gs-number" min="1" max="600" inputmode="numeric" data-i18n-aria-label="gameSheet.minutes" aria-label="minutes"><button type="button" class="gs-step" data-for="gs-timed-minutes" data-step="5" aria-label="More" data-i18n-aria-label="common.stepUp">+</button></span>
@@ -3271,30 +3271,30 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261115b"></script>
-<script src="js/big-store.js?v=20261115b"></script>
-<script src="js/mp4-clip.js?v=20261115b"></script>
-<script src="js/recording-consent.js?v=20261115b"></script>
-<script src="js/local-recorder.js?v=20261115b"></script>
-<script src="js/lib/pool-day.js?v=20261115b"></script>
-<script src="js/lib/race-math.js?v=20261115b"></script>
-<script src="js/lib/handicaps.js?v=20261115b"></script>
-<script src="js/lib/brackets.js?v=20261115b"></script>
-<script src="js/lib/league.js?v=20261115b"></script>
-<script src="js/lib/events.js?v=20261115b"></script>
-<script src="js/lib/chips.js?v=20261115b"></script>
-<script src="js/lib/highlights.js?v=20261115b"></script>
-<script src="js/lib/payouts.js?v=20261115b"></script>
-<script src="js/lib/night-timeline.js?v=20261115b"></script>
-<script src="js/night-map.js?v=20261115b"></script>
-<script src="js/night-braid.js?v=20261115b"></script>
-<script src="js/app.js?v=20261115b"></script>
-<script src="js/camera-client.js?v=20261115b"></script>
-<script src="js/voice.js?v=20261115b"></script>
+<script src="js/pairing.js?v=20261115c"></script>
+<script src="js/big-store.js?v=20261115c"></script>
+<script src="js/mp4-clip.js?v=20261115c"></script>
+<script src="js/recording-consent.js?v=20261115c"></script>
+<script src="js/local-recorder.js?v=20261115c"></script>
+<script src="js/lib/pool-day.js?v=20261115c"></script>
+<script src="js/lib/race-math.js?v=20261115c"></script>
+<script src="js/lib/handicaps.js?v=20261115c"></script>
+<script src="js/lib/brackets.js?v=20261115c"></script>
+<script src="js/lib/league.js?v=20261115c"></script>
+<script src="js/lib/events.js?v=20261115c"></script>
+<script src="js/lib/chips.js?v=20261115c"></script>
+<script src="js/lib/highlights.js?v=20261115c"></script>
+<script src="js/lib/payouts.js?v=20261115c"></script>
+<script src="js/lib/night-timeline.js?v=20261115c"></script>
+<script src="js/night-map.js?v=20261115c"></script>
+<script src="js/night-braid.js?v=20261115c"></script>
+<script src="js/app.js?v=20261115c"></script>
+<script src="js/camera-client.js?v=20261115c"></script>
+<script src="js/voice.js?v=20261115c"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261115b").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261115c").catch(function () {}); });
   }
 </script>
 </body>
