@@ -18,6 +18,8 @@
 //   the race to 7 everyone's; a rack sends the loser to the back;
 // - a rack game: tapping a player's number wins them the rack; a points game: it picks the
 //   player, no point;
+// - ▶️ New game (Bob v Chris, both on the board, race to 7) with Winner Stays on: it stays on, Luc next; a rack: the loser
+//   to the line;
 // - no page errors.
 // Its own file server on 4268.
 // usage: node tests/probe_who_plays.js [screenshot dir]
@@ -224,6 +226,28 @@ function board(opts) {
   s = await st();
   const points = { balls: s.players.map((p) => p.balls || 0), selected: await page.evaluate(() => [...document.querySelectorAll("#scoreboard .player-panel.is-keypad-selected .player-name")].map((n) => n.textContent.replace(/\d.*$/, "").trim())) };
   check("...Straight Pool: tapping Jo's number picks Jo, no point", points.balls.every((b) => b === 0) && points.selected.join() === "Jo", points);
+
+  // ---- ▶️ New game with Winner Stays on: it stays on (2026-11-15: "the loser is still staying, we
+  // don't have the player rotation working anymore" - New game had turned it off) ----
+  const three = JSON.parse(board({ game: { queueEnabled: true } }));
+  three.players = [{ id: "l", name: "Luc", playing: true, balls: 0 }, { id: "b", name: "Bob", playing: false, balls: 0 }, { id: "c", name: "Chris", playing: true, balls: 0 }];
+  await open(JSON.stringify(three));
+  await page.click("#btn-board-menu");
+  await sleep(300);
+  await page.click('[data-menu-key="menu.newGame"]');
+  await sleep(400);
+  await page.type("#quick-game-player1", "Bob");
+  await page.type("#quick-game-player2", "Chris");
+  await page.evaluate(() => { document.getElementById("quick-game-race-raceto").click(); const i = document.getElementById("quick-game-race-to"); i.value = "7"; i.dispatchEvent(new Event("input", { bubbles: true })); });
+  await page.click("#btn-quick-game-start");
+  await sleep(900);
+  s = await st();
+  const ng = { seated: await seated(), line: await line(), queue: s.currentGame.queueEnabled, race: s.raceToWinsTarget, banner: await banner() };
+  check("▶️ New game (Bob v Chris, race to 7) with Winner Stays on: still on - Bob v Chris, Luc next (\"" + ng.line + "\")", ng.queue === true && ng.seated.join() === "Bob,Chris" && /Next up: Luc/.test(ng.line) && ng.race === 7 && /Winner Stays is on - Bob v Chris, Luc is next/.test(ng.banner), ng);
+  await page.keyboard.press("Escape");
+  await plusFor("Bob");
+  const ngRack = { seated: await seated(), line: await line() };
+  check("...Bob wins a rack: Chris to the line, Luc in", ngRack.seated.slice().sort().join() === "Bob,Luc" && /Next up: Chris/.test(ngRack.line), ngRack);
 
   check("no page errors", errors.length === 0, errors);
   await browser.close();

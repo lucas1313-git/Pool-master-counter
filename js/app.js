@@ -25847,6 +25847,7 @@
     // (what's on the board now goes into the players' stats first - while
     // its own "don't record" setting still applies)
     exportAllPlayerStats();
+    var onBoard = state.players.map(function (p) { return p.id; });
     var p1 = resolveOrCreateQuickGamePlayer(quickGamePlayer1Input.value);
     var p2 = resolveOrCreateQuickGamePlayer(quickGamePlayer2Input.value);
     if (!p1 || !p2 || p1.id === p2.id) return;
@@ -25856,7 +25857,7 @@
     // itself when leaving Quick Counter mode, not generally.
     noStatsMode = false;
     noStatsCheckbox.checked = false;
-    finishStartingQuickGame(p1, p2);
+    finishStartingQuickGame(p1, p2, onBoard.indexOf(p1.id) !== -1 || onBoard.indexOf(p2.id) !== -1);
   }
 
   // Per explicit request: play without typing any name at all - two
@@ -25879,9 +25880,14 @@
   // Shared tail for both Quick Game entry points above - everything
   // past "which two players" is identical regardless of how they were
   // obtained.
-  function finishStartingQuickGame(p1, p2) {
+  function finishStartingQuickGame(p1, p2, sameGroup) {
     // Exactly these two, individual, nobody else seated - a fresh 1v1,
     // not an addition to whatever roster happened to be playing before.
+    // ...unless it's the same group going on (one of the two already on the
+    // board) with Winner Stays on - it stays on (2026-11-15: "the loser is
+    // still staying, we don't have the player rotation working anymore" -
+    // New game had turned it off): these two at the table, the others in line.
+    var keepWinnerStays = !!sameGroup && !quickCounterMode && !!state.currentGame.queueEnabled;
     state.players.forEach(function (p) {
       p.playing = p.id === p1.id || p.id === p2.id;
     });
@@ -25889,10 +25895,17 @@
     p2.teamId = null;
 
     applyQuickGameSetup();
+    var line = keepWinnerStays ? effectiveQueue() : [];
+    if (line.length) {
+      state.currentGame.queueEnabled = true;
+      queueModeCheckbox.checked = true;
+      saveQueue(line);
+    }
     closeQuickGameModal();
     startNewSession(true);
     setFocusMode(true);
     showToast(T("toast.letsPlay"));
+    if (line.length) showBannerNotice(T("winnerStays.autoOn", { game: GAME_TYPES[state.currentGame.gameType].label, a: p1.name, b: p2.name, next: line[0].name }));
   }
 
   // Smallest "Player N" not already taken by an existing roster name (any
