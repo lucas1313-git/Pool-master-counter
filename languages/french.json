@@ -2555,7 +2555,6 @@
   "rec.winNone": "🏆 Aucune partie n'a été gagnée sur le tableau de cet ordinateur pendant cet enregistrement.",
   "rec.winCutting": "🏆 Découpe du coup gagnant {{i}} sur {{n}}...",
   "rec.winDone": "🏆 {{n}} coups gagnants, 30 s chacun - en vert dans la liste, et dans {{folder}}.",
-  "rec.winAll": "🏆 Les {{n}} coups gagnants de cet enregistrement sont déjà dans la liste (en vert).",
   "rec.winNoFfmpeg": "🏆 {{n}} coups gagnants ajoutés à la liste (en vert) - découper les extraits demande ffmpeg sur l'ordinateur.",
   "rec.winFailed": "🏆 Impossible de faire les coups gagnants : {{error}}",
   "rec.winCount": "🏆 {{n}}",
@@ -2727,5 +2726,10 @@
   "dayRaces.split": "✂️ Annuler la jonction",
   "dayRaces.splitAria": "Annuler la jonction : {{race}}, {{from}} – {{to}}",
   "dayRaces.splitConfirm": "Annuler la jonction ? Les courses redeviennent telles qu'elles ont été enregistrées.",
-  "dayRaces.splitDone": "Les courses sont de nouveau telles qu'elles ont été enregistrées."
+  "dayRaces.splitDone": "Les courses sont de nouveau telles qu'elles ont été enregistrées.",
+  "rec.winAllWhere": "🏆 Les {{n}} coups gagnants de cet enregistrement sont déjà dans la liste (en vert), et dans {{folder}}.",
+  "rec.winDayShown": "🏆 {{day}} : les {{n}} coups gagnants du jour, dans l'ordre où ils ont été gagnés. ☑ Tout, puis ⬇ Exporter ou 📤 Partager, les prend tous.",
+  "rec.winDayOff": "✕ Voir tous les repères",
+  "rec.listCut": "Les {{shown}} plus récents sur {{n}} repères.",
+  "rec.listAll": "Tout voir ({{n}})"
 }

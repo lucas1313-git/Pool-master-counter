@@ -2555,7 +2555,6 @@
   "rec.winNone": "🏆 Walang larong napanalunan sa scoreboard ng computer na ito habang nagre-record.",
   "rec.winCutting": "🏆 Pinuputol ang panalong tira {{i}} ng {{n}}...",
   "rec.winDone": "🏆 {{n}} panalong tira, 30 s bawat isa - kulay berde sa listahan, at nasa {{folder}}.",
-  "rec.winAll": "🏆 Nasa listahan na (kulay berde) ang {{n}} panalong tira ng recording na ito.",
   "rec.winNoFfmpeg": "🏆 {{n}} panalong tira ang naidagdag sa listahan (kulay berde) - kailangan ng ffmpeg sa computer para maputol ang mga clip.",
   "rec.winFailed": "🏆 Hindi magawa ang mga panalong tira: {{error}}",
   "rec.winCount": "🏆 {{n}}",
@@ -2727,5 +2726,10 @@
   "dayRaces.split": "✂️ Bawiin ang pagdugtong",
   "dayRaces.splitAria": "Bawiin ang pagdugtong: {{race}}, {{from}} – {{to}}",
   "dayRaces.splitConfirm": "Bawiin ang pagdugtong? Babalik ang mga race sa kung paano sila naitala.",
-  "dayRaces.splitDone": "Bumalik na ang mga race sa kung paano sila naitala."
+  "dayRaces.splitDone": "Bumalik na ang mga race sa kung paano sila naitala.",
+  "rec.winAllWhere": "🏆 Nasa listahan na (kulay berde) ang {{n}} panalong tira ng recording na ito, at nasa {{folder}}.",
+  "rec.winDayShown": "🏆 {{day}}: ang {{n}} panalong tira ng araw, ayon sa pagkakasunod ng pagkapanalo. ☑ Lahat, tapos ⬇ I-export o 📤 Ibahagi, para makuha lahat.",
+  "rec.winDayOff": "✕ Ipakita ang lahat ng cue",
+  "rec.listCut": "Ang {{shown}} pinakabago sa {{n}} cue.",
+  "rec.listAll": "Ipakita lahat ({{n}})"
 }

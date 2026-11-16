@@ -96,6 +96,10 @@
     ".cv tr.win td.n { color: #4fd18b; }",
     ".cv tr.win td.n::before { background: #4fd18b; }",
     ".cv tr.win a.cv-btn { color: #4fd18b; border-color: #4fd18b; }",
+    // (🏆 one day's winning shots shown - see shownCues; the short list cut: its "Show all")
+    ".cv .cv-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border: 1px solid #4fd18b; border-radius: 10px; color: #4fd18b; font-weight: 700; }",
+    ".cv .cv-filter[hidden] { display: none; }",
+    ".cv .cv-filter button, .cv .cv-more { min-height: 36px; }",
     ".cv .cv-tl .c.w, .cv .cv-wline .c.w { background: #4fd18b; }",
     ".cv .cv-session-head .cv-wins { margin-left: auto; min-height: 32px; padding: 4px 9px; color: #4fd18b; border-color: #4fd18b; }",
     ".cv .cv-session-head .cv-wins + .cv-del { margin-left: 0; }",
@@ -201,6 +205,7 @@
       '<div class="cv-group"><label><input type="checkbox" class="cv-pick-all"> All</label><span class="dim cv-picked">none checked</span>' +
       '<button class="cv-group-del" data-g="delete" disabled>🗑 Delete</button><button data-g="export" disabled title="Cut each one out and download it">⬇ Export</button>' +
       '<button data-g="keep" disabled title="Cut out and kept for good - not cleaned up, not deleted with its recording">📌 Save (keep forever)</button><button data-g="share" disabled title="This computer\'s share menu">📤 Share</button></div>' +
+      '<div class="cv-filter" hidden></div>' +
       '<table><tbody class="cv-rows"></tbody></table>' +
       (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b><div class="cv-sess dim">Loading...</div></div>' +
         // 📁 each day's cues, as a folder of clips in the recordings folder
@@ -728,7 +733,13 @@
       winsBusy = true;
       renderSessions();
       status(tr("rec.winLooking", "🏆 Looking for the games won during this recording..."));
-      var done = function (text) { winsBusy = false; status(text); return refresh(); };
+      // (then the list: that day's winning shots, all of them)
+      var done = function (text, shown) {
+        winsBusy = false;
+        if (shown) { winsDay = poolDayOf(sp.start); picked = {}; }
+        status(text);
+        return refresh();
+      };
       scoreboardGames().then(function (src) {
         // (a win in a ⏸ pause, or before the first file: not in the video)
         var wins = W.between(src, sp.start, sp.end).filter(function (w) { var at = locate(w.at, s.id); return at && at.session.id === s.id; });
@@ -751,8 +762,8 @@
           });
         }, Promise.resolve()).then(function () {
           var todo = mine().filter(function (c) { return !c.clip; }), total = mine().length;
-          if (!todo.length) return done(made.length ? tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: folder + "/Clips" }) : tr("rec.winAll", "🏆 This recording's {{n}} winning shots are already in the list (in green).", { n: total }));
-          if (!ffmpeg) return done(tr("rec.winNoFfmpeg", "🏆 {{n}} winning shots added to the list (in green) - cutting the clips needs ffmpeg on the computer.", { n: total }));
+          if (!todo.length) return done(made.length ? tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: folder + "/Clips" }) : tr("rec.winAllWhere", "🏆 This recording's {{n}} winning shots are already in the list (in green), and in {{folder}}.", { n: total, folder: folder + "/Clips" }), true);
+          if (!ffmpeg) return done(tr("rec.winNoFfmpeg", "🏆 {{n}} winning shots added to the list (in green) - cutting the clips needs ffmpeg on the computer.", { n: total }), true);
           var i = 0, where = folder + "/Clips";
           return todo.reduce(function (chain, c) {
             return chain.then(function () {
@@ -760,7 +771,7 @@
               return api("/api/rec/cues/" + encodeURIComponent(c.id) + "/clip", {}, "POST").then(function (r) { c.clip = r.file; if (r.folder) where = r.folder; renderRows(); });
             });
           }, Promise.resolve()).then(function () {
-            return done(tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: where }));
+            return done(tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: where }), true);
           });
         });
       }).catch(function (err) { done(tr("rec.winFailed", "🏆 Couldn't make the winning shots: {{error}}", { error: err.message })); });
@@ -782,20 +793,55 @@
     });
 
     // ---- the list ----
-    function renderRows() {
+    // 🏆 After Winning shots, the list is that day's winning shots - every one, in the order
+    // they were won (2026-11-16, the user: "i see 🏆 This recording's 31 winning shots are
+    // already in the list ... I only get 5 that belong to the last race to. I need to be able to
+    // get all the winning shots for the day" - the recording page's list shows its newest 12
+    // cues only). winsDay: that pool day (5 a.m. to 5 a.m.); ✕ Show every cue clears it.
+    var winsDay = null, showAll = false;
+    function poolDayOf(t) {
+      var d = new Date(t);
+      if (d.getHours() < 5) d.setDate(d.getDate() - 1);
+      return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+    }
+    function shownCues() {
       var text = (q(".cv-search").value || "").trim().toLowerCase();
       var list = cues.filter(function (c) { return !text || ((c.name || nameFor(c)) + " " + when(c.startedAt)).toLowerCase().indexOf(text) !== -1; });
+      if (!winsDay) return list;
+      return list.filter(function (c) { return c.kind === "win" && poolDayOf(c.winAt || c.startedAt) === winsDay; })
+        .sort(function (a, b) { return (a.winAt || a.startedAt) - (b.winAt || b.startedAt); });
+    }
+    function renderFilter(count) {
+      var bar = q(".cv-filter");
+      bar.hidden = !winsDay;
+      if (!winsDay) { bar.innerHTML = ""; return; }
+      var day = new Date(winsDay + "T12:00:00");
+      var dayText = day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+      bar.innerHTML = "<span>" + esc(tr("rec.winDayShown", "🏆 {{day}}: the day's {{n}} winning shots, in the order they were won. ☑ All, then ⬇ Export or 📤 Share, takes them all.", { day: dayText, n: count })) + '</span><button class="cv-filter-off">' + esc(tr("rec.winDayOff", "✕ Show every cue")) + "</button>";
+    }
+    function renderRows() {
+      var list = shownCues();
       var rows = q(".cv-rows");
+      renderFilter(list.length);
       if (!list.length) { rows.innerHTML = '<tr><td class="dim">' + (cues.length ? "No cue matches." : "No cues yet - ⭐ Mark during the recording (or say \"mark\").") + "</td></tr>"; return; }
-      rows.innerHTML = list.slice(0, opts.compact ? 12 : 1000).map(function (c) {
+      // (the recording page's short list: its newest 12 - and a way to all of them)
+      var cap = winsDay || showAll || !opts.compact ? 1000 : 12;
+      rows.innerHTML = list.slice(0, cap).map(function (c) {
         var game = c.kind === "game";
         return '<tr data-id="' + esc(c.id) + '" class="' + (sel && sel.id === c.id ? "sel " : "") + (game ? "game " : "") + (c.kind === "win" ? "win " : "") + (c.endedAt ? "" : "open") + '"><td class="pk"><input type="checkbox" class="cv-pick" data-id="' + esc(c.id) + '"' + (picked[c.id] ? " checked" : "") + ' aria-label="Check this cue"></td><td class="n">' + esc(c.name || nameFor(c) + (c.endedAt ? "" : " (still marking)")) + (c.keep ? ' <span class="kept" title="Kept for good">📌</span>' : "") + '</td><td class="dim" style="white-space:nowrap">' + esc(when(c.startedAt)) + '</td><td class="dim">' + (game ? "▶" : c.endedAt ? esc(len(c.endedAt - c.startedAt)) : "...") + "</td><td>" +
           (c.clip ? '<a class="cv-btn" href="/api/rec/clips/' + encodeURIComponent(c.clip) + '" download="' + esc(c.clip) + '" title="The exported clip">⬇</a>' : "") + "</td>" +
           '<td class="x"><button class="cv-del" data-del="cue" data-id="' + esc(c.id) + '" title="Delete this cue (the recording stays)">🗑</button></td></tr>';
-      }).join("");
+      }).join("") + (list.length > cap ? '<tr class="more"><td colspan="6" class="dim">' + esc(tr("rec.listCut", "The newest {{shown}} of {{n}} cues.", { shown: cap, n: list.length })) + ' <button class="cv-more">' + esc(tr("rec.listAll", "Show all {{n}}", { n: list.length })) + "</button></td></tr>" : "");
       renderSure();
     }
+    q(".cv-filter").addEventListener("click", function (e) {
+      if (!e.target.closest("button.cv-filter-off")) return;
+      winsDay = null;
+      renderRows();
+      renderGroup();
+    });
     q(".cv-rows").addEventListener("click", function (e) {
+      if (e.target.closest("button.cv-more")) { showAll = true; renderRows(); return; }
       var del = e.target.closest("button.cv-del");
       if (del) { deleteCue(del.getAttribute("data-id")); return; }
       if (e.target.closest("a")) return;
@@ -816,8 +862,8 @@
         var g = b.getAttribute("data-g");
         b.disabled = !list.length || (g !== "delete" && !clips.length) || ((g === "export" || g === "keep" || g === "share") && !ffmpeg);
       });
-      var all = q(".cv-pick-all");
-      all.checked = !!cues.length && cues.every(function (c) { return picked[c.id]; });
+      var all = q(".cv-pick-all"), shown = shownCues();
+      all.checked = !!shown.length && shown.every(function (c) { return picked[c.id]; });
       if (!shareReady) { var sb = q('.cv-group [data-g="share"]'); sb.textContent = "📤 Share"; sb.classList.remove("ready"); }
     }
     q(".cv-rows").addEventListener("change", function (e) {
@@ -830,7 +876,8 @@
     });
     q(".cv-pick-all").addEventListener("change", function (e) {
       picked = {};
-      if (e.target.checked) cues.forEach(function (c) { picked[c.id] = true; });
+      // (the cues the list has: a search's, or the day's winning shots)
+      if (e.target.checked) shownCues().forEach(function (c) { picked[c.id] = true; });
       shareReady = null;
       renderRows();
       renderGroup();

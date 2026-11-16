@@ -10,7 +10,12 @@
 //   Clips/ under that name, 30 s long (25 s before the win to 5 s after); the game before the
 //   recording not among them;
 // - green: their rows' names and ⬇ links, their marks on the recording's timeline; the legend;
-// - pressed again: nothing made twice ("already in the list");
+// - then the list is that day's winning shots, all of them, in the order won ("🏆 <day>: the day's 3
+//   winning shots..."); ✕ Show every cue: every cue again (14 hand cues besides);
+// - pressed again: nothing made twice ("already in the list ..., and in .../Clips");
+// - the recording page's short list (compact): its newest 12 of 17 cues, "Show all 17" - none of
+//   them a winning shot; 🏆 there: the day's 3 winning shots, all of them (2026-11-16, the user saw
+//   only the last race's 5 of 31); ☑ All checks those 3;
 // - the recording with no game: "No game was won...";
 // - record.html loads it too; no page errors.
 // usage: node tests/probe_winning_shots.js [screenshot dir]
@@ -64,6 +69,10 @@ const GREEN = "rgb(79, 209, 139)";
   };
   const server = spawn(process.execPath, [path.join(__dirname, "..", "server", "server.js")], { env: Object.assign({}, process.env, { HOME, PORT: String(PORT) }), stdio: "ignore" });
   for (let i = 0; i < 40; i++) { try { if ((await fetch(BASE + "manifest.json")).ok) break; } catch (e) {} await sleep(250); }
+  // 14 cues marked by hand near the end of the recording - newer than every winning shot
+  for (let i = 0; i < 14; i++) {
+    await fetch(BASE + "api/rec/cues", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "hand " + (i + 1), startedAt: s0 + 150000 + i * 1000, endedAt: s0 + 155000 + i * 1000, session: id }) });
+  }
   const browser = await puppeteer.launch({ executablePath: EXE, headless: "new", defaultViewport: { width: 1200, height: 1000 } });
   const errors = [];
   try {
@@ -111,12 +120,42 @@ const GREEN = "rgb(79, 209, 139)";
     if (OUT) await page.screenshot({ path: path.join(OUT, "winning_shots.png"), fullPage: true });
     check("green: the three rows' names, dots and ⬇ links, their marks on the timeline; \"" + look.legend + "\"", look.rows.length === 3 && look.rows.every((r) => r.color === GREEN && r.dot === GREEN && r.link === GREEN) && look.marks.length === 3 && look.marks.every((c) => c === GREEN) && /🏆 winning shots/.test(look.legend) && /🏆 3/.test(look.info), look);
 
+    const listed = () => page.evaluate(() => ({ filter: document.querySelector(".cv-filter").hidden ? null : document.querySelector(".cv-filter span").textContent, rows: [...document.querySelectorAll(".cv-rows tr[data-id]")].map((r) => (r.classList.contains("win") ? "🏆 " : "") + r.querySelector("td.n").textContent) }));
+    let shown = await listed();
+    check("then the list: the day's winning shots, all of them, in the order won - \"" + shown.filter + "\"", /^🏆 .+: the day's 3 winning shots, in the order they were won\. ☑ All, then ⬇ Export or 📤 Share, takes them all\.$/.test(shown.filter || "") && JSON.stringify(shown.rows) === JSON.stringify(want.map((n) => "🏆 " + n)), shown);
+    await page.evaluate(() => document.querySelector(".cv-filter button.cv-filter-off").click());
+    await sleep(200);
+    shown = await listed();
+    check("✕ Show every cue: every cue again (" + shown.rows.length + ")", shown.filter === null && shown.rows.length === 17, shown);
+
     const again = await press(id);
     const count = (await (await fetch(BASE + "api/rec/cues")).json()).cues.filter((c) => c.kind === "win").length;
-    check("pressed again: \"" + again + "\", still " + count, again === "🏆 This recording's 3 winning shots are already in the list (in green)." && count === 3, again);
+    check("pressed again: \"" + again + "\", still " + count, /^🏆 This recording's 3 winning shots are already in the list \(in green\), and in .+\/Clips\.$/.test(again) && count === 3, again);
 
     const none = await press(emptyId);
     check("the recording with no game: \"" + none + "\"", none === "🏆 No game was won on this computer's scoreboard while this recording ran.", none);
+
+    // the recording page's short list (compact): its own viewer, beside
+    await page.evaluate(() => { const box = document.createElement("div"); box.id = "compact-box"; document.body.appendChild(box); window.PMCCueViewer.mount(box, { compact: true, sessions: true }); });
+    await sleep(1500);
+    const compactLook = () => page.evaluate(() => {
+      const box = document.getElementById("compact-box");
+      return {
+        rows: [...box.querySelectorAll(".cv-rows tr[data-id]")].map((r) => (r.classList.contains("win") ? "🏆 " : "") + r.querySelector("td.n").textContent),
+        more: box.querySelector(".cv-rows tr.more") && box.querySelector(".cv-rows tr.more").textContent,
+        filter: box.querySelector(".cv-filter").hidden ? null : box.querySelector(".cv-filter span").textContent,
+        status: box.querySelector(".cv-status").textContent, picked: box.querySelector(".cv-picked").textContent
+      };
+    });
+    let small = await compactLook();
+    check("the recording page's short list: the newest 12 of 17, \"" + small.more + "\" - no winning shot among them", small.rows.length === 12 && small.rows.every((r) => !/^🏆/.test(r)) && small.more === "The newest 12 of 17 cues. Show all 17", small);
+    await page.evaluate((sid) => [...document.querySelectorAll("#compact-box .cv-session")].find((x) => x.textContent.indexOf(sid) !== -1).querySelector(".cv-wins").click(), id);
+    for (let i = 0; i < 40; i++) { small = await compactLook(); if (/already/.test(small.status)) break; await sleep(250); }
+    check("🏆 there: the day's 3 winning shots, all of them, the oldest first", /already in the list/.test(small.status) && JSON.stringify(small.rows) === JSON.stringify(want.map((n) => "🏆 " + n)) && !small.more && /the day's 3 winning shots/.test(small.filter || ""), small);
+    await page.evaluate(() => document.querySelector("#compact-box .cv-pick-all").click());
+    await sleep(200);
+    small = await compactLook();
+    check("☑ All checks those 3: \"" + small.picked + "\"", small.picked === "3 checked", small);
 
     const rec = await (await fetch(BASE + "record.html")).text();
     check("record.html loads it too", /js\/lib\/night-timeline\.js/.test(rec) && /js\/lib\/winning-shots\.js/.test(rec) && /js\/big-store\.js/.test(rec) && rec.indexOf("winning-shots.js") < rec.indexOf("cue-viewer.js"));

@@ -2555,7 +2555,6 @@
   "rec.winNone": "🏆 錄影期間，呢部電腦嘅計分板冇記錄任何一局贏波。",
   "rec.winCutting": "🏆 剪緊第 {{i}} 個致勝一桿（共 {{n}} 個）...",
   "rec.winDone": "🏆 {{n}} 個致勝一桿，每個 30 秒 - 喺列表入面係綠色，亦喺 {{folder}}。",
-  "rec.winAll": "🏆 呢段錄影嘅 {{n}} 個致勝一桿已經喺列表入面（綠色）。",
   "rec.winNoFfmpeg": "🏆 加咗 {{n}} 個致勝一桿入列表（綠色）- 要剪片段，電腦要有 ffmpeg。",
   "rec.winFailed": "🏆 整唔到致勝一桿：{{error}}",
   "rec.winCount": "🏆 {{n}}",
@@ -2727,5 +2726,10 @@
   "dayRaces.split": "✂️ 取消合併",
   "dayRaces.splitAria": "取消合併：{{race}}，{{from}} – {{to}}",
   "dayRaces.splitConfirm": "取消合併？啲搶局會返到記錄落嚟嘅樣。",
-  "dayRaces.splitDone": "啲搶局已經返到記錄落嚟嘅樣。"
+  "dayRaces.splitDone": "啲搶局已經返到記錄落嚟嘅樣。",
+  "rec.winAllWhere": "🏆 呢段錄影嘅 {{n}} 個致勝一桿已經喺列表入面（綠色），亦喺 {{folder}}。",
+  "rec.winDayShown": "🏆 {{day}}：當日嘅 {{n}} 個致勝一桿，按贏嘅次序排。☑ 全部，再撳 ⬇ 匯出或 📤 分享，就可以全部攞晒。",
+  "rec.winDayOff": "✕ 顯示所有標記",
+  "rec.listCut": "{{n}} 個標記入面最新嘅 {{shown}} 個。",
+  "rec.listAll": "顯示全部（{{n}}）"
 }

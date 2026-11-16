@@ -2555,7 +2555,6 @@
   "rec.winNone": "🏆 No se ganó ninguna partida en el marcador de este ordenador mientras se grababa.",
   "rec.winCutting": "🏆 Cortando el tiro ganador {{i}} de {{n}}...",
   "rec.winDone": "🏆 {{n}} tiros ganadores, 30 s cada uno - en verde en la lista, y en {{folder}}.",
-  "rec.winAll": "🏆 Los {{n}} tiros ganadores de esta grabación ya están en la lista (en verde).",
   "rec.winNoFfmpeg": "🏆 {{n}} tiros ganadores añadidos a la lista (en verde) - cortar los clips necesita ffmpeg en el ordenador.",
   "rec.winFailed": "🏆 No se pudieron hacer los tiros ganadores: {{error}}",
   "rec.winCount": "🏆 {{n}}",
@@ -2727,5 +2726,10 @@
   "dayRaces.split": "✂️ Deshacer la unión",
   "dayRaces.splitAria": "Deshacer la unión: {{race}}, {{from}} – {{to}}",
   "dayRaces.splitConfirm": "¿Deshacer la unión? Las carreras vuelven a como se registraron.",
-  "dayRaces.splitDone": "Las carreras están otra vez como se registraron."
+  "dayRaces.splitDone": "Las carreras están otra vez como se registraron.",
+  "rec.winAllWhere": "🏆 Los {{n}} tiros ganadores de esta grabación ya están en la lista (en verde), y en {{folder}}.",
+  "rec.winDayShown": "🏆 {{day}}: los {{n}} tiros ganadores del día, en el orden en que se ganaron. ☑ Todo, luego ⬇ Exportar o 📤 Compartir, se los lleva todos.",
+  "rec.winDayOff": "✕ Ver todas las marcas",
+  "rec.listCut": "Las {{shown}} más recientes de {{n}} marcas.",
+  "rec.listAll": "Ver todas ({{n}})"
 }

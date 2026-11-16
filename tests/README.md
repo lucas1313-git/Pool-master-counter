@@ -668,3 +668,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   kept with each older rack - Winner Stays' line, two races at once, a race stopped and a new one
   started, a rack edited or deleted since, pieces joined): tests/unit/day-races.test.js, in
   `npm test`.
+- **probe_winning_shots.js** — 🏆 Winning shots of a recording (2026-11-12), its own server on 4309
+  with a throwaway HOME, a 3-minute recording in two files and the scoreboard's games in the
+  browser: the three games won while it ran, named "winning shot Luc vs Bob-8-Ball-1-0" and so on,
+  cut into Clips/ (30 s each), green in the list and on the timeline; then the list is that day's
+  winning shots, all of them, in the order won, ✕ Show every cue undoes it; pressed again, nothing
+  made twice; the recording page's short list (its newest 12 of 17, "Show all 17") shows all the
+  day's winning shots after 🏆 (2026-11-16: only the last race's 5 of 31 were showing) and ☑ All
+  checks them; a recording with no game; no page errors. Needs ffmpeg.
+  `node tests/probe_winning_shots.js [shots]`. Names and spans: tests/unit/winning-shots.test.js.

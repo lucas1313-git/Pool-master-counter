@@ -2555,7 +2555,6 @@
   "rec.winNone": "🏆 No game was won on this computer's scoreboard while this recording ran.",
   "rec.winCutting": "🏆 Cutting winning shot {{i}} of {{n}}...",
   "rec.winDone": "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.",
-  "rec.winAll": "🏆 This recording's {{n}} winning shots are already in the list (in green).",
   "rec.winNoFfmpeg": "🏆 {{n}} winning shots added to the list (in green) - cutting the clips needs ffmpeg on the computer.",
   "rec.winFailed": "🏆 Couldn't make the winning shots: {{error}}",
   "rec.winCount": "🏆 {{n}}",
@@ -2727,5 +2726,10 @@
   "dayRaces.split": "✂️ Undo the join",
   "dayRaces.splitAria": "Undo the join: {{race}}, {{from}} – {{to}}",
   "dayRaces.splitConfirm": "Undo the join? The races go back to how they were recorded.",
-  "dayRaces.splitDone": "The races are back as they were recorded."
+  "dayRaces.splitDone": "The races are back as they were recorded.",
+  "rec.winAllWhere": "🏆 This recording's {{n}} winning shots are already in the list (in green), and in {{folder}}.",
+  "rec.winDayShown": "🏆 {{day}}: the day's {{n}} winning shots, in the order they were won. ☑ All, then ⬇ Export or 📤 Share, takes them all.",
+  "rec.winDayOff": "✕ Show every cue",
+  "rec.listCut": "The newest {{shown}} of {{n}} cues.",
+  "rec.listAll": "Show all {{n}}"
 }
