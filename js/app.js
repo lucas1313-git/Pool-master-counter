@@ -400,8 +400,11 @@
       // Winner Stays for teams: the teams waiting, in order, and who each one benched
       teamQueue: [],
       teamBenched: {},
-      // 🏁 two races at once: { pivotId, active: "first"|"second", parked: { playerWins, target, seats } }
+      // 🏁 two races at once: { pivotId, active: "first"|"second", parked: { playerWins, target, seats },
+      //   ids: { first, second } (each race's raceId - see currentRaceId) }
       secondRace: null,
+      // the race that goes on once the other one's over keeps its id (see currentRaceId)
+      raceCarryId: null,
       raceAsked: {},
       // each pair is a team of its own: its wins by its players (teamComboKey), and
       // which pair's wins each team letter holds now (see syncTeamCombos)
@@ -521,6 +524,7 @@
           if (!Array.isArray(parsed.teamQueue)) parsed.teamQueue = [];
           if (!parsed.teamBenched || typeof parsed.teamBenched !== "object") parsed.teamBenched = {};
           if (!parsed.secondRace || typeof parsed.secondRace !== "object") parsed.secondRace = null;
+          if (typeof parsed.raceCarryId !== "string") parsed.raceCarryId = null;
           if (!parsed.raceAsked || typeof parsed.raceAsked !== "object") parsed.raceAsked = {};
           if (!parsed.comboWins || typeof parsed.comboWins !== "object") parsed.comboWins = {};
           if (!parsed.teamSlotCombo || typeof parsed.teamSlotCombo !== "object") parsed.teamSlotCombo = {};
@@ -1043,13 +1047,32 @@
     if (race1.length < 2) race1 = racers.map(function (q) { return q.id; });
     tournamentChooser(T("race2.ask", { name: p.name, score: raceScoreText(state.playerWins, race1), n: state.raceToWinsTarget }), choices, { noCancel: true });
   }
+  // The race a rack is in - kept with it (raceId), so a day's races can be told
+  // apart later (🏁 Races on this day, js/lib/day-races.js): the time of the
+  // race's first rack. 🏁 Two races at once: each its own; the one that goes on
+  // once the other's over keeps its own (raceCarryId). ts: the rack's own time
+  // (null: only asking).
+  function currentRaceId(ts) {
+    var r = state.secondRace;
+    if (r) {
+      if (!r.ids) r.ids = {};
+      if (!r.ids[r.active] && ts) r.ids[r.active] = ts;
+      return r.ids[r.active] || null;
+    }
+    if (state.raceCarryId) return state.raceCarryId;
+    for (var i = state.gameHistory.length - 1; i >= 0; i--) {
+      var g = state.gameHistory[i];
+      if (g && typeof g !== "string" && g.ts && !g.tournamentId) return g.raceId || g.ts;
+    }
+    return ts || null;
+  }
   // race 2 with p - now, against `other` (race 1's others wait), or once p sits down
   function startSecondRace(p, other) {
     var race1Seats = lastRaceSeats.filter(function (id) { return id !== p.id && getPlayer(id); });
     if (race1Seats.length < 2) race1Seats = activePlayers().filter(function (q) { return q.id !== p.id; }).map(function (q) { return q.id; });
     var score1 = raceScoreText(state.playerWins, race1Seats);
     // (seatsNow: who's at the table in the race being scored - kept when it waits)
-    state.secondRace = { pivotId: p.id, active: "first", seatsNow: race1Seats, parked: { playerWins: {}, target: state.raceToWinsTarget, seats: [] } };
+    state.secondRace = { pivotId: p.id, active: "first", seatsNow: race1Seats, parked: { playerWins: {}, target: state.raceToWinsTarget, seats: [] }, ids: { first: currentRaceId(null), second: null } };
     // race 2 now: the newcomer and `other` at the table; or race 1's players back
     var seats = other ? [p.id, other.id] : race1Seats;
     state.players.forEach(function (q) {
@@ -1092,6 +1115,7 @@
   // `r`: the two races as they were; winnerIds: who won the one just over.
   function resumeOtherRace(r, winnerIds) {
     if (!r || !r.parked) return;
+    state.raceCarryId = (r.ids && r.ids[r.active === "first" ? "second" : "first"]) || null;
     state.playerWins = r.parked.playerWins || {};
     if (r.parked.target) state.raceToWinsTarget = r.parked.target;
     state.fairRaceTargets = null;
@@ -9640,8 +9664,10 @@
     if (durationMs !== null && durationMs < 1000) durationMs = null;
     var ts = new Date().toISOString();
     if (lastWinStreak && lastWinStreak.ts === null) lastWinStreak.ts = ts;
+    var raceId = currentRaceId(ts);
     state.gameHistory.unshift({
       ts: ts,
+      raceId: raceId,
       gameType: state.currentGame.gameType,
       gameLabel: typeLabel,
       target: state.currentGame.target,
@@ -11706,6 +11732,7 @@
     if (saveRoster) maybeSaveRosterOnNewSession();
     state.raceClosedPending = null;
     state.secondRace = null;
+    state.raceCarryId = null;
     state.raceAsked = {};
     clearUndo();
     state.playerWins = {};
@@ -13846,6 +13873,7 @@
     var chosenGames = days[chosen] || 0;
     document.getElementById("report-calendar-picked-text").textContent = T("dayNotes.reportFor", { date: reportCalendarLongDate(chosen) }) + (chosenGames ? " · " + countPhrase("games", chosenGames) : "");
     document.getElementById("btn-report-calendar-latest").classList.toggle("hidden", !pickedReportDay);
+    renderDayRaces();
     renderAiTake();
   }
   function moveReportCalendar(step) {
@@ -13861,6 +13889,119 @@
     showDayNotesFor(reportDayChosen());
     renderReportCalendar();
   }
+  // ---- 🏁 Races on this day ----
+  // The report's day's races (2026-11-16, the user: "i need to be able to
+  // reset a race to in particular in a particular day ... i need to reset the
+  // last race to as it was not rightly recorded"): each with its time, how it
+  // ended and its score, and ↺ Reset - all its racks out of every record (the
+  // players' games and stats, Q-Scores, the report, the race win; the board's
+  // score too when it's the race on it), Recover Data having them back. Which
+  // racks make a race: js/lib/day-races.js.
+  var dayRacesBox = document.getElementById("day-races");
+  var dayRacesList = document.getElementById("day-races-list");
+  function dayRacesOf(dateStr) {
+    var lib = window.PMCLib && window.PMCLib.dayRaces;
+    return lib ? lib.races(computeDayReportData(dateStr).games) : [];
+  }
+  function dayRaceTitle(race) {
+    return race.timedMinutes ? T("dayRaces.timed", { minutes: race.timedMinutes }) : T("dayRaces.raceTo", { n: race.raceTo });
+  }
+  // "Luc & Luigi 7 – 5 Bob & Suresh", or "Bob 7 · Luc 4 · Chris 3" (a line of
+  // players, Winner Stays): the sides that won a rack, the most first
+  function dayRaceScore(race) {
+    var sides = race.sides.filter(function (s, i) { return s.wins > 0 || i < 2; }).slice(0, 5);
+    if (sides.length === 2) return sides[0].names.join(" & ") + " " + sides[0].wins + " – " + sides[1].wins + " " + sides[1].names.join(" & ");
+    return sides.map(function (s) { return s.names.join(" & ") + " " + s.wins; }).join(" · ");
+  }
+  function dayRaceOnBoard(race) {
+    var live = {};
+    (state.gameHistory || []).forEach(function (g) { if (g && g.ts) live[g.ts] = true; });
+    return !race.end && race.racks.some(function (g) { return live[g.ts]; });
+  }
+  function renderDayRaces() {
+    if (!dayRacesBox) return;
+    var dateStr = reportDayChosen();
+    var races = dayRacesOf(dateStr);
+    dayRacesBox.classList.toggle("hidden", !races.length);
+    dayRacesList.innerHTML = "";
+    races.forEach(function (race) {
+      var onBoard = dayRaceOnBoard(race);
+      var li = document.createElement("li");
+      li.className = "day-race" + (onBoard ? " is-on-board" : "");
+      var text = document.createElement("div");
+      text.className = "day-race-text";
+      var title = document.createElement("span");
+      title.className = "day-race-title";
+      title.textContent = [dayRaceTitle(race), race.racks[race.racks.length - 1].gameLabel, formatReportGameTime(race.from) + " – " + formatReportGameTime(race.to), countPhrase("games", race.racks.length)].filter(Boolean).join(" · ");
+      var result = document.createElement("span");
+      result.className = "day-race-result";
+      var score = dayRaceScore(race);
+      result.textContent = race.end === "won" && race.winners.length
+        ? T("dayRaces.won", { names: race.winners.join(" & "), score: score })
+        : T(race.end === "stopped" ? "dayRaces.stopped" : onBoard ? "dayRaces.onBoard" : "dayRaces.notFinished", { score: score });
+      text.appendChild(title);
+      text.appendChild(result);
+      li.appendChild(text);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-ghost day-race-reset";
+      btn.textContent = T("dayRaces.reset");
+      btn.setAttribute("aria-label", T("dayRaces.resetAria", { race: dayRaceTitle(race), from: formatReportGameTime(race.from), to: formatReportGameTime(race.to) }));
+      btn.addEventListener("click", function () { resetDayRace(race, dateStr); });
+      li.appendChild(btn);
+      dayRacesList.appendChild(li);
+    });
+  }
+  // ↺ Reset: the race's racks out of the live board and every player's log,
+  // their Q-Score changes with them (removeGamesEverywhere); what came out
+  // kept for Recover Data; that day's archived report made again.
+  function resetDayRace(race, dateStr) {
+    var tsList = race.racks.map(function (g) { return g.ts; });
+    var onBoard = dayRaceOnBoard(race);
+    var words = { race: dayRaceTitle(race), date: reportCalendarLongDate(dateStr), from: formatReportGameTime(race.from), to: formatReportGameTime(race.to), games: countPhrase("games", tsList.length) };
+    confirmModal(T("dayRaces.confirm", words) + (onBoard ? " " + T("dayRaces.confirmOnBoard") : ""), function () {
+      var set = {};
+      tsList.forEach(function (ts) { set[ts] = true; });
+      // each player's copies of those racks, as they were (Recover Data)
+      var pruned = {};
+      Object.keys(PLAYER_STATS).forEach(function (key) {
+        var sessions = [];
+        (PLAYER_STATS[key].sessions || []).forEach(function (sess) {
+          var games = (sess.games || []).filter(function (g) { return g && set[g.ts]; });
+          if (!games.length) return;
+          var won = games.filter(function (g) { return g.result === "won"; });
+          sessions.push({ date: sess.date, wins: won.length, gamesWon: won.map(function (g) { return g.gameLabel; }), opponents: sess.opponents || [], games: JSON.parse(JSON.stringify(games)), wonTournament: false });
+        });
+        if (sessions.length) pruned[key] = sessions;
+      });
+      var taken = removeGamesEverywhere(tsList);
+      saveResetSnapshot("todayStats", T("resetSnapshot.raceResetLabel", words), {
+        date: dateStr,
+        prunedSessions: pruned,
+        gameHistory: JSON.parse(JSON.stringify(taken.live)),
+        ratingHistory: taken.ratings
+      });
+      if (taken.live.length) {
+        recomputeLiveWinsFromGameHistory();
+        applyRotationIfDue();
+        saveState();
+      }
+      // (an archived report of that day: made again without the race)
+      if (findReportArchiveEntry(dateStr)) {
+        var again = computeReportImageData(dateStr, true);
+        if (!again.players || !again.players.length) {
+          REPORT_ARCHIVE = REPORT_ARCHIVE.filter(function (entry) { return entry.dateStr !== dateStr; });
+          saveReportArchiveToStorage(REPORT_ARCHIVE);
+          renderReportArchiveList();
+        }
+      }
+      clearUndo();
+      renderAll();
+      renderDayRaces();
+      showToast(T("dayRaces.done", words), "↺ ");
+    });
+  }
+
   // The notes box holds the report's day's notes, saved to that day
   function showDayNotesFor(dateStr) {
     dayNotesDay = dateStr;
@@ -26002,6 +26143,7 @@
         rotatingTeams: !!entry.rotatingTeams,
         scores: entry.scores || null,
         raceTally: entry.raceTally || null,
+        raceId: entry.raceId || null,
         mvpName: entry.mvpName,
         durationMs: entry.durationMs,
         wonRace: entry.wonRace,

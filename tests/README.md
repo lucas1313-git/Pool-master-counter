@@ -655,3 +655,13 @@ Not part of the app - helpers for testing and for running this machine's own cop
   (`HOME=tests/tmphome PORT=4339 node server/server.js`). The night's sums (racks into matches,
   a race, who came in, partners switched, a game filed and still open counted once, the pool
   day): tests/unit/night-timeline.test.js, in `npm test`.
+- **probe_race_reset.js** — 🏁 Races on this day, ↺ Reset (2026-11-16: "i need to reset the last
+  race to as it was not rightly recorded"), its own file server on 4311: yesterday's two saved
+  races (a race won, one stopped by hand - older racks, their score only) listed under the 📅
+  calendar with times, racks and score; ↺ Reset on the stopped one, asked first: its racks out of
+  every player's games, their rating changes taken back, the race won kept; Recover Data has it and
+  brings it back; today's race on the board (each rack kept with its race) reset: the board back
+  to 0 - 0; a race won then the next rack: two races; a phone's width; no page errors.
+  `node tests/probe_race_reset.js [shots]`. Which racks make a race (by raceId, or by the score
+  kept with each older rack - Winner Stays' line, two races at once, a race stopped and a new one
+  started): tests/unit/day-races.test.js, in `npm test`.

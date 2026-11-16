@@ -13,6 +13,8 @@
 //   rack the winner stays and the wins add up (never back to 0 - 0) till Luc wins race 2;
 //   Luc 1 – 0 Kim, "🏁 Race 2 goes on: …", one race again (the top bar has no 🏁);
 // - ↩ Undo this win: both races back - race 1 Kim 2 – 1 Jo on the board, race 2 waiting (Luc 1);
+// - each rack kept with its race (raceId, for 🏁 Races on this day): race 1's four racks one race,
+//   race 2's three another;
 // - "Luc waits": race 1 goes on with Kim v Jo, "🏁 Race 1 · race 2 when Luc plays";
 // - Luc set Playing in the roster (three at the table): Race 2 v Kim or v Jo; v Jo - Jo and Luc;
 // - no page errors.
@@ -145,6 +147,20 @@ const STATE = JSON.stringify({
   await sleep(800);
   let h3 = await look();
   check("...Luc beats Jo: 3 - race 2 won (\"" + h3.milestone.slice(0, 40) + "\"), a new race (" + JSON.stringify(h3.wins) + "), Winner Stays on: " + h3.seated.join(" v ") + ", line " + h3.line.join(", "), /Luc/.test(h3.milestone) && JSON.stringify(h3.wins) === "{}" && h3.queue === true && h3.seated.join() === "Kim,Luc" && h3.line[0] === "Jo" && !h3.second, h3);
+
+  // each rack kept with its race (🏁 Races on this day - js/lib/day-races.js): race 1's four
+  // racks one race, race 2's three another - Luc's rack in between and the two after race 1 was won
+  await sleep(500);
+  const kept = await page.evaluate(async () => {
+    const stats = await window.PMCBigStore.load("playerStats", {});
+    const racks = {};
+    Object.keys(stats).forEach((n) => (stats[n].sessions || []).forEach((x) => (x.games || []).forEach((g) => { if (g.result === "won") racks[g.ts] = g; })));
+    (JSON.parse(localStorage.getItem("poolMasterCounter.state.v2")).gameHistory || []).forEach((g) => { racks[g.ts] = racks[g.ts] || g; });
+    return Object.keys(racks).sort().map((ts) => ({ ts, w: racks[ts].winnerNames[0], id: racks[ts].raceId }));
+  });
+  const race1 = kept.filter((g) => g.id === kept[0].ts), race2 = kept.filter((g) => g.id && g.id !== kept[0].ts);
+  check("each rack kept with its race: race 1 " + race1.map((g) => g.w).join(",") + " | race 2 " + race2.map((g) => g.w).join(","),
+    kept.length === 7 && race1.map((g) => g.w).join() === "Kim,Jo,Kim,Kim" && race2.map((g) => g.w).join() === "Luc,Luc,Luc" && race2.every((g) => g.id === race2[0].ts), kept);
 
   // "Luc waits": race 1 goes on
   await open();
