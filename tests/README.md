@@ -660,8 +660,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   races (a race won, one stopped by hand - older racks, their score only) listed under the 📅
   calendar with times, racks and score; ↺ Reset on the stopped one, asked first: its racks out of
   every player's games, their rating changes taken back, the race won kept; Recover Data has it and
-  brings it back; today's race on the board (each rack kept with its race) reset: the board back
+  brings it back; 🔗 Join with the next ("the race shows in 3 pieces, can I merge them?"): one
+  race, the later piece's result, the first piece's race win no longer counted, ✂️ Undo the join
+  puts both back; today's race on the board (each rack kept with its race) reset: the board back
   to 0 - 0; a race won then the next rack: two races; a phone's width; no page errors.
   `node tests/probe_race_reset.js [shots]`. Which racks make a race (by raceId, or by the score
   kept with each older rack - Winner Stays' line, two races at once, a race stopped and a new one
-  started): tests/unit/day-races.test.js, in `npm test`.
+  started, a rack edited or deleted since, pieces joined): tests/unit/day-races.test.js, in
+  `npm test`.

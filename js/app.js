@@ -13924,7 +13924,7 @@
     var races = dayRacesOf(dateStr);
     dayRacesBox.classList.toggle("hidden", !races.length);
     dayRacesList.innerHTML = "";
-    races.forEach(function (race) {
+    races.forEach(function (race, i) {
       var onBoard = dayRaceOnBoard(race);
       var li = document.createElement("li");
       li.className = "day-race" + (onBoard ? " is-on-board" : "");
@@ -13935,21 +13935,98 @@
       title.textContent = [dayRaceTitle(race), race.racks[race.racks.length - 1].gameLabel, formatReportGameTime(race.from) + " – " + formatReportGameTime(race.to), countPhrase("games", race.racks.length)].filter(Boolean).join(" · ");
       var result = document.createElement("span");
       result.className = "day-race-result";
-      var score = dayRaceScore(race);
-      result.textContent = race.end === "won" && race.winners.length
-        ? T("dayRaces.won", { names: race.winners.join(" & "), score: score })
-        : T(race.end === "stopped" ? "dayRaces.stopped" : onBoard ? "dayRaces.onBoard" : "dayRaces.notFinished", { score: score });
+      result.textContent = dayRaceResult(race, onBoard);
       text.appendChild(title);
       text.appendChild(result);
       li.appendChild(text);
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn btn-ghost day-race-reset";
-      btn.textContent = T("dayRaces.reset");
-      btn.setAttribute("aria-label", T("dayRaces.resetAria", { race: dayRaceTitle(race), from: formatReportGameTime(race.from), to: formatReportGameTime(race.to) }));
-      btn.addEventListener("click", function () { resetDayRace(race, dateStr); });
-      li.appendChild(btn);
+      var actions = document.createElement("div");
+      actions.className = "day-race-actions";
+      var words = { race: dayRaceTitle(race), from: formatReportGameTime(race.from), to: formatReportGameTime(race.to) };
+      var addButton = function (cls, label, aria, run) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-ghost " + cls;
+        btn.textContent = label;
+        btn.setAttribute("aria-label", aria);
+        btn.addEventListener("click", run);
+        actions.appendChild(btn);
+      };
+      if (i < races.length - 1) addButton("day-race-join", T("dayRaces.join"), T("dayRaces.joinAria", words), function () { joinDayRaces(race, races[i + 1]); });
+      if (race.racks.some(function (g) { return g.joined; })) addButton("day-race-split", T("dayRaces.split"), T("dayRaces.splitAria", words), function () { splitDayRace(race); });
+      addButton("day-race-reset", T("dayRaces.reset"), T("dayRaces.resetAria", words), function () { resetDayRace(race, dateStr); });
+      li.appendChild(actions);
       dayRacesList.appendChild(li);
+    });
+  }
+  function dayRaceResult(race, onBoard) {
+    var score = dayRaceScore(race);
+    return race.end === "won" && race.winners.length
+      ? T("dayRaces.won", { names: race.winners.join(" & "), score: score })
+      : T(race.end === "stopped" ? "dayRaces.stopped" : onBoard ? "dayRaces.onBoard" : "dayRaces.notFinished", { score: score });
+  }
+  // Every copy of a rack - the board's and each player's saved one - by its time
+  function eachRackCopy(tsSet, run) {
+    (state.gameHistory || []).forEach(function (g) { if (g && g.ts && tsSet[g.ts]) run(g); });
+    Object.keys(PLAYER_STATS).forEach(function (key) {
+      (PLAYER_STATS[key].sessions || []).forEach(function (sess) {
+        (sess.games || []).forEach(function (g) { if (g && g.ts && tsSet[g.ts]) run(g); });
+      });
+    });
+  }
+  // 🔗 Join with the next (2026-11-16, the user: "the race shows in 3 pieces, can I merge
+  // them?"): both races' racks get the same race (the first one's raceId); one race, one
+  // result - the later one's: the first one's end (its race win, or its stop) no longer
+  // counts. What each rack had is kept on it (joined), for ✂️ Undo the join. The board's own
+  // score isn't touched.
+  function joinDayRaces(first, second) {
+    var racks = first.racks.concat(second.racks).sort(function (a, b) { return a.ts < b.ts ? -1 : 1; });
+    var last = racks[racks.length - 1];
+    var piece = function (race) { return formatReportGameTime(race.from) + " – " + formatReportGameTime(race.to) + " (" + dayRaceResult(race, dayRaceOnBoard(race)) + ")"; };
+    var message = T("dayRaces.joinConfirm", { first: piece(first), second: piece(second), from: formatReportGameTime(racks[0].ts), to: formatReportGameTime(last.ts), games: countPhrase("games", racks.length) });
+    if (first.end) message += " " + T("dayRaces.joinDropsEnd", { time: formatReportGameTime(first.to), result: dayRaceResult(first, false) });
+    if (dayRaceOnBoard(second)) message += " " + T("dayRaces.joinOnBoard");
+    confirmModal(message + " " + T("dayRaces.joinUndoNote"), function () {
+      var id = racks[0].raceId || racks[0].ts;
+      var set = {};
+      racks.forEach(function (g) { set[g.ts] = true; });
+      eachRackCopy(set, function (g) {
+        if (!g.joined) g.joined = { raceId: g.raceId || null, wonRace: !!g.wonRace, raceInterrupted: g.raceInterrupted || null, raceCount: g.raceCount === undefined ? null : g.raceCount };
+        g.raceId = id;
+        if (g.ts !== last.ts) {
+          g.wonRace = false;
+          g.raceInterrupted = null;
+          g.raceCount = null;
+        }
+      });
+      savePlayerStatsToStorage(PLAYER_STATS);
+      saveState();
+      clearUndo();
+      renderAll();
+      renderDayRaces();
+      showToast(T("dayRaces.joined", { games: countPhrase("games", racks.length) }), "🔗 ");
+    });
+  }
+  // ✂️ Undo the join: every rack of the race back to what it had before it was joined
+  function splitDayRace(race) {
+    confirmModal(T("dayRaces.splitConfirm"), function () {
+      var set = {};
+      race.racks.forEach(function (g) { set[g.ts] = true; });
+      eachRackCopy(set, function (g) {
+        if (!g.joined) return;
+        var was = g.joined;
+        if (was.raceId) g.raceId = was.raceId;
+        else delete g.raceId;
+        g.wonRace = was.wonRace;
+        g.raceInterrupted = was.raceInterrupted;
+        g.raceCount = was.raceCount;
+        delete g.joined;
+      });
+      savePlayerStatsToStorage(PLAYER_STATS);
+      saveState();
+      clearUndo();
+      renderAll();
+      renderDayRaces();
+      showToast(T("dayRaces.splitDone"), "✂️ ");
     });
   }
   // ↺ Reset: the race's racks out of the live board and every player's log,
@@ -26144,6 +26221,8 @@
         scores: entry.scores || null,
         raceTally: entry.raceTally || null,
         raceId: entry.raceId || null,
+        // (🔗 joined by hand: what it had before - see joinDayRaces)
+        joined: entry.joined || undefined,
         mvpName: entry.mvpName,
         durationMs: entry.durationMs,
         wonRace: entry.wonRace,

@@ -8,6 +8,9 @@
 // - ↺ Reset on the stopped one, asked first: its 3 racks out of every player's games, their Q-Score
 //   changes taken back (Chris back to where he was, Bob by the same); the race won kept; the list
 //   shows one race; Recover Data has "Race reset - Race to 3, ..." - and Recover brings it all back;
+// - 🔗 Join with the next (2026-11-16: "the race shows in 3 pieces, can I merge them?"), asked
+//   first: one race of 7, the later one's result (⏹ Stopped · Bob 4 · Chris 2 · Luc 1), every copy of
+//   every rack the same race, Bob's race win no longer counted; ✂️ Undo the join puts both back;
 // - today, on the board (race to 3, Bob v Luc): each rack kept with its race (the first rack's
 //   time); the list says "▶ On the board now · Bob 1 – 1 Luc"; ↺ Reset: the board back to 0 - 0,
 //   the racks and their Q-Score changes gone;
@@ -170,6 +173,35 @@ function yesterday() {
     await sleep(500);
     const back = await stored();
     check("Recover brings the race back: its racks and Q-Scores", opened && JSON.stringify(tsOf(back.stats)) === JSON.stringify(y.racks.map((r) => r.ts).sort()) && ratingOf(back.ratings).Chris === rb.Chris, { opened, ts: tsOf(back.stats), r: ratingOf(back.ratings) });
+
+    // 🔗 Join with the next ("the race shows in 3 pieces, can I merge them?"): the two as one race
+    await pickDay(y.day);
+    const press = async (cls, n) => {
+      await page.evaluate((cls, n) => { document.getElementById("day-races").scrollIntoView(); document.querySelectorAll("#day-races-list ." + cls)[n].click(); }, cls, n);
+      await sleep(300);
+      return page.evaluate(() => !document.getElementById("confirm-modal-overlay").classList.contains("hidden") && document.getElementById("confirm-modal-message").textContent);
+    };
+    const buttons = await page.evaluate(() => [...document.querySelectorAll("#day-races-list .day-race")].map((li) => [...li.querySelectorAll("button")].map((b) => b.textContent)));
+    check("🔗 Join with the next on every race but the last: " + JSON.stringify(buttons), JSON.stringify(buttons) === JSON.stringify([["🔗 Join with the next", "↺ Reset"], ["↺ Reset"]]), buttons);
+    const askedJoin = await press("day-race-join", 0);
+    check("asked first: \"" + askedJoin + "\"", /^Join these two into one race\? .+ \(🏆 Bob won · Bob 3 – 1 Luc\), then .+ \(⏹ Stopped · Chris 2 – 1 Bob\)\. One race, .+ \(7 games\), with the later one's result\. The first one's end at .+ \(🏆 Bob won · Bob 3 – 1 Luc\) no longer counts - one race, one result\. ✂️ Undo the join puts them back\.$/.test(askedJoin || ""), askedJoin);
+    await okModal();
+    list = await races();
+    const j = await stored();
+    const copies = (st, ts) => { const out = []; Object.keys(st.stats).forEach((n) => (st.stats[n].sessions || []).forEach((x) => (x.games || []).forEach((g) => { if (g.ts === ts) out.push(g); }))); return out; };
+    const allJoined = y.racks.every((r) => copies(j, r.ts).every((g) => g.raceId === y.racks[0].ts && g.joined));
+    const winGone = copies(j, y.racks[3].ts).every((g) => g.wonRace === false && g.joined.wonRace === true);
+    check("joined: one race - \"" + (list.rows[0] && list.rows[0].result) + "\", " + (list.rows[0] && list.rows[0].title) + "; every copy of every rack the same race, Bob's race win at 9:40 no longer counted (kept for undo)",
+      list.rows.length === 1 && list.rows[0].result === "⏹ Stopped · Bob 4 · Chris 2 · Luc 1" && /· 7 games$/.test(list.rows[0].title) && allJoined && winGone, { list, allJoined, winGone });
+    const splitBtn = await page.evaluate(() => [...document.querySelectorAll("#day-races-list button")].map((b) => b.textContent));
+    check("the joined race has ✂️ Undo the join", JSON.stringify(splitBtn) === JSON.stringify(["✂️ Undo the join", "↺ Reset"]), splitBtn);
+    const askedSplit = await press("day-race-split", 0);
+    await okModal();
+    list = await races();
+    const u = await stored();
+    check("✂️ Undo the join (\"" + askedSplit + "\"): the two races back as recorded, Bob's race win counted again",
+      /^Undo the join\?/.test(askedSplit || "") && list.rows.length === 2 && list.rows[0].result === "🏆 Bob won · Bob 3 – 1 Luc" && list.rows[1].result === "⏹ Stopped · Chris 2 – 1 Bob" &&
+      y.racks.every((r) => copies(u, r.ts).every((g) => !g.joined && !g.raceId)) && copies(u, y.racks[3].ts).every((g) => g.wonRace === true), list);
 
     // today, on the board
     const voice = async (list) => { for (const t of list) { await page.evaluate((t) => window.PMCVoice.handleText(t), t); await sleep(450); } };

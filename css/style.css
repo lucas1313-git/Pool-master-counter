@@ -1910,7 +1910,13 @@ input.field-invalid {
 .day-race.is-on-board {
   border-color: var(--accent);
 }
-.day-race-reset {
+.day-race-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.day-race-actions .btn {
   min-height: 44px;
 }
 

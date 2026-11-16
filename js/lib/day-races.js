@@ -5,8 +5,11 @@
 // which racks, the race to, how it ended (won, ⏹ stopped, or never finished), the score.
 // A rack saved since then carries its race (raceId - see currentRaceId in js/app.js): exact. An
 // older one is placed by the score kept with it (raceTally: each seated player's wins in the race
-// just after it): it goes on the race its score follows on from; a race ends at its winning (or
-// stopped) rack; a rack of open play (no race) ends any race still going.
+// just after it): it goes on the race its score follows on from; one whose score can't be a race's
+// first rack (someone already past 0 but the winner at 1) never starts one - a rack edited or
+// deleted since left the scores after it out of step, and that was still the same race; a race
+// ends at its winning (or stopped) rack; a rack of open play (no race) ends any race still going.
+// Pieces still apart: joined by hand (🔗 - the same raceId written on all their racks).
 // Pure: no page, no storage - js/app.js calls it through PMCLib.dayRaces, the unit tests in Node.
 (function (root) {
   "use strict";
@@ -28,6 +31,17 @@
       if (t[n] !== (before || 0) + (winners.indexOf(k) !== -1 ? 1 : 0)) ok = false;
     });
     return ok ? (known ? 2 : 1) : 0;
+  }
+  // A race's first rack: the winners at 1, everyone else at 0 (no score kept: can't tell - yes)
+  function couldStart(g) {
+    var t = g.raceTally;
+    if (!t || typeof t !== "object") return true;
+    var winners = (g.winnerNames || []).map(key);
+    return Object.keys(t).every(function (n) { return t[n] === (winners.indexOf(key(n)) !== -1 ? 1 : 0); });
+  }
+  // how many of the rack's players have played the race
+  function knownIn(last, g) {
+    return Object.keys(g.raceTally || {}).filter(function (n) { return last[key(n)] !== undefined; }).length;
   }
   function note(race, g) {
     race.racks.push(g);
@@ -90,6 +104,11 @@
         var newest = open[open.length - 1];
         if (newest && (newest.raceTo === g.raceTarget || !g.raceTarget)) into = newest;
       }
+      // (a score that can't start a race: the race going on it has most players of - the newest)
+      if (!into && open.length && !couldStart(g)) {
+        into = open[open.length - 1];
+        open.forEach(function (r) { if (knownIn(r.last, g) > knownIn(into.last, g)) into = r; });
+      }
       if (!into) {
         into = { racks: [], last: {}, raceTo: null, end: null, closed: false };
         open.push(into);
@@ -121,8 +140,9 @@
         timedMinutes: lastRack.timedSession ? lastRack.timedMinutes || null : null,
         from: r.racks[0].ts,
         to: lastRack.ts,
-        end: r.end,
-        winners: r.end && lastRack.wonRace ? (lastRack.winnerNames || []).slice() : [],
+        // (how its last rack left it - a race joined by hand ends where the later piece did)
+        end: endOf(lastRack),
+        winners: endOf(lastRack) && lastRack.wonRace ? (lastRack.winnerNames || []).slice() : [],
         sides: Object.keys(sides).map(function (k) { return sides[k]; }).sort(function (x, y) { return y.wins - x.wins || (x.firstSeen < y.firstSeen ? -1 : 1); }).map(function (s) { return { names: s.names, wins: s.wins }; })
       };
     });

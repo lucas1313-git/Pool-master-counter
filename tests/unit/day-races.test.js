@@ -161,3 +161,35 @@ test("nothing, or nothing raced", () => {
   n.rack("Bob", "Luc", { race: 1 });
   assert.deepEqual(R.races(n.racks), []);
 });
+
+test("a rack edited since (✏️ another winner) or deleted (🗑): the scores after it out of step - still one race", () => {
+  const n = night();
+  n.rack("Bob", "Chris");
+  const edited = n.rack("Bob", "Chris");
+  n.rack("Chris", "Bob");
+  n.rack("Bob", "Chris");
+  // ✏️ the second rack given to Chris afterwards: its winner changed, its score as it was
+  edited.winnerNames = ["Chris"];
+  edited.opponentNames = ["Bob"];
+  const n2 = night();
+  n2.rack("Luc", "Bob");
+  n2.rack("Luc", "Bob");
+  n2.rack("Luc", "Bob");
+  n2.rack("Bob", "Luc");
+  n2.racks.splice(1, 1); // (🗑 the second)
+  assert.deepEqual(R.races(n.racks).map((r) => r.racks.length), [4]);
+  assert.deepEqual(R.races(n2.racks).map((r) => r.racks.length), [3]);
+});
+
+test("🔗 joined by hand (the same raceId on all their racks, the first piece's end cleared): one race, the later piece's result", () => {
+  const n = night();
+  n.rack("Bob", "Chris");
+  n.rack("Bob", "Chris", { race: 2, won: true });
+  n.rack("Luc", "Bob", { fresh: true });
+  n.rack("Luc", "Bob", { stopped: true });
+  assert.deepEqual(shape(R.races(n.racks)), [{ n: 2, end: "won", winners: "Bob" }, { n: 2, end: "stopped", winners: "" }]);
+  n.racks.forEach((g, i) => { g.raceId = n.racks[0].ts; if (i < 3) { g.wonRace = false; g.raceInterrupted = null; } });
+  const one = R.races(n.racks);
+  assert.deepEqual(shape(one), [{ n: 4, end: "stopped", winners: "" }]);
+  assert.deepEqual(one[0].sides, [{ names: ["Bob"], wins: 2 }, { names: ["Luc"], wins: 2 }, { names: ["Chris"], wins: 0 }]);
+});
