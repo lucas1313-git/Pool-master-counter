@@ -140,7 +140,7 @@
       return {
         endMs: endMs, startMs: typeof g.durationMs === "number" && g.durationMs > 0 ? endMs - g.durationMs : null,
         mode: isTeam ? "teams" : sides.length > 2 ? "freeForAll" : "individual", rotatingTeams: !!g.rotatingTeams, sidesMerged: merged,
-        gameType: g.gameType || null, game: g.gameLabel || g.gameType || "", target: g.target || null,
+        gameType: g.gameType || null, game: g.gameLabel || g.gameType || "", target: g.target || null, unit: g.unit || null,
         raceTarget: g.raceTarget > 1 ? g.raceTarget : null, endsRace: !!(g.wonRace || g.raceInterrupted), interrupted: !!g.raceInterrupted,
         raceTally: g.raceTally || null, names: sideNames, sides: sides, keys: sides.map(sideKey),
         points: hasPoints ? sideNames.map(function (names) { return names.reduce(function (t, n) { return t + (typeof g.scores[n] === "number" ? g.scores[n] : 0); }, 0); }) : null,
@@ -228,7 +228,9 @@
         tournament: !!first.tournamentId, sidesMerged: first.sidesMerged,
         changes: changes,
         racks: m.racks.map(function (rk) {
-          return { endedAt: localIso(rk.endMs), durationMs: rk.startMs === null ? null : rk.endMs - rk.startMs, winner: m.keys.indexOf(rk.keys[0]), points: rk.points, ballsLeft: rk.ballsLeft, skunk: rk.skunk };
+          // (raceTally: each seated player's wins in the race just after it, by name - the race score)
+          return { endedAt: localIso(rk.endMs), durationMs: rk.startMs === null ? null : rk.endMs - rk.startMs, winner: m.keys.indexOf(rk.keys[0]), points: rk.points, ballsLeft: rk.ballsLeft, skunk: rk.skunk,
+            unit: rk.unit, raceTarget: rk.raceTarget, raceTally: rk.raceTally, endsRace: rk.endsRace };
         })
       };
     });

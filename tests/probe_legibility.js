@@ -3,7 +3,7 @@
 //   7:1 (WCAG) and APCA Lc 75 against what they sit on (both ends of the card's gradient, and the
 //   shooter's tinted card too);
 // - score digits at least 130 CSS px tall (25 mm on an 11-inch iPad) with 4 players;
-// - no text under 14 px on the board; the label says RACKS, "2 / 5" in a race; a long name stays
+// - no text under 14 px on the board; the label says RACE, "2 / 5" in a race; a long name stays
 //   on one line;
 // - Practice (not saved): asked before it goes on (No leaves it off), then PRACTICE · NOT SAVED
 //   stays on the board; on the full page the switch is in Current Session, not above the board;
@@ -152,7 +152,7 @@ function measureContrast() {
   });
   check("...no text under 14 px on the board", small.length === 0, small);
   const label = await page.evaluate(() => ({ label: document.querySelector("#scoreboard .stat-label").textContent, value: document.querySelector("#scoreboard .stat-value").textContent.replace(/\s+/g, " ").trim() }));
-  check("...the label says RACKS, the count \"2 / 5\" in a race", /^racks$/i.test(label.label) && label.value === "2 / 5", label);
+  check("...the label says RACE, the count \"2 / 5\" in a race", /^race$/i.test(label.label) && label.value === "2 / 5", label);
   if (OUT) await page.screenshot({ path: path.join(OUT, "legible_four.png") });
   await open(board({ longName: true }));
   const name = await page.evaluate(() => { const n = document.querySelector("#scoreboard .player-name"); return { lines: Math.round(n.getBoundingClientRect().height / parseFloat(getComputedStyle(n).lineHeight || getComputedStyle(n).fontSize)), h: Math.round(n.getBoundingClientRect().height), lh: getComputedStyle(n).lineHeight, clamp: getComputedStyle(n).webkitLineClamp }; });

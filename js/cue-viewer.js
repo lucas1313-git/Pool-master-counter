@@ -204,7 +204,8 @@
       '<input type="search" class="cv-search" placeholder="Find a cue - player, game, date...">' +
       '<div class="cv-group"><label><input type="checkbox" class="cv-pick-all"> All</label><span class="dim cv-picked">none checked</span>' +
       '<button class="cv-group-del" data-g="delete" disabled>🗑 Delete</button><button data-g="export" disabled title="Cut each one out and download it">⬇ Export</button>' +
-      '<button data-g="keep" disabled title="Cut out and kept for good - not cleaned up, not deleted with its recording">📌 Save (keep forever)</button><button data-g="share" disabled title="This computer\'s share menu">📤 Share</button></div>' +
+      '<button data-g="keep" disabled title="Cut out and kept for good - not cleaned up, not deleted with its recording">📌 Save (keep forever)</button><button data-g="share" disabled title="This computer\'s share menu">📤 Share</button>' +
+      '<button data-g="one" disabled title="' + esc(tr("rec.oneVideoTitle", "The checked clips joined into one video, in the order they happened, each with its caption: who plays who, the race score (a points game: the points), the time")) + '">' + esc(tr("rec.oneVideo", "🎞 One video")) + "</button></div>" +
       '<div class="cv-filter" hidden></div>' +
       '<table><tbody class="cv-rows"></tbody></table>' +
       (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b><div class="cv-sess dim">Loading...</div></div>' +
@@ -723,6 +724,12 @@
         return { gameHistory: Array.isArray(history) ? history : [], playerStats: ps || {} };
       });
     }
+    // a winning shot still named as before the race score and the time were in it: "winning shot
+    // Bob vs Luc-8-Ball-1-0" - its score (position) last (" (2)" after it allowed)
+    function oldWinName(c) {
+      var base = String(c.name || "").replace(/ \(\d+\)$/, ""), score = String(c.position || "");
+      return c.source === "winning shot" && base.indexOf("winning shot ") === 0 && !!score && base.slice(-(score.length + 1)) === "-" + score;
+    }
     // 🏆 every game won during recording `id`: a cue each (25 s before the win was entered to 5 s
     // after), cut into the Clips folder - the ones already made kept, not made twice
     var winsBusy = false;
@@ -745,12 +752,28 @@
         var wins = W.between(src, sp.start, sp.end).filter(function (w) { var at = locate(w.at, s.id); return at && at.session.id === s.id; });
         if (!wins.length) return done(tr("rec.winNone", "🏆 No game was won on this computer's scoreboard while this recording ran."));
         var mine = function () { return cues.filter(function (c) { return c.kind === "win" && c.session === s.id; }); };
-        var fresh = wins.filter(function (w) { return !mine().some(function (c) { return Math.abs((c.winAt || 0) - w.at) < 2000; }); });
+        var theCue = function (w) { return mine().filter(function (c) { return Math.abs((c.winAt || 0) - w.at) < 2000; })[0]; };
+        var fresh = wins.filter(function (w) { return !theCue(w); });
         // (one name each: the same score in another match of the same two gets " (2)")
         var taken = {};
         cues.forEach(function (c) { taken[c.name] = true; });
         var made = [];
-        return fresh.reduce(function (chain, w) {
+        // ones made before their names had the race score and the time ("...-8-Ball-1-0"): named
+        // again, their clips with them - a name changed by hand stays
+        var stale = wins.filter(function (w) { var c = theCue(w); return c && oldWinName(c) && c.name !== w.name; }), renamed = 0;
+        var said = function (text) { return renamed ? tr("rec.winRenamed", "🏆 {{n}} winning shots named again, with the race score and the time.", { n: renamed }) + " " + text : text; };
+        return stale.reduce(function (chain, w) {
+          return chain.then(function () {
+            var c = theCue(w), name = w.name, n = 2;
+            delete taken[c.name];
+            while (taken[name]) name = w.name + " (" + n++ + ")";
+            taken[name] = true;
+            return api("/api/rec/cues/" + encodeURIComponent(c.id), { name: name, position: w.score, clipFollows: true }, "PATCH").then(function (saved) {
+              cues[cues.indexOf(c)] = saved;
+              renamed++;
+            });
+          });
+        }, Promise.resolve()).then(function () { return fresh.reduce(function (chain, w) {
           return chain.then(function () {
             var name = w.name, n = 2;
             while (taken[name]) name = w.name + " (" + n++ + ")";
@@ -760,10 +783,10 @@
               player: w.winners.join("+"), opponent: w.losers.map(function (names) { return names.join("+"); }).join("+"), matchup: who.join(" v "), gameType: w.gameType, gameLabel: w.game, position: w.score, source: "winning shot", session: s.id };
             return api("/api/rec/cues", c).then(function (savedCue) { cues.unshift(savedCue); made.push(savedCue); });
           });
-        }, Promise.resolve()).then(function () {
+        }, Promise.resolve()); }).then(function () {
           var todo = mine().filter(function (c) { return !c.clip; }), total = mine().length;
-          if (!todo.length) return done(made.length ? tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: folder + "/Clips" }) : tr("rec.winAllWhere", "🏆 This recording's {{n}} winning shots are already in the list (in green), and in {{folder}}.", { n: total, folder: folder + "/Clips" }), true);
-          if (!ffmpeg) return done(tr("rec.winNoFfmpeg", "🏆 {{n}} winning shots added to the list (in green) - cutting the clips needs ffmpeg on the computer.", { n: total }), true);
+          if (!todo.length) return done(said(made.length ? tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: folder + "/Clips" }) : tr("rec.winAllWhere", "🏆 This recording's {{n}} winning shots are already in the list (in green), and in {{folder}}.", { n: total, folder: folder + "/Clips" })), true);
+          if (!ffmpeg) return done(said(tr("rec.winNoFfmpeg", "🏆 {{n}} winning shots added to the list (in green) - cutting the clips needs ffmpeg on the computer.", { n: total })), true);
           var i = 0, where = folder + "/Clips";
           return todo.reduce(function (chain, c) {
             return chain.then(function () {
@@ -771,7 +794,7 @@
               return api("/api/rec/cues/" + encodeURIComponent(c.id) + "/clip", {}, "POST").then(function (r) { c.clip = r.file; if (r.folder) where = r.folder; renderRows(); });
             });
           }, Promise.resolve()).then(function () {
-            return done(tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: where }), true);
+            return done(said(tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: where })), true);
           });
         });
       }).catch(function (err) { done(tr("rec.winFailed", "🏆 Couldn't make the winning shots: {{error}}", { error: err.message })); });
@@ -817,7 +840,7 @@
       if (!winsDay) { bar.innerHTML = ""; return; }
       var day = new Date(winsDay + "T12:00:00");
       var dayText = day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-      bar.innerHTML = "<span>" + esc(tr("rec.winDayShown", "🏆 {{day}}: the day's {{n}} winning shots, in the order they were won. ☑ All, then ⬇ Export or 📤 Share, takes them all.", { day: dayText, n: count })) + '</span><button class="cv-filter-off">' + esc(tr("rec.winDayOff", "✕ Show every cue")) + "</button>";
+      bar.innerHTML = "<span>" + esc(tr("rec.winDayShown", "🏆 {{day}}: the day's {{n}} winning shots, in the order they were won. ☑ All, then ⬇ Export, 📤 Share or 🎞 One video (all of them in one, with captions) takes them all.", { day: dayText, n: count })) + '</span><button class="cv-filter-off">' + esc(tr("rec.winDayOff", "✕ Show every cue")) + "</button>";
     }
     function renderRows() {
       var list = shownCues();
@@ -851,7 +874,7 @@
     });
     q(".cv-search").addEventListener("input", renderRows);
 
-    // ---- ☑ the checked cues, together: delete, export, save (keep forever), share ----
+    // ---- ☑ the checked cues, together: delete, export, save (keep forever), share, one video ----
     var picked = {}; // id -> true
     var shareReady = null; // the files made for 📤 Share - a second click shares them (from the click itself)
     function pickedCues() { return cues.filter(function (c) { return picked[c.id]; }); }
@@ -860,7 +883,7 @@
       q(".cv-picked").textContent = list.length ? list.length + " checked" : "none checked";
       root.querySelectorAll(".cv-group button").forEach(function (b) {
         var g = b.getAttribute("data-g");
-        b.disabled = !list.length || (g !== "delete" && !clips.length) || ((g === "export" || g === "keep" || g === "share") && !ffmpeg);
+        b.disabled = !list.length || (g !== "delete" && !clips.length) || ((g === "export" || g === "keep" || g === "share" || g === "one") && !ffmpeg) || (g === "one" && oneBusy);
       });
       var all = q(".cv-pick-all"), shown = shownCues();
       all.checked = !!shown.length && shown.every(function (c) { return picked[c.id]; });
@@ -899,8 +922,74 @@
       });
     }
     function downloadClip(file) {
+      downloadFrom("/api/rec/clips/" + encodeURIComponent(file), file);
+    }
+    // 🎞 One video: the checked clips joined into one, in the order they happened, each with its
+    // caption - who plays who, the race score (a points game: its points), the game, the race to,
+    // the time - nothing left to edit (2026-11-16, the user: "export all selected as one video,
+    // merging all the selected clips into one, so i don't have to edit them. I also need to have a
+    // caption, saying who is playing with who and the race to score. if it is a point game the
+    // point score"). server/reel.js cuts and joins them (16:9, with the sound), kept in
+    // Highlights and downloaded; the captions are drawn here (js/lib/score-bug.js).
+    var oneBusy = false;
+    function sidesText(sides) {
+      var who = function (sd) { return sd.names.join(" & "); };
+      if (sides.length === 2) return who(sides[0]) + "  " + sides[0].value + " – " + sides[1].value + "  " + who(sides[1]);
+      return sides.map(function (sd) { return who(sd) + " " + sd.value; }).join(" · ");
+    }
+    // a cue's caption { top, bottom }, from the scoreboard's games (src)
+    function captionFor(c, src) {
+      var W = window.PMCLib.winningShots, at = c.kind === "win" && c.winAt ? c.winAt : c.startedAt;
+      var time = new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      var raceTo = function (n) { return n > 1 ? tr("rec.capRaceTo", "Race to {{n}}", { n: n }) : ""; };
+      // 🏆 a winning shot: the score once it was won
+      if (c.kind === "win" && c.winAt) {
+        var w = W.between(src, c.winAt - 2000, c.winAt + 2000).sort(function (x, y) { return Math.abs(x.at - c.winAt) - Math.abs(y.at - c.winAt); })[0];
+        if (w) return { top: sidesText(w.sides), bottom: [w.game, raceTo(w.raceTo), time].filter(Boolean).join(" · ") };
+      }
+      // a cue: who's on it, and the race as it stood then
+      var who = c.player ? [c.player].concat(c.opponent ? [c.opponent] : []) : String(c.matchup || "").split(/-vs-| v /).filter(Boolean);
+      var race = W.scoreAt(src, at), points = !race || race.unit === "points" || race.unit === "balls";
+      var sides = who.map(function (side) {
+        var names = side.split(/\s*[+&]\s*/).filter(Boolean);
+        var wins = names.map(function (n) { return race && race.wins[n.replace(/\s+/g, " ").trim().toLowerCase()]; });
+        return { names: names, value: wins.every(function (v) { return v === wins[0]; }) ? wins[0] || 0 : null };
+      });
+      var scored = !points && sides.length > 1 && sides.every(function (sd) { return sd.value !== null; });
+      return {
+        top: scored ? sidesText(sides) : who.join(" vs ") || tr("rec.capTable", "The table"),
+        bottom: [c.gameLabel, scored ? raceTo(race.raceTo) : c.kind === "win" ? c.position : "", time].filter(Boolean).join(" · ")
+      };
+    }
+    function oneVideo() {
+      var list = pickedCues().filter(function (c) { return c.kind !== "game" && c.endedAt; }).sort(function (a, b) { return a.startedAt - b.startedAt; });
+      var W = window.PMCLib && window.PMCLib.winningShots, B = window.PMCLib && window.PMCLib.scoreBug;
+      if (!list.length || !W || !B || oneBusy) return;
+      oneBusy = true;
+      renderGroup();
+      var secs = list.reduce(function (t, c) { return t + (c.endedAt - c.startedAt) / 1000; }, 0);
+      status(tr("rec.oneMaking", "🎞 Making one video of {{n}} clips ({{len}}), each with its caption - a few minutes...", { n: list.length, len: len(secs * 1000) }));
+      var first = W.stamp(list[0].startedAt), last = W.stamp(list[list.length - 1].startedAt);
+      var name = (list.every(function (c) { return c.kind === "win"; }) ? "Winning shots " : "Cues ") + first.slice(0, 10) + " " + first.slice(11, 16) + "-" + last.slice(11, 16);
+      var w = B.width("16:9", 1920);
+      scoreboardGames().then(function (src) {
+        var body = { clips: list.map(function (c) { return { from: c.startedAt, to: c.endedAt, bug: B.png(captionFor(c, src), w) }; }), aspect: "16:9", sound: true, name: name };
+        return api("/api/rec/reel", body);
+      }).then(function (r) {
+        oneBusy = false;
+        renderGroup();
+        downloadFrom("/api/rec/highlights/" + encodeURIComponent(r.file), r.file);
+        status(tr("rec.oneDone", "🎞 One video: {{n}} clips, {{len}}, each with its caption - downloaded, and kept in {{folder}} ({{file}}).", { n: r.clips, len: len(r.seconds * 1000), folder: r.folder, file: r.file }) +
+          (r.skipped && r.skipped.length ? " " + tr("rec.oneSkipped", "{{n}} left out - no recording covers them.", { n: r.skipped.length }) : ""));
+      }).catch(function (err) {
+        oneBusy = false;
+        renderGroup();
+        status(tr("rec.oneFailed", "🎞 Couldn't make the video: {{error}}", { error: err.message }));
+      });
+    }
+    function downloadFrom(href, file) {
       var a = document.createElement("a");
-      a.href = "/api/rec/clips/" + encodeURIComponent(file);
+      a.href = href;
       a.download = file;
       document.body.appendChild(a); a.click(); a.remove();
     }
@@ -908,6 +997,7 @@
       var b = e.target.closest("button[data-g]");
       if (!b || b.disabled) return;
       var g = b.getAttribute("data-g");
+      if (g === "one") return oneVideo();
       if (g === "delete") {
         if (!askSure("group", "picked")) return;
         var ids = Object.keys(picked);

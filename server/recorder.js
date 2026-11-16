@@ -597,7 +597,16 @@ function attachRecorderRoutes(app) {
     readBody(req, function (b) {
       var cues = loadCues(), cue = cues.filter(function (c) { return c.id === req.params.cue; })[0];
       if (!cue || !b) return sendJson(res, 404, { error: "no such cue" });
+      var was = cue.name;
       pickCue(b, cue);
+      // (clipFollows: its clip in Clips/ renamed with it - 🏆 a winning shot named again, with
+      // its race score and time - unless a clip has that name already)
+      if (b.clipFollows === true && cue.clip && cue.name !== was) {
+        var from = path.join(clipsDir(), cue.clip), to = safeFileName(cue.name) + ".mp4";
+        try {
+          if (fs.existsSync(from) && !fs.existsSync(path.join(clipsDir(), to))) { fs.renameSync(from, path.join(clipsDir(), to)); cue.clip = to; }
+        } catch (e) {}
+      }
       saveCues(cues);
       sendJson(res, 200, cue);
     });
@@ -644,7 +653,8 @@ function attachRecorderRoutes(app) {
 
 // body: { clips: [{ from, to, bug: "data:image/png;base64,..." }], aspect, sound, name }
 function buildHighlightReel(body, cb) {
-  var clips = body.clips.slice(0, 40).map(function (c) {
+  // (up to 200: 🎞 One video of a night's checked cues - js/cue-viewer.js)
+  var clips = body.clips.slice(0, 200).map(function (c) {
     var m = /^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/.exec(String((c && c.bug) || ""));
     return { from: Number(c && c.from), to: Number(c && c.to), bug: m ? Buffer.from(m[1], "base64") : null };
   }).filter(function (c) { return c.from > 0 && c.to > c.from && c.to - c.from <= 120000; });

@@ -5,10 +5,14 @@
 // a race to 2, Luc v Bob: the first rack saved in the players' game logs (Luc, 40 s in), the other
 // two still in the open session (Bob 100 s in - across the two files - and Luc 170 s in), and a
 // game before the recording; a second recording with no game in it:
-// - 🏆 Winning shots on the recording: the three games, named "winning shot Luc vs Bob-8-Ball-1-0",
-//   "winning shot Bob vs Luc-8-Ball-1-1", "winning shot Luc vs Bob-8-Ball-2-1", each cut into
-//   Clips/ under that name, 30 s long (25 s before the win to 5 s after); the game before the
-//   recording not among them;
+// a race to 4 begun before the recording (Luc 2 - 2 Bob), each rack kept with the race score:
+// - 🏆 Winning shots on the recording: the three games, named with the race score and the time
+//   (2026-11-16: "the winning shot names all say 1-0, use the race score ... I need to have the
+//   time in the clips") "winning shot Luc vs Bob-8-Ball-3-2-<date>-<time>", "...Bob vs
+//   Luc-8-Ball-3-3-...", "...Luc vs Bob-8-Ball-4-3-...", each cut into Clips/ under that name, 30 s
+//   long (25 s before the win to 5 s after); the game before the recording not among them; the
+//   first one already there under its old name ("...-8-Ball-1-0", its clip cut): named again, its
+//   clip renamed with it, not made twice;
 // - green: their rows' names and ⬇ links, their marks on the recording's timeline; the legend;
 // - then the list is that day's winning shots, all of them, in the order won ("🏆 <day>: the day's 3
 //   winning shots..."); ✕ Show every cue: every cue again (14 hand cues besides);
@@ -16,6 +20,10 @@
 // - the recording page's short list (compact): its newest 12 of 17 cues, "Show all 17" - none of
 //   them a winning shot; 🏆 there: the day's 3 winning shots, all of them (2026-11-16, the user saw
 //   only the last race's 5 of 31); ☑ All checks those 3;
+// - 🎞 One video of the 3 winning shots and a cue of Luc's: one video in Highlights, 95 s, the four
+//   in the order they happened, each with its caption - "Luc  3 – 2  Bob" / "8-Ball · Race to 4 ·
+//   <time>", the cue "Luc  3 – 3  Bob" (the race as it stood then); a frame of it in the
+//   screenshots;
 // - the recording with no game: "No game was won...";
 // - record.html loads it too; no page errors.
 // usage: node tests/probe_winning_shots.js [screenshot dir]
@@ -57,8 +65,8 @@ const GREEN = "rgb(79, 209, 139)";
   fs.writeFileSync(path.join(ROOT, emptyId, "session.json"), JSON.stringify({ id: emptyId, startedAt: e0, endedAt: e0 + 90000, mime: "video/mp4", ext: "mp4", parts: [{ n: 1, file: "part-001.mp4", startedAt: e0, endedAt: e0 + 90000 }] }));
 
   // the scoreboard's games: a race to 2, Luc v Bob
-  const game = (at, w, l, o) => Object.assign({ ts: new Date(at).toISOString(), gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", winnerNames: [w], opponentNames: [l], isTeam: false, raceTarget: 2, wonRace: false, scores: null }, o || {});
-  const g1 = game(s0 + 40000, "Luc", "Bob"), g2 = game(s0 + 100000, "Bob", "Luc"), g3 = game(s0 + 170000, "Luc", "Bob", { wonRace: true });
+  const game = (at, w, l, o) => Object.assign({ ts: new Date(at).toISOString(), gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", winnerNames: [w], opponentNames: [l], isTeam: false, raceTarget: 4, wonRace: false, scores: null }, o || {});
+  const g1 = game(s0 + 40000, "Luc", "Bob", { raceTally: { Luc: 3, Bob: 2 } }), g2 = game(s0 + 100000, "Bob", "Luc", { raceTally: { Bob: 3, Luc: 3 } }), g3 = game(s0 + 170000, "Luc", "Bob", { wonRace: true, raceTally: { Luc: 4, Bob: 3 } });
   const before = game(s0 - 600000, "Kim", "Jo", { gameLabel: "9-Ball", gameType: "9ball", raceTarget: 1 });
   // (the first rack and the game before: in the players' saved game logs - each player's own copy)
   const copy = (g, me) => Object.assign({}, g, { result: g.winnerNames[0] === me ? "won" : "lost", opponentNames: g.winnerNames[0] === me ? g.opponentNames : g.winnerNames, teammateNames: [] });
@@ -69,15 +77,24 @@ const GREEN = "rgb(79, 209, 139)";
   };
   const server = spawn(process.execPath, [path.join(__dirname, "..", "server", "server.js")], { env: Object.assign({}, process.env, { HOME, PORT: String(PORT) }), stdio: "ignore" });
   for (let i = 0; i < 40; i++) { try { if ((await fetch(BASE + "manifest.json")).ok) break; } catch (e) {} await sleep(250); }
-  // 14 cues marked by hand near the end of the recording - newer than every winning shot
+  // 14 cues marked by hand near the end of the recording - newer than every winning shot (the
+  // first one Luc's, against Bob)
   for (let i = 0; i < 14; i++) {
-    await fetch(BASE + "api/rec/cues", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "hand " + (i + 1), startedAt: s0 + 150000 + i * 1000, endedAt: s0 + 155000 + i * 1000, session: id }) });
+    await fetch(BASE + "api/rec/cues", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ name: "hand " + (i + 1), startedAt: s0 + 150000 + i * 1000, endedAt: s0 + 155000 + i * 1000, session: id }, i ? {} : { player: "Luc", opponent: "Bob", gameLabel: "8-Ball", gameType: "8ball" })) });
   }
+  // the first winning shot made before (its old name, the match's "1-0"), its clip cut
+  const stamp = (t) => { const d = new Date(t); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + "-" + pad2(d.getHours()) + "h" + pad2(d.getMinutes()) + "m" + pad2(d.getSeconds()); };
+  const g1at = Date.parse(g1.ts), oldName = "winning shot Luc vs Bob-8-Ball-1-0";
+  const old = await (await fetch(BASE + "api/rec/cues", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "win", winAt: g1at, name: oldName, customName: true, startedAt: g1at - 25000, markedAt: g1at, endedAt: g1at + 5000, duration: 30000, player: "Luc", opponent: "Bob", matchup: "Luc v Bob", gameType: "8ball", gameLabel: "8-Ball", position: "1-0", source: "winning shot", session: id }) })).json();
+  await fetch(BASE + "api/rec/cues/" + old.id + "/clip", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const oldClip = path.join(ROOT, "Clips", oldName + ".mp4"), hadOld = fs.existsSync(oldClip);
   const browser = await puppeteer.launch({ executablePath: EXE, headless: "new", defaultViewport: { width: 1200, height: 1000 } });
   const errors = [];
   try {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push("cues: " + e.message));
+    // (the captions' words, as drawn)
+    await page.evaluateOnNewDocument(() => { window.__drawn = []; const f = CanvasRenderingContext2D.prototype.fillText; CanvasRenderingContext2D.prototype.fillText = function (t) { window.__drawn.push(String(t)); return f.apply(this, arguments); }; });
     await page.goto(BASE + "manifest.json");
     await page.evaluate((st, ps) => {
       localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify({ players: [], gameHistory: st }));
@@ -98,11 +115,12 @@ const GREEN = "rgb(79, 209, 139)";
     check("the recording has \"" + (button && button.text) + "\" (green)", button && button.text === "🏆 Winning shots" && /winning shot \[player\] vs \[player\]-\[game\]-\[score\]/.test(button.title) && button.color === GREEN, button);
 
     const said = await press(id);
-    check("🏆 pressed: \"" + said + "\"", /^🏆 3 winning shots, 30 s each - green in the list, and in .*Clips\.$/.test(said), said);
+    check("🏆 pressed: \"" + said + "\"", /^🏆 1 winning shots named again, with the race score and the time\. 🏆 3 winning shots, 30 s each - green in the list, and in .*Clips\.$/.test(said), said);
     const cues = (await (await fetch(BASE + "api/rec/cues")).json()).cues.filter((c) => c.kind === "win").sort((a, b) => a.winAt - b.winAt);
-    const want = ["winning shot Luc vs Bob-8-Ball-1-0", "winning shot Bob vs Luc-8-Ball-1-1", "winning shot Luc vs Bob-8-Ball-2-1"];
-    check("three winning shots, the game before the recording not among them: " + cues.map((c) => c.name).join(" | "), JSON.stringify(cues.map((c) => c.name)) === JSON.stringify(want), cues);
     const wins = [g1, g2, g3].map((g) => Date.parse(g.ts));
+    const want = ["winning shot Luc vs Bob-8-Ball-3-2-", "winning shot Bob vs Luc-8-Ball-3-3-", "winning shot Luc vs Bob-8-Ball-4-3-"].map((n, i) => n + stamp(wins[i]));
+    check("three winning shots, with the race score and the time, the game before the recording not among them: " + cues.map((c) => c.name).join(" | "), JSON.stringify(cues.map((c) => c.name)) === JSON.stringify(want) && cues.map((c) => c.position).join(" ") === "3-2 3-3 4-3", cues);
+    check("the one made before: named again (not made twice), its clip renamed with it", hadOld && cues[0].id === old.id && cues[0].clip === want[0] + ".mp4" && !fs.existsSync(oldClip) && fs.existsSync(path.join(ROOT, "Clips", want[0] + ".mp4")), { hadOld, first: cues[0], oldStill: fs.existsSync(oldClip) });
     check("each from 25 s before its win to 5 s after, in this recording", cues.length === 3 && cues.every((c, i) => c.winAt === wins[i] && c.startedAt === wins[i] - 25000 && c.endedAt === wins[i] + 5000 && c.session === id && c.clip === want[i] + ".mp4"), cues);
     const lengths = want.map((n) => { const f = path.join(ROOT, "Clips", n + ".mp4"); return fs.existsSync(f) ? +execFileSync(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]).toString().trim() : null; });
     check("cut into Clips/ under their names, 30 s each (" + lengths.map((x) => x && x.toFixed(1)).join(", ") + " s - the second across the two files)", lengths.every((x) => x !== null && Math.abs(x - 30) <= 1.5), lengths);
@@ -122,7 +140,7 @@ const GREEN = "rgb(79, 209, 139)";
 
     const listed = () => page.evaluate(() => ({ filter: document.querySelector(".cv-filter").hidden ? null : document.querySelector(".cv-filter span").textContent, rows: [...document.querySelectorAll(".cv-rows tr[data-id]")].map((r) => (r.classList.contains("win") ? "🏆 " : "") + r.querySelector("td.n").textContent) }));
     let shown = await listed();
-    check("then the list: the day's winning shots, all of them, in the order won - \"" + shown.filter + "\"", /^🏆 .+: the day's 3 winning shots, in the order they were won\. ☑ All, then ⬇ Export or 📤 Share, takes them all\.$/.test(shown.filter || "") && JSON.stringify(shown.rows) === JSON.stringify(want.map((n) => "🏆 " + n)), shown);
+    check("then the list: the day's winning shots, all of them, in the order won - \"" + shown.filter + "\"", /^🏆 .+: the day's 3 winning shots, in the order they were won\. ☑ All, then ⬇ Export, 📤 Share or 🎞 One video \(all of them in one, with captions\) takes them all\.$/.test(shown.filter || "") && JSON.stringify(shown.rows) === JSON.stringify(want.map((n) => "🏆 " + n)), shown);
     await page.evaluate(() => document.querySelector(".cv-filter button.cv-filter-off").click());
     await sleep(200);
     shown = await listed();
@@ -131,6 +149,31 @@ const GREEN = "rgb(79, 209, 139)";
     const again = await press(id);
     const count = (await (await fetch(BASE + "api/rec/cues")).json()).cues.filter((c) => c.kind === "win").length;
     check("pressed again: \"" + again + "\", still " + count, /^🏆 This recording's 3 winning shots are already in the list \(in green\), and in .+\/Clips\.$/.test(again) && count === 3, again);
+
+    // 🎞 One video: the 3 winning shots (☑ All on the day's list) and Luc's cue (hand 1)
+    await page.evaluate(() => document.querySelector(".cv-pick-all").click());
+    await page.evaluate(() => document.querySelector(".cv-filter button.cv-filter-off").click());
+    await sleep(200);
+    await page.evaluate(() => [...document.querySelectorAll(".cv-rows tr[data-id]")].find((r) => r.querySelector("td.n").textContent === "hand 1").querySelector("input.cv-pick").click());
+    await sleep(200);
+    const oneBtn = await page.evaluate(() => { const b = document.querySelector('.cv-group [data-g="one"]'); return { text: b.textContent, disabled: b.disabled, picked: document.querySelector(".cv-picked").textContent }; });
+    check("☑ 4 checked, \"" + oneBtn.text + "\" there", oneBtn.text === "🎞 One video" && !oneBtn.disabled && oneBtn.picked === "4 checked", oneBtn);
+    let reelBody = null;
+    page.on("request", (r) => { if (/\/api\/rec\/reel$/.test(r.url())) reelBody = JSON.parse(r.postData()); });
+    await page.evaluate(() => { window.__drawn = []; document.querySelector('.cv-group [data-g="one"]').click(); });
+    let made = "";
+    for (let i = 0; i < 480; i++) { made = await page.evaluate(() => document.querySelector(".cv-status").textContent); if (!/Making/.test(made)) break; await sleep(250); }
+    const reelName = "Cues " + stamp(wins[0] - 25000).slice(0, 10) + " " + stamp(wins[0] - 25000).slice(11, 16) + "-" + stamp(s0 + 150000).slice(11, 16) + ".mp4";
+    const reelFile = path.join(ROOT, "Highlights", reelName);
+    const reelLen = fs.existsSync(reelFile) ? +execFileSync(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", reelFile]).toString().trim() : null;
+    check("🎞 \"" + made + "\" - " + reelName + ", " + (reelLen && reelLen.toFixed(1)) + " s", /^🎞 One video: 4 clips, 1:35, each with its caption - downloaded, and kept in .+Highlights \(.+\.mp4\)\.$/.test(made) && reelLen !== null && Math.abs(reelLen - 95) <= 3, { made, reelName, reelLen });
+    const spans = reelBody ? reelBody.clips.map((c) => [c.from - s0, c.to - s0]) : null;
+    check("the four in the order they happened, with the sound, each with its caption picture: " + JSON.stringify(spans), reelBody && reelBody.sound === true && JSON.stringify(spans) === JSON.stringify([[15000, 45000], [75000, 105000], [145000, 175000], [150000, 155000]].sort((a, b) => a[0] - b[0])) && reelBody.clips.every((c) => /^data:image\/png;base64,/.test(c.bug)), spans);
+    const drawn = await page.evaluate(() => window.__drawn);
+    const time = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const wantDrawn = ["Luc  3 – 2  Bob", "8-Ball · Race to 4 · " + time(wins[0]), "Bob  3 – 3  Luc", "8-Ball · Race to 4 · " + time(wins[1]), "Luc  4 – 3  Bob", "8-Ball · Race to 4 · " + time(wins[2]), "Luc  3 – 3  Bob", "8-Ball · Race to 4 · " + time(s0 + 150000)];
+    check("the captions: who plays who, the race score, the game, the race to, the time - " + JSON.stringify(drawn), JSON.stringify(drawn) === JSON.stringify(wantDrawn), { drawn, wantDrawn });
+    if (OUT && reelLen) execFileSync(FF, ["-v", "error", "-y", "-ss", "40", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_frame.png")]);
 
     const none = await press(emptyId);
     check("the recording with no game: \"" + none + "\"", none === "🏆 No game was won on this computer's scoreboard while this recording ran.", none);

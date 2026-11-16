@@ -921,6 +921,31 @@
   function isRacing() {
     return state.raceToWinsTarget > 1;
   }
+  // A points game (Straight Pool, 15 Ball Rotation, One Pocket's balls...): its points are the
+  // score; any other game counts racks, and the score that matters is the race's - the games won
+  // (2026-11-16, the user: "when it is not a point game, I need to see the race score there is no
+  // use to see the rack score ever. the voice should also tell the race score, except when it is
+  // a point based game")
+  function pointsGame() {
+    return quickCounterMode || state.currentGame.unit === "points" || state.currentGame.unit === "balls";
+  }
+  // the label over a score card's race number: RACE in a race; no race, RACKS (GAMES of several racks)
+  function cardRaceLabel() {
+    if (isRacing()) return T("card.race");
+    return state.currentGame.target > 1 ? T("card.games") : T("card.racks");
+  }
+  // The race score for the voice, the side of firstKey (a player's id, or a team's) first: "3 to
+  // 2"; three sides or more, "Bob 3, Luc 2, Chris 1" - the sides at the table
+  function spokenRaceScore(firstKey) {
+    var sides = state.currentGame.mode === "teams"
+      ? (teamWinnerStaysOn() ? seatedTeamIds() : TEAM_IDS.filter(function (id) { return teamMembersLive(id).length > 0; })).map(function (id) {
+          return { key: id, name: teamSlotLabel(id), wins: state.teamWins[id] || 0 };
+        })
+      : activePlayers().map(function (p) { return { key: p.id, name: shortDisplayNameForPlayer(p), wins: state.playerWins[p.id] || 0 }; });
+    sides = sides.filter(function (sd) { return sd.key === firstKey; }).concat(sides.filter(function (sd) { return sd.key !== firstKey; }));
+    if (sides.length === 2) return T("keypad.speakScoreTwo", { a: sides[0].wins, b: sides[1].wins });
+    return sides.map(function (sd) { return sd.name + " " + sd.wins; }).join(", ");
+  }
   // Winner Stays: two at the table, the rest in line, and the board shows
   // the winner's streak and who's next.
   function winnerStaysOn() {
@@ -6103,11 +6128,10 @@
       // you're already looking at/hearing about), or "[Name] plus/
       // minus [count] point" if this tap is what just switched the
       // selection to them - captured BEFORE the switch below, same as
-      // wasLeading/willLead. "Won the game" for rack-unit games
-      // (8-Ball, 9-Ball, etc.) keeps its own older rule unchanged - only
-      // announced on that same switch, staying silent (not "plus 1
-      // point" - that would be a strange thing to say about a win)
-      // when the winner was already the one selected.
+      // wasLeading/willLead. A rack game (8-Ball, 9-Ball, etc.) says
+      // nothing here - not "plus 1 point", a strange thing to say about
+      // a win: the win and the race score are said once it's in (see
+      // speakRackWin).
       var wasSelected = keypadSelectedPlayerId === player.id;
       var wasLeading = keypadPlayerIsLeading(player);
       var willLead = keypadScoreWouldLead(player, (player.balls || 0) + 1);
@@ -6117,7 +6141,7 @@
       requestAdjustScore(player.id, 1);
       if (!quickCounterMode) {
         if (state.currentGame.unit === "rack") {
-          if (!wasSelected) speakKeypadText(T("keypad.speakWonGameDirectTap", { name: shortDisplayNameForPlayer(player) }));
+          // (a rack won: who won and the race score, said once it's in - see speakRackWin)
         } else {
           var key = wasSelected ? "keypad.speakPointDeltaSelected" : "keypad.speakPointDeltaUnselected";
           speakKeypadText(T(key, { name: shortDisplayNameForPlayer(player), direction: T("keypad.directionPlus"), count: 1 }));
@@ -6482,10 +6506,16 @@
     // count toward this game's target, with the win count as a small
     // badge above it.
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
+    // A rack game - not a points game - shows the race big, whatever its target (2026-11-16, the
+    // user: "when it is not a point game, I need to see the race score there is no use to see the
+    // rack score ever"): a game of several racks has its racks small.
+    var showsRace = !quickCounterMode && state.currentGame.unit === "rack";
 
-    // (games won - "3 / 5" in a race)
-    if (!isSingleRackGame) {
+    // (games won - "3 / 5" in a race; a game of several racks: its racks)
+    if (!showsRace) {
       panel.appendChild(buildStatMini(T("card.games"), isRacing() ? wins + " / " + effectiveRaceTarget(player.id) : wins, raceReached(wins, player.id), "stat-mini-tourney"));
+    } else if (!isSingleRackGame) {
+      panel.appendChild(buildStatMini(T("card.racks"), (player.balls || 0) + " / " + state.currentGame.target, false, "stat-mini-tourney"));
     }
 
     var block = document.createElement("div");
@@ -6506,13 +6536,13 @@
       selectKeypadPlayer(player.id, null, true);
       window.PMCCameraBridge.resolveUnmatchedShooterPrompt(player.id);
     });
-    if (isSingleRackGame) {
+    if (showsRace) {
       // Still needs a label here - without it this number reads as an
       // ambiguous score when it's actually the session win count.
-      // RACKS, then the count - "3 / 5" in a race
+      // RACE, then the count - "3 / 5" (no race: RACKS, or GAMES of several racks)
       var label = document.createElement("div");
       label.className = "stat-label";
-      label.textContent = T("card.racks");
+      label.textContent = cardRaceLabel();
       block.appendChild(label);
       value.textContent = wins;
       if (isRacing()) {
@@ -6662,17 +6692,21 @@
 
     var wins = state.teamWins[teamId] || 0;
     var isSingleRackGame = state.currentGame.unit === "rack" && state.currentGame.target === 1;
-    if (!isSingleRackGame) {
+    // (a rack game: the race big - see buildIndividualPanel's showsRace)
+    var showsRace = state.currentGame.unit === "rack";
+    if (!showsRace) {
       panel.appendChild(buildStatMini(T("card.games"), isRacing() ? wins + " / " + effectiveRaceTarget(teamId) : wins, raceReached(wins, teamId), "stat-mini-tourney"));
+    } else if (!isSingleRackGame) {
+      panel.appendChild(buildStatMini(T("card.racks"), sumTeamBalls(teamId) + " / " + state.currentGame.target, false, "stat-mini-tourney"));
     }
     var block = document.createElement("div");
     block.className = "stat-block";
     var value = document.createElement("div");
     value.className = "stat-value";
-    if (isSingleRackGame) {
+    if (showsRace) {
       var label = document.createElement("div");
       label.className = "stat-label";
-      label.textContent = T("card.racks");
+      label.textContent = cardRaceLabel();
       block.appendChild(label);
       value.textContent = wins;
       if (isRacing()) {
@@ -9406,11 +9440,13 @@
     // game that ends a race holds its final score) - taken before Winner
     // Stays seats someone else.
     var raceTally = null;
+    var raceSaid = null; // (and the race score for the voice - see speakRackWin)
     function takeRaceTally() {
       raceTally = {};
       activePlayers().forEach(function (p) {
         raceTally[p.name] = state.playerWins[p.id] || 0;
       });
+      raceSaid = { name: isTeam ? teamSlotLabel(key) : shortDisplayNameForPlayer(getPlayer(key)), score: spokenRaceScore(key) };
     }
     if (isTeam) {
       var members = teamMembersLive(key);
@@ -9766,6 +9802,7 @@
     else if (gameTypeChanged || queueSwapInfo) playPositiveSound(null);
     if (fresh) fresh.gameNumber = gameNumber;
     showWinBanner(fresh || null, notices);
+    if (raceSaid && previousUnit !== "points" && previousUnit !== "balls") speakRackWin(raceSaid, !!milestoneNames, onHillNames);
     // (and a clear popup for it - once the balls left are in)
     if (gameTypeChanged) queueGameChangePopup();
     // A race won closes at once (archived, a new session - nothing more
@@ -10566,7 +10603,7 @@
     var playing = activePlayers();
     if (!playing.length) return "";
     var g = state.currentGame;
-    var winsCount = g.unit === "rack" && (g.target || 1) <= 1;
+    var winsCount = !pointsGame();
     var parts = g.mode === "teams"
       ? TEAM_IDS.filter(function (id) {
           return teamMembersLive(id).length > 0;
@@ -31631,7 +31668,23 @@
     return keypadScoreWouldLead(player, player.balls || 0);
   }
 
+  // The voice once a rack is won, in a game that isn't a points game (its points have their own
+  // words): who won and the race score - "Bob wins, 3 to 2"; the race: "Bob wins the race, 7 to
+  // 3"; then who's on the hill (2026-11-16, the user: "the voice should also tell the race
+  // score"). said: { name, score } - taken as the win came in, before Winner Stays seats the next.
+  function speakRackWin(said, raceWon, onHillName) {
+    var text = T(raceWon ? "keypad.speakWonRace" : "keypad.speakWonRack", said);
+    if (onHillName) text += ". " + T("keypad.speakOnHill", { name: onHillName });
+    speakKeypadText(text);
+  }
+
   function speakKeypadPlayerSelected(player, previousPlayer) {
+    // (a rack game: the race score - its points are always 0)
+    if (!pointsGame()) {
+      var side = state.currentGame.mode === "teams" && player.teamId ? player.teamId : player.id;
+      speakKeypadText(T("keypad.speakPlayingRace", { name: shortDisplayNameForPlayer(player), score: spokenRaceScore(side) }));
+      return;
+    }
     if (previousPlayer) {
       speakKeypadText(TP("keypad.speakPreviousTotal", previousPlayer.balls || 0, { name: shortDisplayNameForPlayer(previousPlayer), count: previousPlayer.balls || 0 }));
     }
@@ -33395,54 +33448,15 @@
     var game = (clip.game && clip.game.gameLabel) || cue.gameLabel || "";
     return { top: top, bottom: [game, reasons.length ? highlightReasonText(reasons[0]) : ""].filter(Boolean).join(" · ") };
   }
-  // The score bug at (x, y), w wide (a fifth of that tall): dark, rounded,
-  // a gold edge; the words shrunk to fit. -> its height
+  // The score bug (js/lib/score-bug.js): at (x, y), w wide -> its height
   function drawScoreBug(ctx, x, y, w, text) {
-    var h = Math.round(w * 0.2), r = Math.round(h * 0.18), pad = Math.round(h * 0.2);
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(14, 10, 8, 0.86)";
-    ctx.fill();
-    ctx.save();
-    ctx.clip();
-    ctx.fillStyle = "#ffd23f";
-    ctx.fillRect(x, y, Math.max(4, Math.round(h * 0.07)), h);
-    ctx.restore();
-    var fit = function (s, px, weight) {
-      var size = px;
-      ctx.font = weight + " " + size + "px -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif";
-      while (size > 8 && ctx.measureText(s).width > w - pad * 2) {
-        size -= 1;
-        ctx.font = weight + " " + size + "px -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif";
-      }
-    };
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#ffffff";
-    fit(text.top, Math.round(h * 0.4), "800");
-    ctx.fillText(text.top, x + pad, y + Math.round(h * 0.5));
-    if (text.bottom) {
-      ctx.fillStyle = "#ffd23f";
-      fit(text.bottom, Math.round(h * 0.25), "700");
-      ctx.fillText(text.bottom, x + pad, y + Math.round(h * 0.84));
-    }
-    ctx.restore();
-    return h;
+    return PMCLib.scoreBug.draw(ctx, x, y, w, text);
   }
   function scoreBugWidth(aspect, frameW) {
-    return Math.round(frameW * (aspect === "9:16" ? 0.7 : 0.36));
+    return PMCLib.scoreBug.width(aspect, frameW);
   }
   function scoreBugPng(text, w) {
-    var c = document.createElement("canvas");
-    c.width = w;
-    c.height = Math.round(w * 0.2);
-    drawScoreBug(c.getContext("2d"), 0, 0, w, text);
-    return c.toDataURL("image/png");
+    return PMCLib.scoreBug.png(text, w);
   }
 
   // On the Mac: the clips and their bugs to server/reel.js; the reel back as a File

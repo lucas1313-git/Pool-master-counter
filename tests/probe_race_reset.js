@@ -223,7 +223,8 @@ function yesterday() {
     check("the board back to 0 - 0, the racks gone, their Q-Score changes too", z.state.gameHistory.length === 0 && !(z.state.playerWins.b) && !(z.state.playerWins.l) && JSON.stringify(ratingOf(z.ratings)) === JSON.stringify(r0) && tsOf(z.stats).length === 7, { gh: z.state.gameHistory.length, pw: z.state.playerWins, r: ratingOf(z.ratings), r0 });
     const cards = await page.evaluate(() => [...document.querySelectorAll("#scoreboard .player-panel .player-wins, #scoreboard .player-panel .wins-count")].map((e) => e.textContent.trim()));
     list = await races();
-    check("the list for today: empty, hidden", !list.shown && list.rows.length === 0, list);
+    // (today empty now: the report - and its list - may be on last night, while under 24 hours old)
+    check("the list: no race of today's left - empty, or last night's two", (!list.shown && list.rows.length === 0) || (list.rows.length === 2 && list.rows.every((r) => !r.onBoard) && /Bob 3 – 1 Luc/.test(list.rows[0].result)), list);
 
     // a race won, then the next: two races
     await voice(["Bob wins the game", "Bob wins the game", "Bob wins the game"]);

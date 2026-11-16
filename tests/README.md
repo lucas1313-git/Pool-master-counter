@@ -670,10 +670,21 @@ Not part of the app - helpers for testing and for running this machine's own cop
   `npm test`.
 - **probe_winning_shots.js** — 🏆 Winning shots of a recording (2026-11-12), its own server on 4309
   with a throwaway HOME, a 3-minute recording in two files and the scoreboard's games in the
-  browser: the three games won while it ran, named "winning shot Luc vs Bob-8-Ball-1-0" and so on,
-  cut into Clips/ (30 s each), green in the list and on the timeline; then the list is that day's
-  winning shots, all of them, in the order won, ✕ Show every cue undoes it; pressed again, nothing
-  made twice; the recording page's short list (its newest 12 of 17, "Show all 17") shows all the
-  day's winning shots after 🏆 (2026-11-16: only the last race's 5 of 31 were showing) and ☑ All
-  checks them; a recording with no game; no page errors. Needs ffmpeg.
+  browser: the three games won while it ran, named with the race score and the time (2026-11-16)
+  "winning shot Luc vs Bob-8-Ball-3-2-<date>-<time>" and so on, cut into Clips/ (30 s each), green
+  in the list and on the timeline; one made before under its old name ("...-1-0") named again, its
+  clip renamed with it; then the list is that day's winning shots, all of them, in the order won,
+  ✕ Show every cue undoes it; pressed again, nothing made twice; 🎞 One video of the three and a
+  cue of Luc's: one video in Highlights (95 s), in order, each with its caption ("Luc  3 – 2  Bob" /
+  "8-Ball · Race to 4 · <time>" - the cue: the race as it stood then); the recording page's short
+  list (its newest 12 of 17, "Show all 17") shows all the day's winning shots after 🏆 (2026-11-16:
+  only the last race's 5 of 31 were showing) and ☑ All checks them; a recording with no game; no
+  page errors. Needs ffmpeg.
   `node tests/probe_winning_shots.js [shots]`. Names and spans: tests/unit/winning-shots.test.js.
+- **probe_race_score.js** — the race score on the score cards and in the voice (2026-11-16: "when
+  it is not a point game, I need to see the race score ... the voice should also tell the race
+  score, except when it is a point based game"), its own file server on 4312, the number pad's
+  voice on: Winner Stays, race to 3 - the cards RACE "0 / 3"; "Bob wins, 1 to 0", "Bob wins, 2 to
+  0. Bob is on the hill", "Luc playing, 0 to 2" (no "0 points"), Luc's number "Luc wins, 1 to 2",
+  "Bob wins the race, 3 to 2"; a game of 3 racks: the race big, "Racks: 1 / 3" small; Straight
+  Pool: the points, as before; no page errors. `node tests/probe_race_score.js [shots]`.
