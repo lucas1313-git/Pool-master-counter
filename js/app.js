@@ -3310,6 +3310,9 @@
   var leaderboardList = document.getElementById("leaderboard-list");
   var leaderboardEmptyHint = document.getElementById("leaderboard-empty-hint");
   var leaderboardFormulaNote = document.getElementById("leaderboard-formula-note");
+  var leaderboardFormulaToggle = document.getElementById("leaderboard-formula-toggle");
+  var leaderboardMethodButtons = document.getElementById("leaderboard-method-filter").querySelectorAll(".leaderboard-method-btn");
+  var leaderboardMethodHint = document.getElementById("leaderboard-method-hint");
   var achievementsModalOverlay = document.getElementById("achievements-modal-overlay");
   var achievementsModalTitle = document.getElementById("achievements-modal-title");
   var achievementsModalList = document.getElementById("achievements-modal-list");
@@ -22041,7 +22044,9 @@
       "poolMasterCounter.aiTakeTone.v1", "poolMasterCounter.aiTakes.v1",
       "pmc-camera-settings", "pmc-camera-calibration", "pmc-camera-background-ref", "pmc-camera-empty-room",
       "pmc-camera-selected-device", "pmc-camera-wizard-done",
-      "pmc-room-plan", "pmc-camera-room-tags", "pmc-room-map-options", "pmc-camera-view", "poolMasterCounter.quickGameRace.v1"];
+      "pmc-room-plan", "pmc-camera-room-tags", "pmc-room-map-options", "pmc-camera-view", "poolMasterCounter.quickGameRace.v1",
+      // (how the Leaderboard picks its leader)
+      "poolMasterCounter.leaderboardMethod.v1"];
   }
   function collectDeviceSettings() {
     var out = {};
@@ -30216,6 +30221,88 @@
     };
   }
 
+  // How the leader is picked (2026-11-17): "mvp", the MVP score above - the default, as it was -
+  // or one of js/lib/leaderboard-methods.js's three for the players who don't come as often:
+  // 📈 performance, 🔟 last 10 games, 🌙 best 3 nights. This device's choice, kept with its other
+  // settings (a backup takes it along - deviceSettingKeys).
+  var LEADERBOARD_METHOD_KEY = "poolMasterCounter.leaderboardMethod.v1";
+  function leaderboardMethod() {
+    var m = null;
+    try {
+      m = localStorage.getItem(LEADERBOARD_METHOD_KEY);
+    } catch (e) {}
+    return m && PMCLib.leaderboardMethods.isMethod(m) ? m : "mvp";
+  }
+  function setLeaderboardMethod(m) {
+    try {
+      localStorage.setItem(LEADERBOARD_METHOD_KEY, m);
+    } catch (e) {
+      noteSaveFailure("leaderboard method", e);
+    }
+  }
+
+  // Games as the methods read them: when, won or not, and the opponents' average rating (as it
+  // is now - "how good the players you beat are").
+  function leaderboardMethodGames(games) {
+    var ratings = {};
+    function rating(n) {
+      if (!(n in ratings)) ratings[n] = getPlayerRating(n);
+      return ratings[n];
+    }
+    return games.map(function (g) {
+      var opp = (g.opponentNames || []).filter(Boolean);
+      return {
+        ts: g.ts,
+        won: g.result === "won",
+        opp: opp.length
+          ? opp.reduce(function (sum, n) {
+              return sum + rating(n);
+            }, 0) / opp.length
+          : null
+      };
+    });
+  }
+
+  // The ranking of the entries built (players, teams or a league's members): the MVP score's own
+  // bar and order, or the chosen method's - an entry it can't rank yet (under 3 games; for best
+  // nights, no night of 3) left off, as under the bar. The array carries .minGames and .method.
+  function rankLeaderboardEntries(rawEntries, period) {
+    var method = leaderboardMethod();
+    var entries;
+    if (method === "mvp") {
+      var minGames = leaderboardMinGamesForPeriod(
+        period,
+        rawEntries.map(function (e) {
+          return e.gamesPlayed;
+        }),
+        leaderboardElapsedDaysInPeriod(period)
+      );
+      entries = rawEntries.filter(function (e) {
+        return e.gamesPlayed >= minGames;
+      });
+      entries.minGames = minGames;
+      entries.forEach(function (e) {
+        e.scoreBreakdown = computeLeaderboardScoreBreakdown(e, minGames);
+        e.mvpScore = e.scoreBreakdown.total;
+      });
+      entries.sort(function (a, b) {
+        return b.mvpScore - a.mvpScore;
+      });
+    } else {
+      var M = PMCLib.leaderboardMethods;
+      entries = rawEntries.filter(function (e) {
+        e.methodResult = M.score(method, e.methodGames || leaderboardMethodGames(e.methodRacks || []), e.rating, localDateStrFromTs);
+        return !!e.methodResult;
+      });
+      entries.minGames = M.MIN_GAMES;
+      entries.sort(function (a, b) {
+        return M.compare(method, { result: a.methodResult, rating: a.rating }, { result: b.methodResult, rating: b.rating });
+      });
+    }
+    entries.method = method;
+    return entries;
+  }
+
   // period: "week"/"month"/"all" (defaults to "all"). The returned
   // array also carries a .minGames property (see
   // leaderboardMinGamesForPeriod) so callers that need to show it (the
@@ -30239,28 +30326,12 @@
         tournamentWins: stats.tournamentWins,
         avgDominanceRatio: averageDominanceRatio(stats.games.concat(stats.tournamentGames)),
         skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames)),
-        bestRun: getPlayerBestRun(name)
+        bestRun: getPlayerBestRun(name),
+        // (the racks only - a match won is a title, its racks are games already)
+        methodRacks: stats.games
       };
     });
-    var minGames = leaderboardMinGamesForPeriod(
-      period,
-      rawEntries.map(function (e) {
-        return e.gamesPlayed;
-      }),
-      leaderboardElapsedDaysInPeriod(period)
-    );
-    var entries = rawEntries.filter(function (e) {
-      return e.gamesPlayed >= minGames;
-    });
-    entries.minGames = minGames;
-    entries.forEach(function (e) {
-      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e, minGames);
-      e.mvpScore = e.scoreBreakdown.total;
-    });
-    entries.sort(function (a, b) {
-      return b.mvpScore - a.mvpScore;
-    });
-    return entries;
+    return rankLeaderboardEntries(rawEntries, period);
   }
 
   // Same scoring formula as computeLeaderboardEntries
@@ -30279,7 +30350,8 @@
     var league = findLeagueById(activeLeagueId);
     if (!league) {
       var empty = [];
-      empty.minGames = LEADERBOARD_MIN_GAMES;
+      empty.minGames = leaderboardMethod() === "mvp" ? LEADERBOARD_MIN_GAMES : PMCLib.leaderboardMethods.MIN_GAMES;
+      empty.method = leaderboardMethod();
       return empty;
     }
     var periodMatches = filterGamesByPeriod(league.matches, period);
@@ -30299,28 +30371,13 @@
         tournamentWins: 0,
         avgDominanceRatio: 0,
         skunkWins: 0,
-        bestRun: getPlayerBestRun(m.name)
+        bestRun: getPlayerBestRun(m.name),
+        methodGames: played.map(function (match) {
+          return { ts: match.ts, won: match.winner === m.name, opp: getPlayerRating(match.playerA === m.name ? match.playerB : match.playerA) };
+        })
       };
     });
-    var minGames = leaderboardMinGamesForPeriod(
-      period,
-      rawEntries.map(function (e) {
-        return e.gamesPlayed;
-      }),
-      leaderboardElapsedDaysInPeriod(period)
-    );
-    var entries = rawEntries.filter(function (e) {
-      return e.gamesPlayed >= minGames;
-    });
-    entries.minGames = minGames;
-    entries.forEach(function (e) {
-      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e, minGames);
-      e.mvpScore = e.scoreBreakdown.total;
-    });
-    entries.sort(function (a, b) {
-      return b.mvpScore - a.mvpScore;
-    });
-    return entries;
+    return rankLeaderboardEntries(rawEntries, period);
   }
 
   function loadLeaderboardSnapshot() {
@@ -30353,7 +30410,7 @@
     try {
       localStorage.setItem(
         LEADERBOARD_SNAPSHOT_KEY,
-        JSON.stringify({ entries: currentLeaderboardSnapshotEntries(), ts: new Date().toISOString() })
+        JSON.stringify({ entries: currentLeaderboardSnapshotEntries(), method: leaderboardMethod(), ts: new Date().toISOString() })
       );
     } catch (e) {
       noteSaveFailure("leaderboard snapshot", e);
@@ -30371,6 +30428,8 @@
   function computeLeaderboardChangesLines() {
     var snapshot = loadLeaderboardSnapshot();
     if (!snapshot) return null;
+    // (taken under another way of picking the leader: nothing to compare - the next one will)
+    if ((snapshot.method || "mvp") !== leaderboardMethod()) return null;
     var previous = snapshot.entries;
     var current = currentLeaderboardSnapshotEntries();
 
@@ -30464,6 +30523,9 @@
     var ratingSum = 0;
     var bestRun = 0;
     var allMemberGames = [];
+    // (the leaderboard methods' racks: two of the team's players on the same side, one game)
+    var methodRacks = [];
+    var methodRackSeen = {};
     members.forEach(function (name) {
       var stats = computePlayerCareerStats(name, period);
       gamesPlayed += stats.played + stats.tournamentPlayed;
@@ -30472,6 +30534,12 @@
       var games = stats.games.concat(stats.tournamentGames);
       skunkWins += countSkunkWins(games);
       allMemberGames = allMemberGames.concat(games);
+      stats.games.forEach(function (g) {
+        var key = g.ts + "|" + g.result;
+        if (methodRackSeen[key]) return;
+        methodRackSeen[key] = true;
+        methodRacks.push(g);
+      });
       ratingSum += getPlayerRating(name);
       bestRun = Math.max(bestRun, getPlayerBestRun(name));
     });
@@ -30488,7 +30556,8 @@
       // a "5 in a row" is an individual feat the team gets bragging
       // rights for, same idea as skunkWins already being per-member wins
       // added together rather than some team-wide concept of its own.
-      bestRun: bestRun
+      bestRun: bestRun,
+      methodRacks: methodRacks
     };
   }
 
@@ -30524,25 +30593,7 @@
       agg.name = group.teamName;
       return agg;
     });
-    var minGames = leaderboardMinGamesForPeriod(
-      period,
-      rawEntries.map(function (e) {
-        return e.gamesPlayed;
-      }),
-      leaderboardElapsedDaysInPeriod(period)
-    );
-    var entries = rawEntries.filter(function (e) {
-      return e.gamesPlayed >= minGames;
-    });
-    entries.minGames = minGames;
-    entries.forEach(function (e) {
-      e.scoreBreakdown = computeLeaderboardScoreBreakdown(e, minGames);
-      e.mvpScore = e.scoreBreakdown.total;
-    });
-    entries.sort(function (a, b) {
-      return b.mvpScore - a.mvpScore;
-    });
-    return entries;
+    return rankLeaderboardEntries(rawEntries, period);
   }
 
   // Which of {a, b} the given score-breakdown term favors, and by how
@@ -30631,7 +30682,78 @@
   // `a` outweigh the ones favoring `b`, but by how much. A tiny
   // per-category threshold (not 0 outright) only filters out true
   // floating-point noise from an exact tie, never a real difference.
-  function explainLeaderboardRanking(a, b) {
+  // (the word under the score on a row)
+  var LEADERBOARD_METHOD_SCORE_KEYS = {
+    performance: "leaderboard.scorePerformance",
+    last10: "leaderboard.scoreLast10",
+    bestNights: "leaderboard.scoreBestNights"
+  };
+  var LEADERBOARD_METHOD_LABEL_KEYS = {
+    mvp: "leaderboard.methodMvp",
+    performance: "leaderboard.methodPerformance",
+    last10: "leaderboard.methodLast10",
+    bestNights: "leaderboard.methodBestNights"
+  };
+
+  // An entry's score under one of the 3 other methods, as shown: "586", "7½ / 10"
+  function leaderboardMethodScoreText(entry, method) {
+    var r = entry.methodResult;
+    if (method === "last10") return PMCLib.leaderboardMethods.halves(r.score) + " / " + PMCLib.leaderboardMethods.LAST_GAMES;
+    return String(Math.round(r.score));
+  }
+
+  // What that score is made of, for ❓
+  function leaderboardMethodMakeup(entry, method) {
+    var r = entry.methodResult;
+    var halves = PMCLib.leaderboardMethods.halves;
+    if (method === "performance") {
+      var edge = Math.round(r.edge);
+      return T("leaderboard.howPerformanceOf", { name: entry.name, opp: Math.round(r.opp), won: r.won, lost: r.lost, edge: (edge < 0 ? "−" : "+") + Math.abs(edge), score: Math.round(r.score) });
+    }
+    if (method === "last10") {
+      if (!r.missing) return T("leaderboard.howLast10Of", { name: entry.name, won: r.won });
+      return T("leaderboard.howLast10Short", { name: entry.name, won: r.won, played: r.played, missing: r.missing, half: halves(r.missing / 2), score: halves(r.score) });
+    }
+    var nights = r.nights.map(function (n) {
+      return T("leaderboard.howNightItem", {
+        day: new Date(n.day + "T12:00:00").toLocaleDateString(reportLocale(), { month: "short", day: "numeric" }),
+        score: Math.round(n.score),
+        won: n.won,
+        lost: n.lost
+      });
+    });
+    if (r.filled) nights.push(TP("leaderboard.howNightsFill", r.filled, { count: r.filled, rating: Math.round(r.rating) }));
+    return T("leaderboard.howNightsOf", { name: entry.name, nights: nights.join(" · "), score: Math.round(r.score) });
+  }
+
+  // ❓ under one of the 3 other methods: the two scores, then what each is made of (and, level,
+  // what split them)
+  function explainLeaderboardMethod(a, b, method) {
+    var lines = [
+      T("leaderboard.howVerdict", {
+        method: T(LEADERBOARD_METHOD_LABEL_KEYS[method]),
+        a: a.name,
+        scoreA: leaderboardMethodScoreText(a, method),
+        b: b.name,
+        scoreB: leaderboardMethodScoreText(b, method)
+      }),
+      ""
+    ];
+    lines.push("• " + leaderboardMethodMakeup(a, method));
+    lines.push("• " + leaderboardMethodMakeup(b, method));
+    if (Math.abs(a.methodResult.score - b.methodResult.score) < 1e-9) {
+      lines.push("");
+      lines.push(
+        method === "last10" && a.methodResult.played !== b.methodResult.played
+          ? T("leaderboard.howTiePlayed", { a: a.name })
+          : T("leaderboard.howTieRating", { a: a.name, ratingA: Math.round(a.rating), ratingB: Math.round(b.rating) })
+      );
+    }
+    return lines.join("\n");
+  }
+
+  function explainLeaderboardRanking(a, b, method) {
+    if (method && method !== "mvp") return explainLeaderboardMethod(a, b, method);
     var categories = leaderboardReasonCategories(a, b);
     var supporting = [];
     var against = [];
@@ -30797,7 +30919,7 @@
       explainBtn.addEventListener("click", function () {
         var higher = rank === 1 ? entry : comparisonOther;
         var lower = rank === 1 ? comparisonOther : entry;
-        alertModal(explainLeaderboardRanking(higher, lower));
+        alertModal(explainLeaderboardRanking(higher, lower, entries.method));
       });
       nameRow.appendChild(explainBtn);
     }
@@ -30829,6 +30951,20 @@
     body.appendChild(stats);
 
     li.appendChild(body);
+    // (one of the 3 other methods: its score, big, on the right - the MVP score's row as it was)
+    if (entries.method && entries.method !== "mvp") {
+      var scoreEl = document.createElement("div");
+      scoreEl.className = "leaderboard-method-score";
+      var scoreNum = document.createElement("span");
+      scoreNum.className = "leaderboard-method-score-value";
+      scoreNum.textContent = leaderboardMethodScoreText(entry, entries.method);
+      scoreEl.appendChild(scoreNum);
+      var scoreLabel = document.createElement("span");
+      scoreLabel.className = "leaderboard-method-score-label";
+      scoreLabel.textContent = T(LEADERBOARD_METHOD_SCORE_KEYS[entries.method]);
+      scoreEl.appendChild(scoreLabel);
+      li.appendChild(scoreEl);
+    }
     return li;
   }
 
@@ -30854,10 +30990,7 @@
     if (entries.length === 0) {
       leaderboardList.classList.add("hidden");
       leaderboardEmptyHint.classList.remove("hidden");
-      leaderboardEmptyHint.textContent = T(
-        mode === "teams" ? "leaderboard.notEnoughTeamData" : mode === "league" ? "leaderboard.notEnoughLeagueData" : "leaderboard.notEnoughData",
-        { minGames: entries.minGames }
-      );
+      leaderboardEmptyHint.textContent = T(leaderboardEmptyHintKey(mode, entries.method), { minGames: entries.minGames });
     } else {
       leaderboardList.classList.remove("hidden");
       leaderboardEmptyHint.classList.add("hidden");
@@ -30865,14 +30998,51 @@
         leaderboardList.appendChild(leaderboardRow(entry, i + 1, entries));
       });
     }
-    leaderboardFormulaNote.textContent = T("leaderboard.formulaNote", {
-      minGames: entries.minGames,
-      tournamentWeight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
-      dominanceWeight: LEADERBOARD_DOMINANCE_WEIGHT,
-      skunkWeight: LEADERBOARD_SKUNK_WIN_WEIGHT,
-      runMin: LEADERBOARD_RUN_BONUS_MIN,
-      runWeight: LEADERBOARD_RUN_WEIGHT
+    var method = entries.method;
+    Array.prototype.forEach.call(leaderboardMethodButtons, function (b) {
+      var on = b.getAttribute("data-method") === method;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
     });
+    leaderboardMethodHint.textContent = T(LEADERBOARD_METHOD_HINT_KEYS[method]);
+    leaderboardFormulaToggle.textContent = T(method === "mvp" ? "leaderboard.formulaToggle" : "leaderboard.howToggle");
+    if (method === "mvp") {
+      leaderboardFormulaNote.textContent = T("leaderboard.formulaNote", {
+        minGames: entries.minGames,
+        tournamentWeight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
+        dominanceWeight: LEADERBOARD_DOMINANCE_WEIGHT,
+        skunkWeight: LEADERBOARD_SKUNK_WIN_WEIGHT,
+        runMin: LEADERBOARD_RUN_BONUS_MIN,
+        runWeight: LEADERBOARD_RUN_WEIGHT
+      });
+    } else {
+      var M = PMCLib.leaderboardMethods;
+      leaderboardFormulaNote.textContent = T(LEADERBOARD_METHOD_FORMULA_KEYS[method], {
+        minGames: M.MIN_GAMES,
+        prior: M.PRIOR,
+        last: M.LAST_GAMES,
+        nights: M.BEST_NIGHTS
+      });
+    }
+  }
+
+  var LEADERBOARD_METHOD_HINT_KEYS = {
+    mvp: "leaderboard.methodMvpHint",
+    performance: "leaderboard.methodPerformanceHint",
+    last10: "leaderboard.methodLast10Hint",
+    bestNights: "leaderboard.methodBestNightsHint"
+  };
+  var LEADERBOARD_METHOD_FORMULA_KEYS = {
+    performance: "leaderboard.formulaPerformance",
+    last10: "leaderboard.formulaLast10",
+    bestNights: "leaderboard.formulaBestNights"
+  };
+
+  // nobody ranked yet: why (🌙 best nights: a night of 3 games is what's missing)
+  function leaderboardEmptyHintKey(mode, method) {
+    if (mode === "teams") return "leaderboard.notEnoughTeamData";
+    if (mode === "league") return "leaderboard.notEnoughLeagueData";
+    return method === "bestNights" ? "leaderboard.notEnoughNights" : "leaderboard.notEnoughData";
   }
 
   // Plain text, not a screenshot - works with any share target (text
@@ -30888,19 +31058,21 @@
     var isTeamView = mode === "teams";
     var entries = leaderboardEntriesForView(mode, leaderboardPeriod);
     var scopeLabel = T(leaderboardScopeLabelKey(mode));
-    var lines = [T("leaderboard.shareHeading", { scope: scopeLabel }), ""];
+    var method = entries.method;
+    var lines = [T("leaderboard.shareHeading", { scope: scopeLabel })];
+    // (one of the 3 other methods: said, and each one's score first)
+    if (method !== "mvp") lines.push(T("leaderboard.shareMethod", { method: T(LEADERBOARD_METHOD_LABEL_KEYS[method]) }));
+    lines.push("");
     if (entries.length === 0) {
-      lines.push(
-        T(mode === "teams" ? "leaderboard.notEnoughTeamData" : mode === "league" ? "leaderboard.notEnoughLeagueData" : "leaderboard.notEnoughData", {
-          minGames: entries.minGames
-        })
-      );
+      lines.push(T(leaderboardEmptyHintKey(mode, method), { minGames: entries.minGames }));
     } else {
       entries.forEach(function (entry, i) {
         var rank = i + 1;
         var medal = LEADERBOARD_RANK_MEDALS[rank - 1] || "#" + rank;
         var name = entry.name + (rank === 1 ? " (" + T(isTeamView ? "leaderboard.topTeamTag" : "leaderboard.mvp") + ")" : "");
-        lines.push(medal + " " + name + " — " + leaderboardStatParts(entry, isTeamView).join(" • "));
+        var parts = leaderboardStatParts(entry, isTeamView);
+        if (method !== "mvp") parts.unshift(leaderboardMethodScoreText(entry, method) + " " + T(LEADERBOARD_METHOD_SCORE_KEYS[method]));
+        lines.push(medal + " " + name + " — " + parts.join(" • "));
       });
     }
     return lines.join("\n");
@@ -43192,6 +43364,20 @@
       }
       leaderboardPeriod = newPeriod;
       renderLeaderboardPage();
+    });
+  });
+  // How the leader is picked - a different ranking, so the same fade out first
+  Array.prototype.forEach.call(leaderboardMethodButtons, function (btn) {
+    btn.addEventListener("click", function () {
+      var m = btn.getAttribute("data-method");
+      if (m === leaderboardMethod()) return;
+      setLeaderboardMethod(m);
+      var leavingRows = leaderboardList.querySelectorAll("li");
+      if (!leavingRows.length) return renderLeaderboardPage();
+      Array.prototype.forEach.call(leavingRows, function (row) {
+        row.classList.add("leaderboard-row-leaving");
+      });
+      window.setTimeout(renderLeaderboardPage, CARD_FADE_LEAVE_MS);
     });
   });
 

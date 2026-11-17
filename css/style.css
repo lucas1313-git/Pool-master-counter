@@ -7431,6 +7431,49 @@ body.network-guest-mode #header-group-start {
   font-size: 0.85rem;
 }
 
+/* How the leader is picked: the MVP score, or one of 3 for the players who come less often
+   (js/lib/leaderboard-methods.js) - under the period, its one-line idea below it */
+.leaderboard-method-row {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.leaderboard-method-row .leaderboard-method-btn {
+  flex: 1 1 auto;
+  min-height: 44px;
+}
+.leaderboard-method-hint {
+  margin: 6px 4px 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* that method's score, big on the row's right (the MVP score's row has none, as before) */
+.leaderboard-method-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  text-align: right;
+}
+.leaderboard-method-score-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.leaderboard-row-top .leaderboard-method-score-value {
+  font-size: 2rem;
+}
+.leaderboard-method-score-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 .leaderboard-formula-note {
   margin: 18px 2px 4px;
   color: var(--text-dim);

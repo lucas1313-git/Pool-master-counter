@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261116d">
+<link rel="stylesheet" href="css/style.css?v=20261117a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2580,6 +2580,16 @@
     <button type="button" class="btn btn-ghost period-btn is-active" data-period="all" data-i18n="period.allTime">All Time</button>
   </div>
 
+  <!-- how the leader is picked: the MVP score (the default), or one of 3 that count how well you
+       play, not how often (js/lib/leaderboard-methods.js) -->
+  <div class="row leaderboard-method-row" id="leaderboard-method-filter" role="group" aria-label="How the leader is picked" data-i18n-aria-label="leaderboard.methodAria">
+    <button type="button" class="btn btn-ghost leaderboard-method-btn is-active" data-method="mvp" data-i18n="leaderboard.methodMvp">⭐ MVP score</button>
+    <button type="button" class="btn btn-ghost leaderboard-method-btn" data-method="performance" data-i18n="leaderboard.methodPerformance">📈 Performance</button>
+    <button type="button" class="btn btn-ghost leaderboard-method-btn" data-method="last10" data-i18n="leaderboard.methodLast10">🔟 Last 10 games</button>
+    <button type="button" class="btn btn-ghost leaderboard-method-btn" data-method="bestNights" data-i18n="leaderboard.methodBestNights">🌙 Best 3 nights</button>
+  </div>
+  <p id="leaderboard-method-hint" class="leaderboard-method-hint"></p>
+
   <div class="leaderboard-view-toggle" role="radiogroup" data-i18n-aria-label="leaderboard.viewToggleAria" aria-label="Show leaderboard for">
     <label class="leaderboard-view-option">
       <input type="radio" name="leaderboard-view" id="leaderboard-view-players" value="players" checked>
@@ -2606,7 +2616,7 @@
 
   <!-- the MVP score's formula, for whoever asks (ⓘ) -->
   <details class="leaderboard-formula">
-    <summary data-i18n="leaderboard.formulaToggle">ⓘ How the MVP score works</summary>
+    <summary id="leaderboard-formula-toggle">ⓘ How the MVP score works</summary>
     <p id="leaderboard-formula-note" class="leaderboard-formula-note"></p>
   </details>
 
@@ -3277,32 +3287,33 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261116d"></script>
-<script src="js/big-store.js?v=20261116d"></script>
-<script src="js/mp4-clip.js?v=20261116d"></script>
-<script src="js/recording-consent.js?v=20261116d"></script>
-<script src="js/local-recorder.js?v=20261116d"></script>
-<script src="js/lib/pool-day.js?v=20261116d"></script>
-<script src="js/lib/race-math.js?v=20261116d"></script>
-<script src="js/lib/handicaps.js?v=20261116d"></script>
-<script src="js/lib/brackets.js?v=20261116d"></script>
-<script src="js/lib/league.js?v=20261116d"></script>
-<script src="js/lib/events.js?v=20261116d"></script>
-<script src="js/lib/chips.js?v=20261116d"></script>
-<script src="js/lib/highlights.js?v=20261116d"></script>
-<script src="js/lib/score-bug.js?v=20261116d"></script>
-<script src="js/lib/payouts.js?v=20261116d"></script>
-<script src="js/lib/night-timeline.js?v=20261116d"></script>
-<script src="js/lib/day-races.js?v=20261116d"></script>
-<script src="js/night-map.js?v=20261116d"></script>
-<script src="js/night-braid.js?v=20261116d"></script>
-<script src="js/app.js?v=20261116d"></script>
-<script src="js/camera-client.js?v=20261116d"></script>
-<script src="js/voice.js?v=20261116d"></script>
+<script src="js/pairing.js?v=20261117a"></script>
+<script src="js/big-store.js?v=20261117a"></script>
+<script src="js/mp4-clip.js?v=20261117a"></script>
+<script src="js/recording-consent.js?v=20261117a"></script>
+<script src="js/local-recorder.js?v=20261117a"></script>
+<script src="js/lib/pool-day.js?v=20261117a"></script>
+<script src="js/lib/race-math.js?v=20261117a"></script>
+<script src="js/lib/leaderboard-methods.js?v=20261117a"></script>
+<script src="js/lib/handicaps.js?v=20261117a"></script>
+<script src="js/lib/brackets.js?v=20261117a"></script>
+<script src="js/lib/league.js?v=20261117a"></script>
+<script src="js/lib/events.js?v=20261117a"></script>
+<script src="js/lib/chips.js?v=20261117a"></script>
+<script src="js/lib/highlights.js?v=20261117a"></script>
+<script src="js/lib/score-bug.js?v=20261117a"></script>
+<script src="js/lib/payouts.js?v=20261117a"></script>
+<script src="js/lib/night-timeline.js?v=20261117a"></script>
+<script src="js/lib/day-races.js?v=20261117a"></script>
+<script src="js/night-map.js?v=20261117a"></script>
+<script src="js/night-braid.js?v=20261117a"></script>
+<script src="js/app.js?v=20261117a"></script>
+<script src="js/camera-client.js?v=20261117a"></script>
+<script src="js/voice.js?v=20261117a"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261116d").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261117a").catch(function () {}); });
   }
 </script>
 </body>

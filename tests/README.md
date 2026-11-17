@@ -688,3 +688,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   0. Bob is on the hill", "Luc playing, 0 to 2" (no "0 points"), Luc's number "Luc wins, 1 to 2",
   "Bob wins the race, 3 to 2"; a game of 3 racks: the race big, "Racks: 1 / 3" small; Straight
   Pool: the points, as before; no page errors. `node tests/probe_race_score.js [shots]`.
+- **probe_leaderboard_methods.js** — the Leaderboard's ways to pick the leader (2026-11-17: "keep
+  the default as is but propose 3 great ways to motivate players that don't play as often"), its
+  own file server on 4313: 7 nights of Reg v Mid, Ace 3 nights (8 of 9 v Reg), Low 2 nights - ⭐ MVP
+  score first and as before (Reg, Mid; no score on the rows); 📈 Performance: Ace first, all 4,
+  the ❓ makeup; 🔟 Last 10 games: Ace "8½ / 10"; 🌙 Best 3 nights: Ace first, Low's "1 night not
+  had yet"; kept after a reload; 📤 Share "Ranked by"; Last 7 Days; French; back to ⭐; no page
+  errors. `node tests/probe_leaderboard_methods.js [shots]`. The equations:
+  tests/unit/leaderboard-methods.test.js, in `npm test`.
