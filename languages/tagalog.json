@@ -2758,10 +2758,10 @@
   "leaderboard.scoreLast10": "huling 10 laro",
   "leaderboard.scoreBestNights": "pinakamagandang gabi",
   "leaderboard.howToggle": "ⓘ Paano kinukuwenta ang ranking na ito",
-  "leaderboard.formulaPerformance": "Performance = average na rating ng mga kalaban + 100 × log₂((panalo + {{prior}}) ÷ (talo + {{prior}})), sa mga laro ng panahong ito: ang rating na nilaro mo. Ang 100 puntos ng rating ay 2-sa-1 na tsansa, ang mismong sukat ng rating. Pinakamalaki ang bilang ng pagtalo sa malalakas na manlalaro, at walang dagdag ang mas maraming laro. Kapag pantay ang panalo at talo, ang average ng mga kalaban ang score. Naka-ranggo mula {{minGames}} na laro.",
-  "leaderboard.formulaLast10": "Huling 10 = ang mga panalo sa huling {{last}} laro mo sa panahong ito. Wala pang {{last}} laro? Bawat kulang ay bilang na kalahating panalo. Kaya lahat hinuhusgahan sa parehong {{last}} laro, gaano man kadalas pumunta, at mabilis kang umaakyat sa bawat bagong laro. Kapag tabla: kung sino ang mas maraming talagang nalaro sa {{last}}, saka ang mas mataas na rating. Naka-ranggo mula {{minGames}} na laro.",
-  "leaderboard.formulaBestNights": "Pinakamagandang gabi = average ng performance ng {{nights}} pinakamagandang gabi mo. Bilang ang isang gabi (5 a.m. hanggang 5 a.m.) mula {{minGames}} na laro: average na rating ng mga kalaban + 100 × log₂((panalo + {{prior}}) ÷ (talo + {{prior}})). Ang gabing wala ka pa ay bilang sa rating mo. Ang masamang gabi ay hindi lang kasama sa pinakamaganda mo, kaya walang mawawala sa pagpunta para maglaro.",
-  "leaderboard.notEnoughNights": "Wala pang may gabi na {{minGames}} na laro sa panahong ito. Bilang ang isang gabi mula {{minGames}} na laro.",
+  "leaderboard.formulaPerformance": "Performance = average na rating ng mga kalaban + 100 × log₂((panalo + {{prior}}) ÷ (talo + {{prior}})), sa mga laro ng panahong ito: ang rating na nilaro mo. Ang 100 puntos ng rating ay 2-sa-1 na tsansa, ang mismong sukat ng rating. Pinakamalaki ang bilang ng pagtalo sa malalakas na manlalaro, at walang dagdag ang mas maraming laro. Kapag pantay ang panalo at talo, ang average ng mga kalaban ang score. Ang mga may established na rating lang ({{rated}} na laro o higit pa) ang naka-ranggo, mula {{minGames}} na laro sa panahong ito.",
+  "leaderboard.formulaLast10": "Huling 10 = ang mga panalo sa huling {{last}} laro mo sa panahong ito. Wala pang {{last}} laro? Bawat kulang ay bilang na kalahating panalo. Kaya lahat hinuhusgahan sa parehong {{last}} laro, gaano man kadalas pumunta, at mabilis kang umaakyat sa bawat bagong laro. Kapag tabla: kung sino ang mas maraming talagang nalaro sa {{last}}, saka ang mas mataas na rating. Ang mga may established na rating lang ({{rated}} na laro o higit pa) ang naka-ranggo, mula {{minGames}} na laro sa panahong ito.",
+  "leaderboard.formulaBestNights": "Pinakamagandang gabi = average ng performance ng {{nights}} pinakamagandang gabi mo. Bilang ang isang gabi (5 a.m. hanggang 5 a.m.) mula {{minGames}} na laro: average na rating ng mga kalaban + 100 × log₂((panalo + {{prior}}) ÷ (talo + {{prior}})). Ang gabing wala ka pa ay bilang sa rating mo. Ang masamang gabi ay hindi lang kasama sa pinakamaganda mo, kaya walang mawawala sa pagpunta para maglaro. Ang mga may established na rating lang ({{rated}} na laro o higit pa) ang naka-ranggo.",
+  "leaderboard.notEnoughNights": "Wala pang puwedeng i-ranggo sa ganitong paraan. Kailangan ng established na rating ({{rated}} na laro o higit pa) at isang gabi na {{minGames}} na laro sa panahong ito.",
   "leaderboard.howVerdict": "{{method}}: nangunguna si {{a}}, {{scoreA}} laban sa {{scoreB}} ni {{b}}.",
   "leaderboard.howPerformanceOf": "{{name}}: average na rating ng mga kalaban {{opp}}, {{won}} panalo at {{lost}} talo ({{edge}}) = {{score}}",
   "leaderboard.howLast10Of": "{{name}}: {{won}} panalo sa huling 10 laro",
@@ -2772,5 +2772,11 @@
   "leaderboard.howNightsOf": "Pinakamagandang gabi ni {{name}}: {{nights}} → {{score}}",
   "leaderboard.howTiePlayed": "Tabla - mas maraming talagang nalaro si {{a}} sa 10 laro.",
   "leaderboard.howTieRating": "Tabla - mas mataas ang rating ni {{a}} ({{ratingA}} laban sa {{ratingB}}).",
-  "leaderboard.shareMethod": "Ranggo ayon sa {{method}}"
+  "leaderboard.shareMethod": "Ranggo ayon sa {{method}}",
+  "leaderboard.notEnoughRated": "Wala pang puwedeng i-ranggo sa ganitong paraan. Kailangan ng established na rating ({{rated}} na laro o higit pa) at {{minGames}} na laro sa panahong ito.",
+  "leaderboard.waiting": "Hindi pa naka-ranggo, provisional pa ang rating: {{names}}.",
+  "leaderboard.waitingTeams": "Hindi pa bilang para sa team nila, provisional pa ang rating: {{names}}.",
+  "leaderboard.waitingItem": "{{name}} ({{games}} sa {{rated}} na laro)",
+  "leaderboard.waitingMore": "{{count}} pa",
+  "leaderboard.waitingMoreOne": "{{count}} pa"
 }

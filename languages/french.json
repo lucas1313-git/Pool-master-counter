@@ -2758,10 +2758,10 @@
   "leaderboard.scoreLast10": "10 dernières parties",
   "leaderboard.scoreBestNights": "meilleures soirées",
   "leaderboard.howToggle": "ⓘ Comment ce classement est calculé",
-  "leaderboard.formulaPerformance": "Performance = la cote moyenne des adversaires + 100 × log₂((parties gagnées + {{prior}}) ÷ (parties perdues + {{prior}})), sur les parties de la période : la cote à laquelle vous avez joué. 100 points de cote, c'est une chance de 2 contre 1, l'échelle même de la cote. Battre des joueurs forts compte le plus, et jouer plus de parties n'ajoute rien en soi. Gagner autant que perdre donne la moyenne des adversaires. Classé à partir de {{minGames}} parties.",
-  "leaderboard.formulaLast10": "10 dernières = les parties gagnées sur vos {{last}} dernières parties de la période. Pas encore {{last}} parties ? Chaque partie manquante compte pour une demi-victoire. Tout le monde est donc jugé sur les mêmes {{last}} parties, quelle que soit sa fréquence de jeu, et chaque nouvelle partie vous fait vite avancer. À égalité : celui qui a vraiment joué le plus des {{last}}, puis la meilleure cote. Classé à partir de {{minGames}} parties.",
-  "leaderboard.formulaBestNights": "Meilleures soirées = la moyenne de la performance de vos {{nights}} meilleures soirées. Une soirée (de 5 h à 5 h) compte à partir de {{minGames}} parties : la cote moyenne des adversaires + 100 × log₂((gagnées + {{prior}}) ÷ (perdues + {{prior}})). Une soirée que vous n'avez pas encore eue compte à votre cote. Une mauvaise soirée n'est simplement pas parmi vos meilleures : venir jouer ne vous coûte jamais rien.",
-  "leaderboard.notEnoughNights": "Personne n'a encore eu de soirée de {{minGames}} parties sur cette période. Une soirée compte à partir de {{minGames}} parties.",
+  "leaderboard.formulaPerformance": "Performance = la cote moyenne des adversaires + 100 × log₂((parties gagnées + {{prior}}) ÷ (parties perdues + {{prior}})), sur les parties de la période : la cote à laquelle vous avez joué. 100 points de cote, c'est une chance de 2 contre 1, l'échelle même de la cote. Battre des joueurs forts compte le plus, et jouer plus de parties n'ajoute rien en soi. Gagner autant que perdre donne la moyenne des adversaires. Seuls les joueurs à la cote établie ({{rated}} parties ou plus) sont classés, à partir de {{minGames}} parties sur la période.",
+  "leaderboard.formulaLast10": "10 dernières = les parties gagnées sur vos {{last}} dernières parties de la période. Pas encore {{last}} parties ? Chaque partie manquante compte pour une demi-victoire. Tout le monde est donc jugé sur les mêmes {{last}} parties, quelle que soit sa fréquence de jeu, et chaque nouvelle partie vous fait vite avancer. À égalité : celui qui a vraiment joué le plus des {{last}}, puis la meilleure cote. Seuls les joueurs à la cote établie ({{rated}} parties ou plus) sont classés, à partir de {{minGames}} parties sur la période.",
+  "leaderboard.formulaBestNights": "Meilleures soirées = la moyenne de la performance de vos {{nights}} meilleures soirées. Une soirée (de 5 h à 5 h) compte à partir de {{minGames}} parties : la cote moyenne des adversaires + 100 × log₂((gagnées + {{prior}}) ÷ (perdues + {{prior}})). Une soirée que vous n'avez pas encore eue compte à votre cote. Une mauvaise soirée n'est simplement pas parmi vos meilleures : venir jouer ne vous coûte jamais rien. Seuls les joueurs à la cote établie ({{rated}} parties ou plus) sont classés.",
+  "leaderboard.notEnoughNights": "Personne ne peut encore être classé ainsi. Il faut une cote établie ({{rated}} parties ou plus) et une soirée de {{minGames}} parties sur cette période.",
   "leaderboard.howVerdict": "{{method}} : {{a}} est devant, {{scoreA}} contre {{scoreB}} pour {{b}}.",
   "leaderboard.howPerformanceOf": "{{name}} : adversaires cotés {{opp}} en moyenne, {{won}} gagnées et {{lost}} perdues ({{edge}}) = {{score}}",
   "leaderboard.howLast10Of": "{{name}} : {{won}} gagnées sur les 10 dernières parties",
@@ -2772,5 +2772,11 @@
   "leaderboard.howNightsOf": "Meilleures soirées de {{name}} : {{nights}} → {{score}}",
   "leaderboard.howTiePlayed": "Égalité - {{a}} a vraiment joué plus des 10 parties.",
   "leaderboard.howTieRating": "Égalité - la cote de {{a}} est plus haute ({{ratingA}} contre {{ratingB}}).",
-  "leaderboard.shareMethod": "Classement : {{method}}"
+  "leaderboard.shareMethod": "Classement : {{method}}",
+  "leaderboard.notEnoughRated": "Personne ne peut encore être classé ainsi. Il faut une cote établie ({{rated}} parties ou plus) et {{minGames}} parties sur cette période.",
+  "leaderboard.waiting": "Pas encore classés, cote encore provisoire : {{names}}.",
+  "leaderboard.waitingTeams": "Pas encore comptés pour leur équipe, cote encore provisoire : {{names}}.",
+  "leaderboard.waitingItem": "{{name}} ({{games}} sur {{rated}} parties)",
+  "leaderboard.waitingMore": "{{count}} autres",
+  "leaderboard.waitingMoreOne": "{{count}} autre"
 }

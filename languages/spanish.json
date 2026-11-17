@@ -2758,10 +2758,10 @@
   "leaderboard.scoreLast10": "últimas 10 partidas",
   "leaderboard.scoreBestNights": "mejores noches",
   "leaderboard.howToggle": "ⓘ Cómo se calcula esta clasificación",
-  "leaderboard.formulaPerformance": "Rendimiento = la puntuación media de los rivales + 100 × log₂((partidas ganadas + {{prior}}) ÷ (partidas perdidas + {{prior}})), en las partidas del período: la puntuación a la que jugaste. 100 puntos de puntuación son 2 a 1 de probabilidad, la misma escala de la puntuación. Ganarle a jugadores fuertes es lo que más cuenta, y jugar más partidas no suma nada por sí solo. Ganar tantas como pierdes da la media de los rivales. Se clasifica desde {{minGames}} partidas.",
-  "leaderboard.formulaLast10": "Últimas 10 = las partidas ganadas en tus últimas {{last}} partidas del período. ¿Aún no tienes {{last}}? Cada partida que falta cuenta como media victoria. Así todos se juzgan con las mismas {{last}} partidas, vengan cuando vengan, y cada partida nueva te mueve rápido. Empate: quien de verdad jugó más de las {{last}}, luego la puntuación más alta. Se clasifica desde {{minGames}} partidas.",
-  "leaderboard.formulaBestNights": "Mejores noches = el promedio del rendimiento de tus {{nights}} mejores noches. Una noche (de 5 a. m. a 5 a. m.) cuenta desde {{minGames}} partidas: la puntuación media de los rivales + 100 × log₂((ganadas + {{prior}}) ÷ (perdidas + {{prior}})). Una noche que aún no has tenido cuenta con tu puntuación. Una mala noche simplemente no está entre tus mejores, así que venir a jugar nunca te cuesta nada.",
-  "leaderboard.notEnoughNights": "Nadie ha tenido todavía una noche de {{minGames}} partidas en este período. Una noche cuenta desde {{minGames}} partidas.",
+  "leaderboard.formulaPerformance": "Rendimiento = la puntuación media de los rivales + 100 × log₂((partidas ganadas + {{prior}}) ÷ (partidas perdidas + {{prior}})), en las partidas del período: la puntuación a la que jugaste. 100 puntos de puntuación son 2 a 1 de probabilidad, la misma escala de la puntuación. Ganarle a jugadores fuertes es lo que más cuenta, y jugar más partidas no suma nada por sí solo. Ganar tantas como pierdes da la media de los rivales. Solo se clasifican los jugadores con puntuación establecida ({{rated}} partidas o más), desde {{minGames}} partidas en el período.",
+  "leaderboard.formulaLast10": "Últimas 10 = las partidas ganadas en tus últimas {{last}} partidas del período. ¿Aún no tienes {{last}}? Cada partida que falta cuenta como media victoria. Así todos se juzgan con las mismas {{last}} partidas, vengan cuando vengan, y cada partida nueva te mueve rápido. Empate: quien de verdad jugó más de las {{last}}, luego la puntuación más alta. Solo se clasifican los jugadores con puntuación establecida ({{rated}} partidas o más), desde {{minGames}} partidas en el período.",
+  "leaderboard.formulaBestNights": "Mejores noches = el promedio del rendimiento de tus {{nights}} mejores noches. Una noche (de 5 a. m. a 5 a. m.) cuenta desde {{minGames}} partidas: la puntuación media de los rivales + 100 × log₂((ganadas + {{prior}}) ÷ (perdidas + {{prior}})). Una noche que aún no has tenido cuenta con tu puntuación. Una mala noche simplemente no está entre tus mejores, así que venir a jugar nunca te cuesta nada. Solo se clasifican los jugadores con puntuación establecida ({{rated}} partidas o más).",
+  "leaderboard.notEnoughNights": "Nadie puede clasificarse así todavía. Hace falta una puntuación establecida ({{rated}} partidas o más) y una noche de {{minGames}} partidas en este período.",
   "leaderboard.howVerdict": "{{method}}: {{a}} va delante, {{scoreA}} frente a {{scoreB}} de {{b}}.",
   "leaderboard.howPerformanceOf": "{{name}}: rivales con puntuación media de {{opp}}, ganó {{won}} y perdió {{lost}} ({{edge}}) = {{score}}",
   "leaderboard.howLast10Of": "{{name}}: ganó {{won}} de las últimas 10 partidas",
@@ -2772,5 +2772,11 @@
   "leaderboard.howNightsOf": "Mejores noches de {{name}}: {{nights}} → {{score}}",
   "leaderboard.howTiePlayed": "Empate - {{a}} de verdad jugó más de las 10 partidas.",
   "leaderboard.howTieRating": "Empate - la puntuación de {{a}} es más alta ({{ratingA}} frente a {{ratingB}}).",
-  "leaderboard.shareMethod": "Clasificación por {{method}}"
+  "leaderboard.shareMethod": "Clasificación por {{method}}",
+  "leaderboard.notEnoughRated": "Nadie puede clasificarse así todavía. Hace falta una puntuación establecida ({{rated}} partidas o más) y {{minGames}} partidas en este período.",
+  "leaderboard.waiting": "Aún sin clasificar, puntuación todavía provisional: {{names}}.",
+  "leaderboard.waitingTeams": "Aún no cuentan para su equipo, puntuación todavía provisional: {{names}}.",
+  "leaderboard.waitingItem": "{{name}} ({{games}} de {{rated}} partidas)",
+  "leaderboard.waitingMore": "{{count}} más",
+  "leaderboard.waitingMoreOne": "{{count}} más"
 }

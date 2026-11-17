@@ -2758,10 +2758,10 @@
   "leaderboard.scoreLast10": "最近10局",
   "leaderboard.scoreBestNights": "最好幾晚",
   "leaderboard.howToggle": "ⓘ 呢個排名點計",
-  "leaderboard.formulaPerformance": "表現 = 對手平均評分 + 100 × log₂((贏局 + {{prior}}) ÷ (輸局 + {{prior}}))，計呢段時間嘅局：即係你打出嚟嘅評分。評分差100分即係2比1嘅勝算，同評分一樣嘅尺度。贏強手最計數，打多啲局本身唔會加分。贏輸一樣多，就等於對手平均評分。打夠{{minGames}}局先上榜。",
-  "leaderboard.formulaLast10": "最近10局 = 你呢段時間最近{{last}}局入面贏咗幾多局。未夠{{last}}局？每欠一局當半局贏。咁人人都用同樣{{last}}局嚟比，唔理幾耐嚟一次，每打一局都升得好快。同分：真係打多啲嗰個先，之後睇評分高低。打夠{{minGames}}局先上榜。",
-  "leaderboard.formulaBestNights": "最好幾晚 = 你最好{{nights}}晚嘅表現平均。一晚（朝早5點到朝早5點）打夠{{minGames}}局先計：對手平均評分 + 100 × log₂((贏 + {{prior}}) ÷ (輸 + {{prior}}))。未打嘅晚就用你嘅評分計。打得差嘅一晚唔會係你最好嘅幾晚之一，所以嚟打波永遠唔會蝕。",
-  "leaderboard.notEnoughNights": "呢段時間仲未有人一晚打夠{{minGames}}局。一晚要打夠{{minGames}}局先計。",
+  "leaderboard.formulaPerformance": "表現 = 對手平均評分 + 100 × log₂((贏局 + {{prior}}) ÷ (輸局 + {{prior}}))，計呢段時間嘅局：即係你打出嚟嘅評分。評分差100分即係2比1嘅勝算，同評分一樣嘅尺度。贏強手最計數，打多啲局本身唔會加分。贏輸一樣多，就等於對手平均評分。評分已穩定（打咗{{rated}}局或以上）嘅球員先上榜，呢段時間要打夠{{minGames}}局。",
+  "leaderboard.formulaLast10": "最近10局 = 你呢段時間最近{{last}}局入面贏咗幾多局。未夠{{last}}局？每欠一局當半局贏。咁人人都用同樣{{last}}局嚟比，唔理幾耐嚟一次，每打一局都升得好快。同分：真係打多啲嗰個先，之後睇評分高低。評分已穩定（打咗{{rated}}局或以上）嘅球員先上榜，呢段時間要打夠{{minGames}}局。",
+  "leaderboard.formulaBestNights": "最好幾晚 = 你最好{{nights}}晚嘅表現平均。一晚（朝早5點到朝早5點）打夠{{minGames}}局先計：對手平均評分 + 100 × log₂((贏 + {{prior}}) ÷ (輸 + {{prior}}))。未打嘅晚就用你嘅評分計。打得差嘅一晚唔會係你最好嘅幾晚之一，所以嚟打波永遠唔會蝕。評分已穩定（打咗{{rated}}局或以上）嘅球員先上榜。",
+  "leaderboard.notEnoughNights": "暫時仲未有人可以咁排名。要評分已穩定（打咗{{rated}}局或以上），而且呢段時間有一晚打夠{{minGames}}局。",
   "leaderboard.howVerdict": "{{method}}：{{a}}領先，{{scoreA}} 對 {{b}}嘅 {{scoreB}}。",
   "leaderboard.howPerformanceOf": "{{name}}：對手平均評分{{opp}}，贏{{won}}輸{{lost}}（{{edge}}）= {{score}}",
   "leaderboard.howLast10Of": "{{name}}：最近10局贏咗{{won}}局",
@@ -2772,5 +2772,11 @@
   "leaderboard.howNightsOf": "{{name}}最好嘅幾晚：{{nights}} → {{score}}",
   "leaderboard.howTiePlayed": "同分 - {{a}}真係打咗多啲嗰10局。",
   "leaderboard.howTieRating": "同分 - {{a}}評分較高（{{ratingA}} 對 {{ratingB}}）。",
-  "leaderboard.shareMethod": "排名方法：{{method}}"
+  "leaderboard.shareMethod": "排名方法：{{method}}",
+  "leaderboard.notEnoughRated": "暫時仲未有人可以咁排名。要評分已穩定（打咗{{rated}}局或以上），而且呢段時間打夠{{minGames}}局。",
+  "leaderboard.waiting": "未上榜，評分仲未穩定：{{names}}。",
+  "leaderboard.waitingTeams": "未計入隊伍，評分仲未穩定：{{names}}。",
+  "leaderboard.waitingItem": "{{name}}（{{games}}/{{rated}}局）",
+  "leaderboard.waitingMore": "仲有{{count}}個",
+  "leaderboard.waitingMoreOne": "仲有{{count}}個"
 }

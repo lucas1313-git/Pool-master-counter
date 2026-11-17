@@ -3313,6 +3313,7 @@
   var leaderboardFormulaToggle = document.getElementById("leaderboard-formula-toggle");
   var leaderboardMethodButtons = document.getElementById("leaderboard-method-filter").querySelectorAll(".leaderboard-method-btn");
   var leaderboardMethodHint = document.getElementById("leaderboard-method-hint");
+  var leaderboardOnboardingNote = document.getElementById("leaderboard-onboarding-note");
   var achievementsModalOverlay = document.getElementById("achievements-modal-overlay");
   var achievementsModalTitle = document.getElementById("achievements-modal-title");
   var achievementsModalList = document.getElementById("achievements-modal-list");
@@ -30241,6 +30242,13 @@
     }
   }
 
+  // Onboarded: a rating no longer provisional - RATING_PROVISIONAL_GAMES rated games, the player
+  // page's "established" (the user: "they should be onboarded already, same for all ratings").
+  // The 3 methods rank only those; a team counts only its onboarded players' games.
+  function leaderboardOnboarded(name) {
+    return getPlayerRobustness(name) >= RATING_PROVISIONAL_GAMES;
+  }
+
   // Games as the methods read them: when, won or not, and the opponents' average rating (as it
   // is now - "how good the players you beat are").
   function leaderboardMethodGames(games) {
@@ -30264,8 +30272,10 @@
   }
 
   // The ranking of the entries built (players, teams or a league's members): the MVP score's own
-  // bar and order, or the chosen method's - an entry it can't rank yet (under 3 games; for best
-  // nights, no night of 3) left off, as under the bar. The array carries .minGames and .method.
+  // bar and order, or the chosen method's - an entry not onboarded yet, or that it can't rank yet
+  // (under 3 games; for best nights, no night of 3), left off, as under the bar. The array carries
+  // .minGames, .method and .waiting (the players left off for their provisional rating, closest
+  // to established first).
   function rankLeaderboardEntries(rawEntries, period) {
     var method = leaderboardMethod();
     var entries;
@@ -30288,15 +30298,27 @@
       entries.sort(function (a, b) {
         return b.mvpScore - a.mvpScore;
       });
+      entries.waiting = [];
     } else {
       var M = PMCLib.leaderboardMethods;
       entries = rawEntries.filter(function (e) {
+        if (!e.onboarded) return false;
         e.methodResult = M.score(method, e.methodGames || leaderboardMethodGames(e.methodRacks || []), e.rating, localDateStrFromTs);
         return !!e.methodResult;
       });
       entries.minGames = M.MIN_GAMES;
       entries.sort(function (a, b) {
         return M.compare(method, { result: a.methodResult, rating: a.rating }, { result: b.methodResult, rating: b.rating });
+      });
+      // (a player: themselves, if they played in the period; a team: its players who did)
+      var waiting = [];
+      rawEntries.forEach(function (e) {
+        (e.waiting || (e.onboarded || !e.gamesPlayed ? [] : [e.name])).forEach(function (n) {
+          if (waiting.indexOf(n) === -1) waiting.push(n);
+        });
+      });
+      entries.waiting = waiting.sort(function (a, b) {
+        return getPlayerRobustness(b) - getPlayerRobustness(a);
       });
     }
     entries.method = method;
@@ -30328,7 +30350,8 @@
         skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames)),
         bestRun: getPlayerBestRun(name),
         // (the racks only - a match won is a title, its racks are games already)
-        methodRacks: stats.games
+        methodRacks: stats.games,
+        onboarded: leaderboardOnboarded(name)
       };
     });
     return rankLeaderboardEntries(rawEntries, period);
@@ -30352,6 +30375,7 @@
       var empty = [];
       empty.minGames = leaderboardMethod() === "mvp" ? LEADERBOARD_MIN_GAMES : PMCLib.leaderboardMethods.MIN_GAMES;
       empty.method = leaderboardMethod();
+      empty.waiting = [];
       return empty;
     }
     var periodMatches = filterGamesByPeriod(league.matches, period);
@@ -30374,7 +30398,8 @@
         bestRun: getPlayerBestRun(m.name),
         methodGames: played.map(function (match) {
           return { ts: match.ts, won: match.winner === m.name, opp: getPlayerRating(match.playerA === m.name ? match.playerB : match.playerA) };
-        })
+        }),
+        onboarded: leaderboardOnboarded(m.name)
       };
     });
     return rankLeaderboardEntries(rawEntries, period);
@@ -30523,9 +30548,11 @@
     var ratingSum = 0;
     var bestRun = 0;
     var allMemberGames = [];
-    // (the leaderboard methods' racks: two of the team's players on the same side, one game)
+    // (the leaderboard methods' racks: two of the team's players on the same side, one game; only
+    // its onboarded players' - the ones not yet, who played in the period, waiting)
     var methodRacks = [];
     var methodRackSeen = {};
+    var waiting = [];
     members.forEach(function (name) {
       var stats = computePlayerCareerStats(name, period);
       gamesPlayed += stats.played + stats.tournamentPlayed;
@@ -30534,12 +30561,16 @@
       var games = stats.games.concat(stats.tournamentGames);
       skunkWins += countSkunkWins(games);
       allMemberGames = allMemberGames.concat(games);
-      stats.games.forEach(function (g) {
-        var key = g.ts + "|" + g.result;
-        if (methodRackSeen[key]) return;
-        methodRackSeen[key] = true;
-        methodRacks.push(g);
-      });
+      if (leaderboardOnboarded(name)) {
+        stats.games.forEach(function (g) {
+          var key = g.ts + "|" + g.result;
+          if (methodRackSeen[key]) return;
+          methodRackSeen[key] = true;
+          methodRacks.push(g);
+        });
+      } else if (stats.games.length) {
+        waiting.push(name);
+      }
       ratingSum += getPlayerRating(name);
       bestRun = Math.max(bestRun, getPlayerBestRun(name));
     });
@@ -30557,7 +30588,9 @@
       // rights for, same idea as skunkWins already being per-member wins
       // added together rather than some team-wide concept of its own.
       bestRun: bestRun,
-      methodRacks: methodRacks
+      methodRacks: methodRacks,
+      onboarded: members.some(leaderboardOnboarded),
+      waiting: waiting
     };
   }
 
@@ -30990,7 +31023,7 @@
     if (entries.length === 0) {
       leaderboardList.classList.add("hidden");
       leaderboardEmptyHint.classList.remove("hidden");
-      leaderboardEmptyHint.textContent = T(leaderboardEmptyHintKey(mode, entries.method), { minGames: entries.minGames });
+      leaderboardEmptyHint.textContent = T(leaderboardEmptyHintKey(mode, entries.method), { minGames: entries.minGames, rated: RATING_PROVISIONAL_GAMES });
     } else {
       leaderboardList.classList.remove("hidden");
       leaderboardEmptyHint.classList.add("hidden");
@@ -31005,6 +31038,8 @@
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
     leaderboardMethodHint.textContent = T(LEADERBOARD_METHOD_HINT_KEYS[method]);
+    leaderboardOnboardingNote.classList.toggle("hidden", !entries.waiting.length);
+    leaderboardOnboardingNote.textContent = entries.waiting.length ? leaderboardWaitingText(entries.waiting, mode) : "";
     leaderboardFormulaToggle.textContent = T(method === "mvp" ? "leaderboard.formulaToggle" : "leaderboard.howToggle");
     if (method === "mvp") {
       leaderboardFormulaNote.textContent = T("leaderboard.formulaNote", {
@@ -31019,6 +31054,7 @@
       var M = PMCLib.leaderboardMethods;
       leaderboardFormulaNote.textContent = T(LEADERBOARD_METHOD_FORMULA_KEYS[method], {
         minGames: M.MIN_GAMES,
+        rated: RATING_PROVISIONAL_GAMES,
         prior: M.PRIOR,
         last: M.LAST_GAMES,
         nights: M.BEST_NIGHTS
@@ -31038,11 +31074,25 @@
     bestNights: "leaderboard.formulaBestNights"
   };
 
-  // nobody ranked yet: why (🌙 best nights: a night of 3 games is what's missing)
+  // nobody ranked yet: why (the 3 methods: an established rating too; 🌙 best nights: and a
+  // night of 3 games)
   function leaderboardEmptyHintKey(mode, method) {
     if (mode === "teams") return "leaderboard.notEnoughTeamData";
     if (mode === "league") return "leaderboard.notEnoughLeagueData";
-    return method === "bestNights" ? "leaderboard.notEnoughNights" : "leaderboard.notEnoughData";
+    if (method === "mvp") return "leaderboard.notEnoughData";
+    return method === "bestNights" ? "leaderboard.notEnoughNights" : "leaderboard.notEnoughRated";
+  }
+
+  // "Not ranked yet, rating still provisional: Ana (12 of 20 games), Bo (5 of 20 games)." - the
+  // first few, closest to established first
+  var LEADERBOARD_WAITING_SHOWN = 6;
+  function leaderboardWaitingText(waiting, mode) {
+    var items = waiting.slice(0, LEADERBOARD_WAITING_SHOWN).map(function (n) {
+      return T("leaderboard.waitingItem", { name: n, games: getPlayerRobustness(n), rated: RATING_PROVISIONAL_GAMES });
+    });
+    var more = waiting.length - LEADERBOARD_WAITING_SHOWN;
+    if (more > 0) items.push(TP("leaderboard.waitingMore", more, { count: more }));
+    return T(mode === "teams" ? "leaderboard.waitingTeams" : "leaderboard.waiting", { names: items.join(", ") });
   }
 
   // Plain text, not a screenshot - works with any share target (text
@@ -31064,7 +31114,7 @@
     if (method !== "mvp") lines.push(T("leaderboard.shareMethod", { method: T(LEADERBOARD_METHOD_LABEL_KEYS[method]) }));
     lines.push("");
     if (entries.length === 0) {
-      lines.push(T(leaderboardEmptyHintKey(mode, method), { minGames: entries.minGames }));
+      lines.push(T(leaderboardEmptyHintKey(mode, method), { minGames: entries.minGames, rated: RATING_PROVISIONAL_GAMES }));
     } else {
       entries.forEach(function (entry, i) {
         var rank = i + 1;

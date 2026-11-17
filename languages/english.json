@@ -2758,10 +2758,10 @@
   "leaderboard.scoreLast10": "last 10 games",
   "leaderboard.scoreBestNights": "best nights",
   "leaderboard.howToggle": "ⓘ How this ranking works",
-  "leaderboard.formulaPerformance": "Performance = the opponents' average rating + 100 × log₂((games won + {{prior}}) ÷ (games lost + {{prior}})), over this period's games: the rating you played at. 100 rating points is 2-to-1 odds, the rating's own scale. Beating strong players counts most, and more games add nothing by themselves. Winning as many as you lose scores the opponents' average. Ranked from {{minGames}} games.",
-  "leaderboard.formulaLast10": "Last 10 = the games won in your last {{last}} games of this period. Not {{last}} games yet? Each one missing counts as half a win. So everyone is judged on the same {{last}} games, however often they come, and every new game moves you fast. Level scores: whoever really played more of the {{last}}, then the higher rating. Ranked from {{minGames}} games.",
-  "leaderboard.formulaBestNights": "Best nights = the average of your {{nights}} best nights' performance. A night (5 a.m. to 5 a.m.) counts from {{minGames}} games: the opponents' average rating + 100 × log₂((won + {{prior}}) ÷ (lost + {{prior}})). A night you haven't had yet counts at your rating. A bad night is simply not one of your best, so coming to play never costs you anything.",
-  "leaderboard.notEnoughNights": "Nobody has had a night of {{minGames}} games yet in this period. A night counts from {{minGames}} games.",
+  "leaderboard.formulaPerformance": "Performance = the opponents' average rating + 100 × log₂((games won + {{prior}}) ÷ (games lost + {{prior}})), over this period's games: the rating you played at. 100 rating points is 2-to-1 odds, the rating's own scale. Beating strong players counts most, and more games add nothing by themselves. Winning as many as you lose scores the opponents' average. Only players with an established rating ({{rated}} games or more) are ranked, from {{minGames}} games in this period.",
+  "leaderboard.formulaLast10": "Last 10 = the games won in your last {{last}} games of this period. Not {{last}} games yet? Each one missing counts as half a win. So everyone is judged on the same {{last}} games, however often they come, and every new game moves you fast. Level scores: whoever really played more of the {{last}}, then the higher rating. Only players with an established rating ({{rated}} games or more) are ranked, from {{minGames}} games in this period.",
+  "leaderboard.formulaBestNights": "Best nights = the average of your {{nights}} best nights' performance. A night (5 a.m. to 5 a.m.) counts from {{minGames}} games: the opponents' average rating + 100 × log₂((won + {{prior}}) ÷ (lost + {{prior}})). A night you haven't had yet counts at your rating. A bad night is simply not one of your best, so coming to play never costs you anything. Only players with an established rating ({{rated}} games or more) are ranked.",
+  "leaderboard.notEnoughNights": "Nobody can be ranked this way yet. A player needs an established rating ({{rated}} games or more) and a night of {{minGames}} games in this period.",
   "leaderboard.howVerdict": "{{method}}: {{a}} is ahead, {{scoreA}} vs {{b}}'s {{scoreB}}.",
   "leaderboard.howPerformanceOf": "{{name}}: opponents rated {{opp}} on average, won {{won}} and lost {{lost}} ({{edge}}) = {{score}}",
   "leaderboard.howLast10Of": "{{name}}: won {{won}} of the last 10 games",
@@ -2772,5 +2772,11 @@
   "leaderboard.howNightsOf": "{{name}}'s best nights: {{nights}} → {{score}}",
   "leaderboard.howTiePlayed": "Level - {{a}} really played more of the 10 games.",
   "leaderboard.howTieRating": "Level - {{a}}'s rating is higher ({{ratingA}} vs {{ratingB}}).",
-  "leaderboard.shareMethod": "Ranked by {{method}}"
+  "leaderboard.shareMethod": "Ranked by {{method}}",
+  "leaderboard.notEnoughRated": "Nobody can be ranked this way yet. A player needs an established rating ({{rated}} games or more) and {{minGames}} games in this period.",
+  "leaderboard.waiting": "Not ranked yet, rating still provisional: {{names}}.",
+  "leaderboard.waitingTeams": "Not counted for their team yet, rating still provisional: {{names}}.",
+  "leaderboard.waitingItem": "{{name}} ({{games}} of {{rated}} games)",
+  "leaderboard.waitingMore": "{{count}} more",
+  "leaderboard.waitingMoreOne": "{{count}} more"
 }

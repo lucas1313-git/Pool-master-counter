@@ -12,6 +12,8 @@
 // - "bestNights": the average of your 3 best nights' performance (a pool night, 5 a.m. to 5 a.m.,
 //   of 3 games or more); a night you haven't had counts at your rating, so a bad night - or none -
 //   never costs anything.
+// Who is ranked at all is js/app.js's: only players already onboarded - a rating established, no
+// longer provisional (the user: "they should be onboarded already, same for all ratings").
 // Pure: no page, no storage, no app state - games come in as {ts, won, opp} (opp: the opponents'
 // average rating, null when there were none). js/app.js calls it through PMCLib.leaderboardMethods,
 // the unit tests (tests/unit/) load it in Node.

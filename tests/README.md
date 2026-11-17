@@ -690,9 +690,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   Pool: the points, as before; no page errors. `node tests/probe_race_score.js [shots]`.
 - **probe_leaderboard_methods.js** — the Leaderboard's ways to pick the leader (2026-11-17: "keep
   the default as is but propose 3 great ways to motivate players that don't play as often"), its
-  own file server on 4313: 7 nights of Reg v Mid, Ace 3 nights (8 of 9 v Reg), Low 2 nights - ⭐ MVP
-  score first and as before (Reg, Mid; no score on the rows); 📈 Performance: Ace first, all 4,
-  the ❓ makeup; 🔟 Last 10 games: Ace "8½ / 10"; 🌙 Best 3 nights: Ace first, Low's "1 night not
-  had yet"; kept after a reload; 📤 Share "Ranked by"; Last 7 Days; French; back to ⭐; no page
-  errors. `node tests/probe_leaderboard_methods.js [shots]`. The equations:
+  own file server on 4313: 7 nights of Reg v Mid, Ace 3 nights (8 of 9 v Reg), Low 2 nights, Ace
+  and Low with 20 old games (rating established), New 3-0 v Reg (provisional) - ⭐ MVP score
+  first and as before (no score on the rows, no note); Last 30 Days, 📈 Performance: Ace first,
+  the 4, New left off and named in "Not ranked yet, rating still provisional: New (3 of 20
+  games)." (the user: "they should be onboarded already, same for all ratings"), the ❓ makeup;
+  Teams: New "not counted for their team yet"; 🔟 Last 10 games: Ace "8½ / 10"; 🌙 Best 3 nights:
+  Ace first, Low's "1 night not had yet"; kept after a reload; 📤 Share "Ranked by"; Last 7 Days;
+  New at 20 games ranked; French; back to ⭐; no page errors. `node tests/probe_leaderboard_methods.js [shots]`. The equations:
   tests/unit/leaderboard-methods.test.js, in `npm test`.
