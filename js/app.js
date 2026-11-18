@@ -11110,8 +11110,8 @@
 
   // Per-player best-ever run, separate from RUN_RECORDS above (which only
   // remembers the single global all-time/daily record, not who else came
-  // close). Used by the leaderboard's run bonus (computeLeaderboardScore-
-  // Breakdown) and the Streak Shooter achievement - same findContactKey-
+  // close). Used by the player page and the Streak Shooter achievement
+  // (no longer by the leaderboard, 2026-11-18) - same findContactKey-
   // style case-insensitive key lookup as PLAYER_CONTACTS.
   var PLAYER_BEST_RUNS_KEY = "poolMasterCounter.playerBestRuns.v1";
 
@@ -30028,7 +30028,7 @@
   });
   // Points per tournament win - sits right after rating in influence per
   // request (win rate, rating, tournament wins, games played, skunks,
-  // run, THEN dominance). At 3/win, a single win (3) lands below a
+  // THEN dominance). At 3/win, a single win (3) lands below a
   // typical rating gap's contribution (ratingTerm = rating/20, so even a
   // modest ~60-point gap is worth 3+) rather than swamping it outright -
   // the old weight of 6 meant one win alone beat a full 100-point rating
@@ -30039,10 +30039,8 @@
   // winning. The ratio is 0-1 (see averageDominanceRatio), so this
   // multiplies up to the term's max at ratio 1.0 (emptying the rack
   // every win); typical dominant wins land well under it. Deliberately
-  // the smallest-influence term of the six per request (win rate,
-  // rating, games played, skunks, run, THEN dominance) - lower than
-  // LEADERBOARD_RUN_BONUS_MAX below, since a run of skilled shooting is
-  // judged a bigger deal than a lopsided final score.
+  // the smallest-influence term per request (win rate, rating, games
+  // played, skunks, THEN dominance).
   var LEADERBOARD_DOMINANCE_WEIGHT = 5;
   // Points per skunk win (opponent potted zero balls) - deliberately
   // small (both this and dominance are "style" bonuses on top of a win,
@@ -30052,19 +30050,8 @@
   // large a weight here lets it swamp everything else, which is what
   // happened at the original weight of 4.
   var LEADERBOARD_SKUNK_WIN_WEIGHT = 1;
-  // A player's best-ever "balls in a row" run (see the run-tracking
-  // section above, getPlayerBestRun) only starts contributing once it
-  // reaches this length - a 2-3 ball run is unremarkable, 5+ is the
-  // threshold worth rewarding. Points scale with how far past it a
-  // player's best run goes (a 5-run is worth one unit, a 10-run six),
-  // not just a flat bonus for clearing the bar - but capped at
-  // LEADERBOARD_RUN_BONUS_MAX so one exceptional outlier run can't ever
-  // swamp win rate/rating/activity/skunks the way an uncapped version
-  // of this term could (a 30-ball run used to add 52 points outright,
-  // comfortably beating a max-possible rating term of 45).
-  var LEADERBOARD_RUN_BONUS_MIN = 5;
-  var LEADERBOARD_RUN_WEIGHT = 2;
-  var LEADERBOARD_RUN_BONUS_MAX = 8;
+  // (The best "balls in a row" run used to add up to 8 points too - taken out 2026-11-18 at the
+  // user's request: the score is about winning games, not one run.)
 
   // How many balls are actually in play for a given game type - the
   // scale "balls left on the table" is relative TO. One Pocket plays a
@@ -30228,10 +30215,6 @@
     var ratingTerm = entry.rating / 20;
     var dominanceTerm = entry.avgDominanceRatio * LEADERBOARD_DOMINANCE_WEIGHT;
     var skunkTerm = entry.skunkWins * LEADERBOARD_SKUNK_WIN_WEIGHT;
-    var runTerm =
-      entry.bestRun >= LEADERBOARD_RUN_BONUS_MIN
-        ? Math.min((entry.bestRun - (LEADERBOARD_RUN_BONUS_MIN - 1)) * LEADERBOARD_RUN_WEIGHT, LEADERBOARD_RUN_BONUS_MAX)
-        : 0;
     var activityTerm = Math.log2(entry.gamesPlayed) * 2;
     return {
       winRateTerm: winRateTerm,
@@ -30239,9 +30222,8 @@
       ratingTerm: ratingTerm,
       dominanceTerm: dominanceTerm,
       skunkTerm: skunkTerm,
-      runTerm: runTerm,
       activityTerm: activityTerm,
-      total: winRateTerm + tournamentTerm + ratingTerm + dominanceTerm + skunkTerm + runTerm + activityTerm
+      total: winRateTerm + tournamentTerm + ratingTerm + dominanceTerm + skunkTerm + activityTerm
     };
   }
 
@@ -30373,7 +30355,6 @@
         tournamentWins: stats.tournamentWins,
         avgDominanceRatio: averageDominanceRatio(stats.games.concat(stats.tournamentGames)),
         skunkWins: countSkunkWins(stats.games.concat(stats.tournamentGames)),
-        bestRun: getPlayerBestRun(name),
         // (the racks only - a match won is a title, its racks are games already)
         methodRacks: stats.games,
         onboarded: leaderboardOnboarded(name)
@@ -30392,8 +30373,8 @@
   // everyone regardless of how much they've actually played in the
   // league. tournamentWins/avgDominanceRatio/skunkWins are always 0 here
   // (those concepts don't apply to a league's race-format matches) -
-  // rating and bestRun still come from the same shared, cross-cutting
-  // stats every other leaderboard view uses.
+  // rating still comes from the same shared, cross-cutting stats every
+  // other leaderboard view uses.
   function computeLeaderboardLeagueEntries(period) {
     var league = findLeagueById(activeLeagueId);
     if (!league) {
@@ -30420,7 +30401,6 @@
         tournamentWins: 0,
         avgDominanceRatio: 0,
         skunkWins: 0,
-        bestRun: getPlayerBestRun(m.name),
         methodGames: played.map(function (match) {
           var other = match.playerA === m.name ? match.playerB : match.playerA;
           return { ts: match.ts, won: match.winner === m.name, opp: getPlayerRating(other), names: [other] };
@@ -30572,7 +30552,6 @@
     var tournamentWins = 0;
     var skunkWins = 0;
     var ratingSum = 0;
-    var bestRun = 0;
     var allMemberGames = [];
     // (the leaderboard methods' racks: two of the team's players on the same side, one game; only
     // its onboarded players' - the ones not yet, who played in the period, waiting)
@@ -30598,7 +30577,6 @@
         waiting.push(name);
       }
       ratingSum += getPlayerRating(name);
-      bestRun = Math.max(bestRun, getPlayerBestRun(name));
     });
     return {
       members: members,
@@ -30609,11 +30587,6 @@
       tournamentWins: tournamentWins,
       avgDominanceRatio: averageDominanceRatio(allMemberGames),
       skunkWins: skunkWins,
-      // The team's proudest individual run, not summed across members -
-      // a "5 in a row" is an individual feat the team gets bragging
-      // rights for, same idea as skunkWins already being per-member wins
-      // added together rather than some team-wide concept of its own.
-      bestRun: bestRun,
       methodRacks: methodRacks,
       // (the MVP score's games, as counted in gamesPlayed - for 🧗)
       mvpRacks: allMemberGames,
@@ -30709,16 +30682,6 @@
             leader: leader.name,
             leaderVal: leader.skunkWins,
             otherVal: other.skunkWins
-          });
-        }
-      },
-      {
-        delta: a.scoreBreakdown.runTerm - b.scoreBreakdown.runTerm,
-        describe: function (leader, other) {
-          return T("leaderboard.reasonRun", {
-            leader: leader.name,
-            leaderVal: leader.bestRun,
-            otherVal: other.bestRun
           });
         }
       },
@@ -31083,7 +31046,6 @@
       if (b.tournamentTerm) lines.push("• " + T("leaderboard.whyTermTournament", { count: entry.tournamentWins, weight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT, points: pts(b.tournamentTerm) }));
       if (b.dominanceTerm) lines.push("• " + T("leaderboard.whyTermDominance", { pct: Math.round(entry.avgDominanceRatio * 100), weight: LEADERBOARD_DOMINANCE_WEIGHT, points: pts(b.dominanceTerm) }));
       if (b.skunkTerm) lines.push("• " + T("leaderboard.whyTermSkunk", { count: entry.skunkWins, points: pts(b.skunkTerm) }));
-      if (b.runTerm) lines.push("• " + T("leaderboard.whyTermRun", { count: entry.bestRun, points: pts(b.runTerm) }));
       lines.push("• " + T("leaderboard.whyTermActivity", { games: entry.gamesPlayed, points: pts(b.activityTerm) }));
       lines.push("");
       lines.push(T("leaderboard.whyByOpponent"));
@@ -31242,9 +31204,6 @@
     if (entry.skunkWins > 0) {
       statParts.push(T("leaderboard.statSkunkWins", { wins: entry.skunkWins }));
     }
-    if (entry.bestRun >= LEADERBOARD_RUN_BONUS_MIN) {
-      statParts.push(T("leaderboard.statBestRun", { count: entry.bestRun }));
-    }
     statParts.push(T(isTeamEntry ? "leaderboard.statAvgRating" : "leaderboard.statRating", { rating: Math.round(entry.rating) }));
     return statParts;
   }
@@ -31395,9 +31354,7 @@
         minGames: entries.minGames,
         tournamentWeight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
         dominanceWeight: LEADERBOARD_DOMINANCE_WEIGHT,
-        skunkWeight: LEADERBOARD_SKUNK_WIN_WEIGHT,
-        runMin: LEADERBOARD_RUN_BONUS_MIN,
-        runWeight: LEADERBOARD_RUN_WEIGHT
+        skunkWeight: LEADERBOARD_SKUNK_WIN_WEIGHT
       });
     } else {
       var M = PMCLib.leaderboardMethods;

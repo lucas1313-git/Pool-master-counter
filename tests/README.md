@@ -692,7 +692,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
   the default as is but propose 3 great ways to motivate players that don't play as often"), its
   own file server on 4313: 7 nights of Reg v Mid, Ace 3 nights (8 of 9 v Reg), Low 2 nights, Ace
   and Low with 20 old games (rating established), New 3-0 v Reg (provisional) - ⭐ MVP score
-  first and as before (no score on the rows, no note); Last 30 Days, 📈 Performance: Ace first,
+  first and as before (no score on the rows, no note), Low's 30 balls in a row worth nothing (not
+  in the formula, the row or 🧗 - 2026-11-18, "remove the "ball in a row" from the calculation");
+  Last 30 Days, 📈 Performance: Ace first,
   the 4, New left off and named in "Not ranked yet, rating still provisional: New (3 of 20
   games)." (the user: "they should be onboarded already, same for all ratings"), the ❓ makeup;
   Teams: New "not counted for their team yet"; 🔟 Last 10 games: Ace "8½ / 10"; 🌙 Best 3 nights:

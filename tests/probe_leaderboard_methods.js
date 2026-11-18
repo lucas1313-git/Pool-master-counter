@@ -7,7 +7,9 @@
 //   and beats Reg 8 of 9; Low comes 2 nights and loses 6 of 7 to Mid; New, brand new, beats Reg
 //   3-0 two nights ago (3 rated games: provisional); Reg and New are the Sharks, Ace and Mid the Owls;
 // - ⭐ MVP score (the default, on first, all time): the 4, New under the 10 games; no score on the
-//   rows, no note, "ⓘ How the MVP score works" and the formula as before;
+//   rows, no note, "ⓘ How the MVP score works" and the formula as before; Low's 30 balls in a row
+//   count for nothing (2026-11-18, the user: "remove the "ball in a row" from the calculation") -
+//   not in the formula, the row or 🧗;
 // - Last 30 Days, 📈 Performance: Ace first (MVP tag), the 4 ranked, Low last, New not (his 3-0
 //   would put him second): "Not ranked yet, rating still provisional: New (3 of 20 games)."; each
 //   row's score, big; ❓ on Ace: "📈 Performance: Ace is ahead" and what each score is made of; the
@@ -97,6 +99,7 @@ function logs(newPlayed) {
     ["onboardingSeen", "boardTipsSeen", "homeScreenTipSeen", "migratedFromRepo"].forEach((k) => localStorage.setItem("poolMasterCounter." + k + ".v1", "1"));
     localStorage.setItem("poolMasterCounter.playerStats.v1", JSON.stringify(logs));
     localStorage.setItem("poolMasterCounter.contacts.v1", JSON.stringify({ Reg: { clubTeam: "Sharks" }, New: { clubTeam: "Sharks" }, Ace: { clubTeam: "Owls" }, Mid: { clubTeam: "Owls" } }));
+    localStorage.setItem("poolMasterCounter.playerBestRuns.v1", JSON.stringify({ Low: { name: "Low", value: 30, ts: new Date().toISOString() } }));
     localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify({
       players: ["Reg", "Mid", "Ace", "Low", "New"].map((n) => ({ id: n.toLowerCase(), name: n, playing: n === "Reg" || n === "Mid", balls: 0 })),
       playerWins: {}, teamWins: {}, teamMvpWins: {}, gameHistory: [], gamesPlayedCount: 0,
@@ -114,7 +117,8 @@ function logs(newPlayed) {
       name: li.querySelector(".leaderboard-name-btn").firstChild.textContent.trim(),
       mvp: !!li.querySelector(".leaderboard-mvp-tag"),
       score: (li.querySelector(".leaderboard-method-score-value") || {}).textContent || null,
-      label: (li.querySelector(".leaderboard-method-score-label") || {}).textContent || null
+      label: (li.querySelector(".leaderboard-method-score-label") || {}).textContent || null,
+      text: li.textContent
     })),
     active: [...document.querySelectorAll(".leaderboard-method-btn.is-active")].map((b) => b.dataset.method),
     hint: document.getElementById("leaderboard-method-hint").textContent,
@@ -173,11 +177,14 @@ function logs(newPlayed) {
     check("⭐ MVP score on first, all time (" + names(r) + "): the 4, New (3 games) under the 10; no score on the rows, no note; \"" + r.toggle + "\"",
       r.active.join() === "mvp" && names(r).split(", ").sort().join() === "Ace,Low,Mid,Reg" && r.rows.every((x) => x.score === null) && r.note === null && r.toggle === "ⓘ How the MVP score works" && /^MVP score = \(wins ÷ \(games \+ 10\)\)/.test(r.formula) && /wins, rating/.test(r.hint), r);
     if (OUT) await page.screenshot({ path: path.join(OUT, "lb_mvp.png"), fullPage: true });
+    const lowRow = r.rows.find((x) => x.name === "Low") || { text: "" };
+    check("...Low's 30 balls in a row: not in the formula (\"" + r.formula.slice(-80) + "\") or on the row",
+      !/best run|\{\{/.test(r.formula) && /A long run of balls in a row doesn't count\.$/.test(r.formula) && lowRow.text && !/ball run|30-/.test(lowRow.text) && /8 wins/.test(lowRow.text), { formula: r.formula, low: lowRow.text });
     let c = await climb("Low");
     check("⭐ ❓ → 🧗 on Low (#4): " + JSON.stringify(c.text.slice(0, 700)),
       c.first === "🧗 How to climb & why here" && c.button === "← Back" && c.back && c.text.startsWith("🧗 How Low can climb - #4 of 4, ⭐ MVP score: ") &&
       /\nTo pass Mid \(#3, [\d.]+\):\n• Beat Mid \d+ times in a row → Low [\d.]+, Mid [\d.]+\n• Win the next \d+ games, against anyone → Low [\d.]+\nThe gap is [\d.]+ points: a tournament win adds 3, a skunk win 1\./.test(c.text) &&
-      /\n📋 What put Low at #4:\n• Wins: 8 ÷ \(27 games \+ 10\) × 100 = 21\.6\n• Rating: \d+ ÷ 20 = [\d.]+\n/.test(c.text) && /• vs Reg: won 7, lost 13 → \+[\d.]+\n• vs Mid: won 1, lost 6 → [−+][\d.]+$/.test(c.text), c);
+      /\n📋 What put Low at #4:\n• Wins: 8 ÷ \(27 games \+ 10\) × 100 = 21\.6\n• Rating: \d+ ÷ 20 = [\d.]+\n/.test(c.text) && /• vs Reg: won 7, lost 13 → \+[\d.]+\n• vs Mid: won 1, lost 6 → [−+][\d.]+$/.test(c.text) && !/Best run/.test(c.text), c);
     c = await climb("Reg");
     check("...on Reg (#1): \"How Reg stays on top\", what Ace would need - " + JSON.stringify(c.text.slice(0, 260)),
       c.text.startsWith("🧗 How Reg stays on top - #1 of 4, ⭐ MVP score: ") && /\nFor Ace \(#2, [\d.]+\) to pass Reg, it would take:\n• Beat Reg \d+ times in a row → Ace [\d.]+, Reg [\d.]+\n/.test(c.text) && !/The gap/.test(c.text), c);
