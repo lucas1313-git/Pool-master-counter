@@ -7474,12 +7474,21 @@ body.network-guest-mode #header-group-start {
   white-space: nowrap;
 }
 
+/* The formula behind ⓘ - read from about 6 feet away, like the popups (the user: "not readable
+   at 6 feet distance"): big, bright, left-aligned so the long sentence reads line by line. */
 .leaderboard-formula-note {
-  margin: 18px 2px 4px;
-  color: var(--text-dim);
-  font-size: 0.78rem;
-  text-align: center;
-  line-height: 1.4;
+  margin: 14px 2px 4px;
+  color: var(--text);
+  font-size: 1.6rem;
+  font-weight: 600;
+  text-align: left;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .leaderboard-formula-note {
+    font-size: 1.3rem;
+  }
 }
 
 @keyframes all-player-card-in {
@@ -12210,9 +12219,11 @@ body.network-guest-mode .now-playing-stop-race {
 .leaderboard-formula > summary {
   cursor: pointer;
   color: var(--text-dim);
+  font-size: 1.3rem;
   font-weight: 700;
   min-height: 44px;
-  line-height: 44px;
+  line-height: 1.4;
+  padding: 8px 0;
 }
 
 /* A popup takes the focus itself when it opens (P19) - no ring around the whole screen. */
