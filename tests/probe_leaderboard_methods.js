@@ -136,6 +136,26 @@ function logs(newPlayed) {
     await sleep(250);
     return text;
   };
+  // ❓ then its 🧗 button: {button, text, back (the ❓ text again after ← Back)}
+  const climb = async (name, shot) => {
+    await page.evaluate((name) => [...document.querySelectorAll("#leaderboard-list li")].find((li) => li.querySelector(".leaderboard-name-btn").firstChild.textContent.trim() === name).querySelector(".leaderboard-explain-btn").click(), name);
+    await sleep(300);
+    const first = await page.evaluate(() => ({ text: document.getElementById("confirm-modal-message").textContent, button: document.getElementById("btn-confirm-modal-extra").classList.contains("hidden") ? null : document.getElementById("btn-confirm-modal-extra").textContent }));
+    let text = first.text, back = null, button = null;
+    if (first.button) {
+      await page.evaluate(() => document.getElementById("btn-confirm-modal-extra").click());
+      await sleep(300);
+      text = await page.evaluate(() => document.getElementById("confirm-modal-message").textContent);
+      button = await page.evaluate(() => document.getElementById("btn-confirm-modal-extra").textContent);
+      if (OUT && shot) await page.screenshot({ path: path.join(OUT, shot) });
+      await page.evaluate(() => document.getElementById("btn-confirm-modal-extra").click());
+      await sleep(300);
+      back = (await page.evaluate(() => document.getElementById("confirm-modal-message").textContent)) === first.text;
+    }
+    await page.evaluate(() => document.getElementById("btn-confirm-modal-ok").click());
+    await sleep(250);
+    return { first: first.button, button, text, back };
+  };
   const names = (r) => r.rows.map((x) => x.name).join(", ");
   try {
     await openBoard();
@@ -145,6 +165,14 @@ function logs(newPlayed) {
     check("⭐ MVP score on first, all time (" + names(r) + "): the 4, New (3 games) under the 10; no score on the rows, no note; \"" + r.toggle + "\"",
       r.active.join() === "mvp" && names(r).split(", ").sort().join() === "Ace,Low,Mid,Reg" && r.rows.every((x) => x.score === null) && r.note === null && r.toggle === "ⓘ How the MVP score works" && /^MVP score = \(wins ÷ \(games \+ 10\)\)/.test(r.formula) && /wins, rating/.test(r.hint), r);
     if (OUT) await page.screenshot({ path: path.join(OUT, "lb_mvp.png"), fullPage: true });
+    let c = await climb("Low");
+    check("⭐ ❓ → 🧗 on Low (#4): " + JSON.stringify(c.text.slice(0, 700)),
+      c.first === "🧗 How to climb & why here" && c.button === "← Back" && c.back && c.text.startsWith("🧗 How Low can climb - #4 of 4, ⭐ MVP score: ") &&
+      /\nTo pass Mid \(#3, [\d.]+\):\n• Beat Mid \d+ times in a row → Low [\d.]+, Mid [\d.]+\n• Win the next \d+ games, against anyone → Low [\d.]+\nThe gap is [\d.]+ points: a tournament win adds 3, a skunk win 1\./.test(c.text) &&
+      /\n📋 What put Low at #4:\n• Wins: 8 ÷ \(27 games \+ 10\) × 100 = 21\.6\n• Rating: \d+ ÷ 20 = [\d.]+\n/.test(c.text) && /• vs Reg: won 7, lost 13 → \+[\d.]+\n• vs Mid: won 1, lost 6 → [−+][\d.]+$/.test(c.text), c);
+    c = await climb("Reg");
+    check("...on Reg (#1): \"How Reg stays on top\", what Ace would need - " + JSON.stringify(c.text.slice(0, 260)),
+      c.text.startsWith("🧗 How Reg stays on top - #1 of 4, ⭐ MVP score: ") && /\nFor Ace \(#2, [\d.]+\) to pass Reg, it would take:\n• Beat Reg \d+ times in a row → Ace [\d.]+, Reg [\d.]+\n/.test(c.text) && !/The gap/.test(c.text), c);
 
     // ---- 📈 Performance, the last 30 days ----
     await period("month");
@@ -157,9 +185,17 @@ function logs(newPlayed) {
     let why = await explain("Ace");
     check("...❓ on Ace: " + JSON.stringify(why.slice(0, 260)), /^📈 Performance: Ace is ahead, \d+ vs \w+'s \d+\./.test(why) && /• Ace: opponents rated \d+ on average, won 8 and lost 1 \(\+\d+\) = \d+/.test(why), why);
     if (OUT) await page.screenshot({ path: path.join(OUT, "lb_performance.png"), fullPage: true });
+    c = await climb("Reg", "lb_climb.png");
+    check("...🧗 on Reg (#2): beat Ace 6 times, wins in a row alone not enough, by opponent, best win - " + JSON.stringify(c.text.slice(0, 700)),
+      c.text.startsWith("🧗 How Reg can climb - #2 of 4, 📈 Performance: 421") && c.text.includes("\nTo pass Ace (#1, 591):\n• Beat Ace 6 times in a row → Reg 450, Ace 432\n• Wins in a row alone won't do it - even 50 isn't enough.\n(Worked out with today's ratings") &&
+      c.text.includes("\n📋 What put Reg at #2:\nResults by opponent (→ what those games add to the score):\n• vs Mid (rated 419): won 25, lost 15 → +204\n• vs Ace (rated 429): won 1, lost 8 → −42\n• vs New (rated 426): won 0, lost 3 → −16\n") && /\nBest win: beat Ace \(rated 429\), .+\.\nCostliest loss: lost to Mid \(rated 419\), .+\.$/.test(c.text), c);
+    c = await climb("Low");
+    check("...🧗 on Low (#4): \"Win 3 in a row against players rated around 419 → Low 377\"", c.text.includes("\n• Beat Mid 3 times in a row → Low 377, Mid 352\n• Win 3 in a row against players rated around 419 → Low 377\n"), c.text);
     await view("teams");
     r = await read();
     check("...Teams (" + names(r) + " - " + r.rows.map((x) => x.score).join(", ") + "): both ranked, \"" + r.note + "\"", r.rows.length === 2 && r.note === "Not counted for their team yet, rating still provisional: New (3 of 20 games).", r);
+    c = await climb("Owls");
+    check("...🧗 on the Owls: no beating a team, wins in a row - " + JSON.stringify(c.text.slice(0, 300)), c.text.includes("\nTo pass Sharks (#1, 421):\n• Win 2 in a row against players rated around 404 → Owls 422\n(Worked") && !/Beat /.test(c.text), c);
     await view("players");
 
     // ---- 🔟 Last 10 games ----
@@ -168,6 +204,10 @@ function logs(newPlayed) {
     check("🔟 Last 10 games (" + names(r) + " - " + r.rows.map((x) => x.score).join(", ") + "): Ace \"8½ / 10\" first, New not", r.rows[0].name === "Ace" && r.rows[0].score === "8½ / 10" && r.rows.length === 4 && r.rows.every((x) => / \/ 10$/.test(x.score)) && r.note === NOTE, r);
     why = await explain("Ace");
     check("...❓: \"won 8 of 9 games, + ½ for the 1 not played yet\"", /• Ace: won 8 of 9 games, \+ ½ for the 1 not played yet \(half a win each\) = 8½/.test(why), why);
+    c = await climb("Ace");
+    check("...🧗 on Ace (#1): what Mid would need, the 10 games themselves - " + JSON.stringify(c.text.slice(0, 400)),
+      c.text.startsWith("🧗 How Ace stays on top - #1 of 4, 🔟 Last 10 games: 8½ / 10") && c.text.includes("\nFor Mid (#2, 6 / 10) to pass Ace, it would take:\n• Beat Ace 3 times in a row → Mid 8 / 10, Ace 6 / 10\n• Win the next 5 games, against anyone → Mid 9 / 10\n") &&
+      c.text.includes("\nThe last 10 games, newest first:\n") && (c.text.match(/\n• ✅ .+: beat Reg/g) || []).length === 8 && (c.text.match(/\n• ❌ .+: lost to Reg/g) || []).length === 1 && c.text.endsWith("\n• 1 game not played yet: + ½"), c);
 
     // ---- 🌙 Best 3 nights ----
     await pick("bestNights");
@@ -176,6 +216,10 @@ function logs(newPlayed) {
     why = await explain("Low");
     check("...❓ on Low: 2 nights and \"1 night not had yet, at the rating\" - " + JSON.stringify(why.slice(0, 300)), /• Low's best nights: .+ · .+ · 1 night not had yet, at the rating \d+ → \d+/.test(why), why);
     if (OUT) await page.screenshot({ path: path.join(OUT, "lb_best_nights.png"), fullPage: true });
+    c = await climb("Low");
+    check("...🧗 on Low: one night beating Mid 3 times, the nights and who they were against - " + JSON.stringify(c.text.slice(0, 500)),
+      c.text.includes("\nTo pass Mid (#3, 385):\n• One night beating Mid 3 times in a row → Low 394, Mid 385\n• One night winning 3 in a row against players rated around 419 → Low 394\n") &&
+      /\nThe 3 best nights:\n• 🌙 .+: 345 - won 1, lost 3 against opponents rated 419 on average \(Mid 1–3\)\n• 🌙 .+: 287 - won 0, lost 3 against opponents rated 419 on average \(Mid 0–3\)\n• 1 night not had yet, at the rating 309$/.test(c.text), c);
 
     // ---- kept after a reload; 📤 Share ----
     await openBoard();
@@ -206,6 +250,8 @@ function logs(newPlayed) {
     await pick("bestNights");
     r = await read();
     const frBtn = await page.evaluate(() => document.querySelector('.leaderboard-method-btn[data-method="bestNights"]').textContent);
+    c = await climb("Low");
+    check("...🧗 in French: \"" + c.first + "\", " + JSON.stringify(c.text.slice(0, 120)), c.first === "🧗 Comment grimper et pourquoi ici" && c.button === "← Retour" && /\n📋 Ce qui a mis Low au n° \d :\nLes 3 meilleures soirées :\n/.test(c.text), c);
     check("in French: \"" + frBtn + "\", \"" + r.toggle + "\", \"" + (r.rows[0] || {}).label + "\"", frBtn === "🌙 3 meilleures soirées" && r.toggle === "ⓘ Comment ce classement est calculé" && (r.rows[0] || {}).label === "meilleures soirées", r);
 
     // ---- back to the MVP score ----

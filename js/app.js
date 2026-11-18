@@ -3818,6 +3818,7 @@
   var confirmModalObfuscateCheckbox = document.getElementById("confirm-modal-obfuscate-checkbox");
   var btnConfirmModalOk = document.getElementById("btn-confirm-modal-ok");
   var btnConfirmModalCancel = document.getElementById("btn-confirm-modal-cancel");
+  var btnConfirmModalExtra = document.getElementById("btn-confirm-modal-extra");
 
   // ---------------------------------------------------------------------
   // Generic modal alert/confirm/prompt - replaces native alert()/
@@ -3828,6 +3829,8 @@
 
   var confirmModalOnConfirm = null;
   var confirmModalOnCancel = null;
+  // (alertModalWithAction's second button - one more popup from this one)
+  var confirmModalOnExtra = null;
 
   var paywallModalOverlay = document.getElementById("paywall-modal-overlay");
   var btnPaywallUnlock = document.getElementById("btn-paywall-unlock");
@@ -3841,6 +3844,7 @@
     confirmModalOverlay.classList.add("hidden");
     confirmModalOnConfirm = null;
     confirmModalOnCancel = null;
+    confirmModalOnExtra = null;
   }
 
   // message is normally a plain string, set via textContent so nothing
@@ -3868,6 +3872,7 @@
     confirmModalObfuscateRow.classList.toggle("hidden", !showObfuscate);
     confirmModalObfuscateCheckbox.checked = false;
     btnConfirmModalCancel.classList.toggle("hidden", !showCancel);
+    btnConfirmModalExtra.classList.toggle("hidden", !confirmModalOnExtra);
     confirmModalOverlay.classList.remove("hidden");
     // preventScroll: true - this overlay is position:fixed and already
     // covers the whole viewport, so there's nothing for the browser's
@@ -3890,6 +3895,17 @@
     var cb = onClose || null;
     confirmModalOnConfirm = cb;
     confirmModalOnCancel = cb;
+    confirmModalOnExtra = null;
+    openConfirmModal(message, false, false);
+  }
+
+  // alertModal with a second button beside OK that closes it and runs onAction - another popup
+  // opened from this one (the Leaderboard's ❓ → 🧗 and back)
+  function alertModalWithAction(message, actionLabel, onAction) {
+    confirmModalOnConfirm = null;
+    confirmModalOnCancel = null;
+    confirmModalOnExtra = onAction;
+    btnConfirmModalExtra.textContent = actionLabel;
     openConfirmModal(message, false, false);
   }
 
@@ -3898,6 +3914,7 @@
   function confirmModal(message, onYes, onNo) {
     confirmModalOnConfirm = onYes;
     confirmModalOnCancel = onNo || null;
+    confirmModalOnExtra = null;
     openConfirmModal(message, true, false);
   }
 
@@ -3920,6 +3937,7 @@
       onSubmit(confirmModalInput.value, confirmModalObfuscateCheckbox.checked);
     };
     confirmModalOnCancel = onCancel || null;
+    confirmModalOnExtra = null;
     confirmModalInputOptions.innerHTML = "";
     (suggestions || []).forEach(function (value) {
       var opt = document.createElement("option");
@@ -3936,6 +3954,11 @@
   });
   btnConfirmModalCancel.addEventListener("click", function () {
     var cb = confirmModalOnCancel;
+    closeConfirmModal();
+    if (cb) cb();
+  });
+  btnConfirmModalExtra.addEventListener("click", function () {
+    var cb = confirmModalOnExtra;
     closeConfirmModal();
     if (cb) cb();
   });
@@ -30266,7 +30289,8 @@
           ? opp.reduce(function (sum, n) {
               return sum + rating(n);
             }, 0) / opp.length
-          : null
+          : null,
+        names: opp
       };
     });
   }
@@ -30303,7 +30327,8 @@
       var M = PMCLib.leaderboardMethods;
       entries = rawEntries.filter(function (e) {
         if (!e.onboarded) return false;
-        e.methodResult = M.score(method, e.methodGames || leaderboardMethodGames(e.methodRacks || []), e.rating, localDateStrFromTs);
+        e.methodGames = e.methodGames || leaderboardMethodGames(e.methodRacks || []);
+        e.methodResult = M.score(method, e.methodGames, e.rating, localDateStrFromTs);
         return !!e.methodResult;
       });
       entries.minGames = M.MIN_GAMES;
@@ -30397,7 +30422,8 @@
         skunkWins: 0,
         bestRun: getPlayerBestRun(m.name),
         methodGames: played.map(function (match) {
-          return { ts: match.ts, won: match.winner === m.name, opp: getPlayerRating(match.playerA === m.name ? match.playerB : match.playerA) };
+          var other = match.playerA === m.name ? match.playerB : match.playerA;
+          return { ts: match.ts, won: match.winner === m.name, opp: getPlayerRating(other), names: [other] };
         }),
         onboarded: leaderboardOnboarded(m.name)
       };
@@ -30589,6 +30615,8 @@
       // added together rather than some team-wide concept of its own.
       bestRun: bestRun,
       methodRacks: methodRacks,
+      // (the MVP score's games, as counted in gamesPlayed - for 🧗)
+      mvpRacks: allMemberGames,
       onboarded: members.some(leaderboardOnboarded),
       waiting: waiting
     };
@@ -30839,6 +30867,266 @@
     return lines.join("\n");
   }
 
+  // 🧗 from ❓, on every row (2026-11-17, the user: "a secondary popup from the help popup ... 1-
+  // tell what that player needs to do to climb the ladder. 2- describe what games results and what
+  // player made this leader be in that position"): how to pass the one above (on top: what the
+  // second would need), then the results the score is made of - by opponent, night or game.
+  // Worked out with today's ratings and nobody else playing; the MVP score's other parts
+  // (rating, tournaments, style) stay as they are.
+  var LEADERBOARD_CLIMB_MAX = 50;
+  var LEADERBOARD_OPPONENTS_SHOWN = 8;
+
+  // the games an entry's score was worked out from ({ts, won, opp, names})
+  function leaderboardEntryGames(entry, method) {
+    if (method !== "mvp") return entry.methodGames || [];
+    return entry.methodGames || leaderboardMethodGames(entry.mvpRacks || entry.methodRacks || []);
+  }
+
+  // the entry's score as now - {score, ...}
+  function leaderboardResultOf(entry, method) {
+    return method === "mvp" ? { score: entry.mvpScore } : entry.methodResult;
+  }
+
+  // ...as if the games `added` were played and the ones `removed` weren't (null: not ranked)
+  function leaderboardScoreWith(entry, method, added, removed, minGames) {
+    added = added || [];
+    removed = removed || [];
+    if (method === "mvp") {
+      var won = function (list) {
+        return list.filter(function (g) {
+          return g.won;
+        }).length;
+      };
+      var played = entry.gamesPlayed + added.length - removed.length;
+      if (played <= 0) return null;
+      var moved = Object.assign({}, entry, { wins: entry.wins + won(added) - won(removed), gamesPlayed: played });
+      return { score: computeLeaderboardScoreBreakdown(moved, minGames).total };
+    }
+    var games = leaderboardEntryGames(entry, method).filter(function (g) {
+      return removed.indexOf(g) === -1;
+    });
+    return PMCLib.leaderboardMethods.score(method, games.concat(added), entry.rating, localDateStrFromTs);
+  }
+
+  // a (with aRes) ranked above b (with bRes)?
+  function leaderboardAhead(method, a, aRes, b, bRes) {
+    if (!aRes) return false;
+    if (!bRes) return true;
+    if (method === "mvp") return aRes.score > bRes.score;
+    return PMCLib.leaderboardMethods.compare(method, { result: aRes, rating: a.rating }, { result: bRes, rating: b.rating }) < 0;
+  }
+
+  function leaderboardResultText(method, res) {
+    return method === "mvp" ? res.score.toFixed(1) : leaderboardMethodScoreText({ methodResult: res }, method);
+  }
+
+  // the rating of who this entry usually plays (its own when nobody's rated)
+  function leaderboardUsualOpponent(entry, method) {
+    var rated = leaderboardEntryGames(entry, method).filter(function (g) {
+      return typeof g.opp === "number" && isFinite(g.opp);
+    });
+    if (!rated.length) return entry.rating;
+    return (
+      rated.reduce(function (sum, g) {
+        return sum + g.opp;
+      }, 0) / rated.length
+    );
+  }
+
+  // How `climber` gets past `target`: beating them k times in a row (not between teams), or k wins
+  // in a row against the usual opponents - each the fewest that does it, with the scores after.
+  function leaderboardClimbRoutes(climber, target, method, minGames, isTeam) {
+    var M = PMCLib.leaderboardMethods;
+    var nights = method === "bestNights";
+    var max = method === "last10" ? M.LAST_GAMES : LEADERBOARD_CLIMB_MAX;
+    // (best nights: one more night - tomorrow evening's; otherwise from now)
+    var from = new Date();
+    if (nights) from = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1, 20, 0);
+    var vars = { name: climber.name, other: target.name, max: max };
+    var lines = [];
+    var mine;
+    var theirs;
+    if (!isTeam) {
+      var beat = M.fewest(function (k) {
+        mine = leaderboardScoreWith(climber, method, M.streak(k, true, target.rating, [target.name], from), null, minGames);
+        theirs = leaderboardScoreWith(target, method, M.streak(k, false, climber.rating, [climber.name], from), null, minGames);
+        return leaderboardAhead(method, climber, mine, target, theirs);
+      }, max);
+      lines.push(
+        beat
+          ? TP(nights ? "leaderboard.climbBeatNight" : "leaderboard.climbBeat", beat, Object.assign({ count: beat, mine: leaderboardResultText(method, mine), theirs: leaderboardResultText(method, theirs) }, vars))
+          : T("leaderboard.climbBeatFar", vars)
+      );
+    }
+    var rating = leaderboardUsualOpponent(climber, method);
+    var targetNow = leaderboardResultOf(target, method);
+    var wins = M.fewest(function (k) {
+      mine = leaderboardScoreWith(climber, method, M.streak(k, true, rating, [], from), null, minGames);
+      return leaderboardAhead(method, climber, mine, target, targetNow);
+    }, max);
+    var key = method === "performance" ? "leaderboard.climbWinRated" : nights ? "leaderboard.climbNightRated" : "leaderboard.climbWinAny";
+    lines.push(wins ? TP(key, wins, Object.assign({ count: wins, rating: Math.round(rating), mine: leaderboardResultText(method, mine) }, vars)) : T("leaderboard.climbFar", vars));
+    return lines;
+  }
+
+  function leaderboardNamesText(names) {
+    return names.join(" & ");
+  }
+
+  function leaderboardWhen(ts) {
+    return new Date(ts).toLocaleString(reportLocale(), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  function leaderboardSigned(n, digits) {
+    var text = Math.abs(n).toFixed(digits);
+    return (n < 0 && Number(text) !== 0 ? "−" : "+") + text;
+  }
+
+  // The results by opponent, the ones that mattered most first: W-L (and the rating, for
+  // performance), and → what those games add to the score (the score without them, taken away)
+  function leaderboardOpponentLines(entry, method, minGames) {
+    var M = PMCLib.leaderboardMethods;
+    var now = leaderboardResultOf(entry, method).score;
+    var digits = method === "mvp" ? 1 : 0;
+    var groups = M.byOpponent(leaderboardEntryGames(entry, method))
+      .filter(function (o) {
+        return method !== "performance" || o.opp !== null;
+      })
+      .map(function (o) {
+        var without = leaderboardScoreWith(entry, method, null, o.games, minGames);
+        o.impact = without ? now - without.score : null;
+        return o;
+      });
+    groups.sort(function (a, b) {
+      return Math.abs(b.impact || 0) - Math.abs(a.impact || 0) || b.games.length - a.games.length;
+    });
+    var lines = groups.slice(0, LEADERBOARD_OPPONENTS_SHOWN).map(function (o) {
+      var vars = { names: leaderboardNamesText(o.names), won: o.won, lost: o.lost, rating: Math.round(o.opp) };
+      var line = !o.names.length ? T("leaderboard.whySolo", vars) : method === "performance" ? T("leaderboard.whyVsRated", vars) : T("leaderboard.whyVs", vars);
+      return "• " + line + (o.impact !== null ? " → " + leaderboardSigned(o.impact, digits) : "");
+    });
+    var more = groups.length - LEADERBOARD_OPPONENTS_SHOWN;
+    if (more > 0) lines.push("• " + TP("leaderboard.whyMoreOpponents", more, { count: more }));
+    return lines;
+  }
+
+  // What put the entry there: the MVP score's parts and the results by opponent; performance's
+  // results by opponent, best win and costliest loss; the last 10 games themselves; the best
+  // nights and who they were against.
+  function leaderboardWhyLines(entry, method, minGames) {
+    var M = PMCLib.leaderboardMethods;
+    var r = entry.methodResult;
+    var lines = [];
+    if (method === "mvp") {
+      var b = entry.scoreBreakdown;
+      var pts = function (n) {
+        return n.toFixed(1);
+      };
+      lines.push("• " + T("leaderboard.whyTermWinRate", { wins: entry.wins, games: entry.gamesPlayed, minGames: minGames, points: pts(b.winRateTerm) }));
+      lines.push("• " + T("leaderboard.whyTermRating", { rating: Math.round(entry.rating), points: pts(b.ratingTerm) }));
+      if (b.tournamentTerm) lines.push("• " + T("leaderboard.whyTermTournament", { count: entry.tournamentWins, weight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT, points: pts(b.tournamentTerm) }));
+      if (b.dominanceTerm) lines.push("• " + T("leaderboard.whyTermDominance", { pct: Math.round(entry.avgDominanceRatio * 100), weight: LEADERBOARD_DOMINANCE_WEIGHT, points: pts(b.dominanceTerm) }));
+      if (b.skunkTerm) lines.push("• " + T("leaderboard.whyTermSkunk", { count: entry.skunkWins, points: pts(b.skunkTerm) }));
+      if (b.runTerm) lines.push("• " + T("leaderboard.whyTermRun", { count: entry.bestRun, points: pts(b.runTerm) }));
+      lines.push("• " + T("leaderboard.whyTermActivity", { games: entry.gamesPlayed, points: pts(b.activityTerm) }));
+      lines.push("");
+      lines.push(T("leaderboard.whyByOpponent"));
+      return lines.concat(leaderboardOpponentLines(entry, method, minGames));
+    }
+    if (method === "performance") {
+      lines.push(T("leaderboard.whyByOpponent"));
+      lines = lines.concat(leaderboardOpponentLines(entry, method, minGames));
+      var rated = leaderboardEntryGames(entry, method).filter(function (g) {
+        return typeof g.opp === "number" && isFinite(g.opp) && g.names.length;
+      });
+      var best = null;
+      var worst = null;
+      rated.forEach(function (g) {
+        if (g.won && (!best || g.opp > best.opp)) best = g;
+        if (!g.won && (!worst || g.opp < worst.opp)) worst = g;
+      });
+      if (best || worst) lines.push("");
+      if (best) lines.push(T("leaderboard.whyBestWin", { names: leaderboardNamesText(best.names), rating: Math.round(best.opp), when: leaderboardWhen(best.ts) }));
+      if (worst) lines.push(T("leaderboard.whyWorstLoss", { names: leaderboardNamesText(worst.names), rating: Math.round(worst.opp), when: leaderboardWhen(worst.ts) }));
+      return lines;
+    }
+    if (method === "last10") {
+      lines.push(T("leaderboard.whyLast10", { last: M.LAST_GAMES }));
+      r.results.forEach(function (g) {
+        var vars = { when: leaderboardWhen(g.ts), names: leaderboardNamesText(g.names || []) };
+        var key = g.won ? "leaderboard.whyGameWon" : "leaderboard.whyGameLost";
+        lines.push("• " + T(g.names && g.names.length ? key : key + "Solo", vars));
+      });
+      if (r.missing) lines.push("• " + TP("leaderboard.whyMissing", r.missing, { count: r.missing, half: M.halves(r.missing / 2) }));
+      return lines;
+    }
+    lines.push(T("leaderboard.whyNights", { nights: M.BEST_NIGHTS }));
+    r.nights.forEach(function (n) {
+      var against = M.byOpponent(n.results)
+        .filter(function (o) {
+          return o.names.length;
+        })
+        .map(function (o) {
+          return T("leaderboard.whyNightVs", { names: leaderboardNamesText(o.names), won: o.won, lost: o.lost });
+        });
+      lines.push(
+        "• " +
+          T("leaderboard.whyNight", {
+            day: new Date(n.day + "T12:00:00").toLocaleDateString(reportLocale(), { month: "short", day: "numeric" }),
+            score: Math.round(n.score),
+            won: n.won,
+            lost: n.lost,
+            opp: Math.round(n.opp),
+            against: against.join(", ")
+          })
+      );
+    });
+    if (r.filled) lines.push("• " + TP("leaderboard.howNightsFill", r.filled, { count: r.filled, rating: Math.round(r.rating) }));
+    var others = r.nightsPlayed - r.nights.length;
+    if (others > 0) lines.push("• " + TP("leaderboard.whyOtherNights", others, { count: others, nights: M.BEST_NIGHTS }));
+    return lines;
+  }
+
+  // The 🧗 popup's text for the entry at `rank`
+  function explainLeaderboardClimb(entry, rank, entries) {
+    var method = entries.method;
+    var minGames = entries.minGames;
+    var isTeam = !!entry.members;
+    var label = T(LEADERBOARD_METHOD_LABEL_KEYS[method]);
+    var scoreOf = function (e) {
+      return leaderboardResultText(method, leaderboardResultOf(e, method));
+    };
+    var title = rank === 1 && entries.length > 1 ? "leaderboard.climbTitleTop" : "leaderboard.climbTitle";
+    var lines = [T(title, { name: entry.name, rank: rank, count: entries.length, method: label, score: scoreOf(entry) }), ""];
+    if (entries.length < 2) {
+      lines.push(T("leaderboard.climbAlone", { name: entry.name }));
+    } else {
+      var climber = rank === 1 ? entries[1] : entry;
+      var target = rank === 1 ? entry : entries[rank - 2];
+      lines.push(
+        rank === 1
+          ? T("leaderboard.climbTop", { name: entry.name, other: climber.name, score: scoreOf(climber) })
+          : T("leaderboard.climbTo", { other: target.name, rank: rank - 1, score: scoreOf(target) })
+      );
+      leaderboardClimbRoutes(climber, target, method, minGames, isTeam).forEach(function (l) {
+        lines.push("• " + l);
+      });
+      if (method === "mvp" && rank > 1) {
+        lines.push(
+          T("leaderboard.climbMvpGap", {
+            gap: (target.mvpScore - entry.mvpScore).toFixed(1),
+            tournament: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
+            skunk: LEADERBOARD_SKUNK_WIN_WEIGHT
+          })
+        );
+      }
+      lines.push(T("leaderboard.climbAssume"));
+    }
+    lines.push("");
+    lines.push(T("leaderboard.whyTitle", { name: entry.name, rank: rank }));
+    return lines.concat(leaderboardWhyLines(entry, method, minGames)).join("\n");
+  }
+
   var LEADERBOARD_RANK_MEDALS = ["🥇", "🥈", "🥉"];
 
   // The row of unlocked-achievement icons shown under a player's name on
@@ -30942,20 +31230,23 @@
     // Rank 1 explains itself against rank 2 (the concrete "why did #1
     // beat #2" case); everyone else explains themselves against whoever
     // is directly above them in the list.
+    // From there, 🧗: how this one climbs, and what put them here (alone on the board, straight
+    // to it).
     var comparisonOther = rank === 1 ? entries[1] : entries[rank - 2];
-    if (comparisonOther) {
-      var explainBtn = document.createElement("button");
-      explainBtn.type = "button";
-      explainBtn.className = "leaderboard-explain-btn";
-      explainBtn.textContent = "❓";
-      explainBtn.setAttribute("aria-label", T("leaderboard.explainAria", { name: entry.name }));
-      explainBtn.addEventListener("click", function () {
-        var higher = rank === 1 ? entry : comparisonOther;
-        var lower = rank === 1 ? comparisonOther : entry;
-        alertModal(explainLeaderboardRanking(higher, lower, entries.method));
+    var explainBtn = document.createElement("button");
+    explainBtn.type = "button";
+    explainBtn.className = "leaderboard-explain-btn";
+    explainBtn.textContent = "❓";
+    explainBtn.setAttribute("aria-label", T("leaderboard.explainAria", { name: entry.name }));
+    explainBtn.addEventListener("click", function openExplain() {
+      if (!comparisonOther) return alertModal(explainLeaderboardClimb(entry, rank, entries));
+      var higher = rank === 1 ? entry : comparisonOther;
+      var lower = rank === 1 ? comparisonOther : entry;
+      alertModalWithAction(explainLeaderboardRanking(higher, lower, entries.method), T("leaderboard.climbButton"), function () {
+        alertModalWithAction(explainLeaderboardClimb(entry, rank, entries), T("leaderboard.climbBack"), openExplain);
       });
-      nameRow.appendChild(explainBtn);
-    }
+    });
+    nameRow.appendChild(explainBtn);
     body.appendChild(nameRow);
 
     if (!isTeamEntry) {

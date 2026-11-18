@@ -697,5 +697,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   games)." (the user: "they should be onboarded already, same for all ratings"), the ❓ makeup;
   Teams: New "not counted for their team yet"; 🔟 Last 10 games: Ace "8½ / 10"; 🌙 Best 3 nights:
   Ace first, Low's "1 night not had yet"; kept after a reload; 📤 Share "Ranked by"; Last 7 Days;
-  New at 20 games ranked; French; back to ⭐; no page errors. `node tests/probe_leaderboard_methods.js [shots]`. The equations:
+  New at 20 games ranked; French; back to ⭐; no page errors. ❓ → 🧗 "How to climb & why here"
+  (the user: "1- tell what that player needs to do to climb the ladder. 2- describe what games
+  results and what player made this leader be in that position", every row): the beat-the-one-
+  above and wins-in-a-row routes with the scores after, #1's "stays on top" (what #2 would need),
+  MVP parts + results by opponent (→ what they add), performance's by opponent/best win/costliest
+  loss, the last 10 games themselves, the best nights and who they were against, teams (no
+  beating a team), ← Back to ❓, French. `node tests/probe_leaderboard_methods.js [shots]`. The equations:
   tests/unit/leaderboard-methods.test.js, in `npm test`.

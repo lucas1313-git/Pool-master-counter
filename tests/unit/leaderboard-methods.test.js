@@ -93,3 +93,29 @@ test("the methods: mvp is the app's own (none here); an unknown one isn't a meth
   assert.equal(M.isMethod("bestNights"), true);
   assert.equal(M.isMethod("q"), false);
 });
+
+test("🧗 climbing: the fewest wins in a row that pass, null past the most tried", () => {
+  // 3-3 against players rated 400 is 400: wins in a row against 400 until past 480
+  const me = night(10, 3, 3, 400);
+  const k = M.fewest((k) => M.performance(me.concat(M.streak(k, true, 400, ["Reg"], "2026-11-20T20:00:00Z"))).score > 480, 50);
+  near(M.performance(me.concat(M.streak(k, true, 400, ["Reg"], "2026-11-20T20:00:00Z"))).score, 400 + 100 * Math.log2((3 + k + 2) / 5));
+  assert.ok(M.performance(me.concat(M.streak(k - 1, true, 400, [], "2026-11-20T20:00:00Z"))).score <= 480);
+  assert.equal(M.fewest(() => false, 10), null);
+  assert.equal(M.fewest((k) => k >= 1, 10), 1);
+  const s = M.streak(2, false, 450, ["Ann"], "2026-11-20T20:00:00Z");
+  assert.deepEqual(s.map((g) => [g.ts, g.won, g.opp, g.names[0]]), [["2026-11-20T20:00:00.000Z", false, 450, "Ann"], ["2026-11-20T20:00:01.000Z", false, 450, "Ann"]]);
+});
+
+test("🧗 what put them there: the games by opponent; the last 10 and the nights carry their games", () => {
+  const games = [].concat(
+    M.streak(3, true, 420, ["Reg"], "2026-11-10T20:00:00Z"),
+    M.streak(1, false, 420, ["Reg"], "2026-11-10T21:00:00Z"),
+    M.streak(2, true, 380, ["Bo", "Ann"], "2026-11-10T22:00:00Z"),
+    M.streak(1, true, null, [], "2026-11-10T23:00:00Z")
+  );
+  const by = M.byOpponent(games);
+  assert.deepEqual(by.map((o) => [o.names.join("&"), o.won, o.lost, o.opp]), [["Reg", 3, 1, 420], ["Ann&Bo", 2, 0, 380], ["", 1, 0, null]]);
+  assert.equal(M.last10(games).results.length, 7);
+  const n = M.bestNights(night(9, 6, 1), 400, P.localDateStrFromTs);
+  assert.equal(n.nights[0].results.length, 7);
+});

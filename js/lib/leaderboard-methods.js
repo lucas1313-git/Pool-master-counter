@@ -14,8 +14,8 @@
 //   never costs anything.
 // Who is ranked at all is js/app.js's: only players already onboarded - a rating established, no
 // longer provisional (the user: "they should be onboarded already, same for all ratings").
-// Pure: no page, no storage, no app state - games come in as {ts, won, opp} (opp: the opponents'
-// average rating, null when there were none). js/app.js calls it through PMCLib.leaderboardMethods,
+// Pure: no page, no storage, no app state - games come in as {ts, won, opp, names} (opp: the
+// opponents' average rating, null when there were none; names: who they were, for 🧗). js/app.js calls it through PMCLib.leaderboardMethods,
 // the unit tests (tests/unit/) load it in Node.
 (function (root) {
   "use strict";
@@ -73,7 +73,7 @@
       return g.won;
     }).length;
     var missing = LAST_GAMES - counted.length;
-    return { score: won + missing / 2, won: won, played: counted.length, missing: missing };
+    return { score: won + missing / 2, won: won, played: counted.length, missing: missing, results: counted };
   }
 
   // the average of the 3 best nights' performance; a night not had (yet) counts at the rating
@@ -92,7 +92,7 @@
     var nights = [];
     days.forEach(function (day) {
       var p = performanceOf(byDay[day]);
-      if (p && p.games >= MIN_GAMES) nights.push({ day: day, score: p.score, opp: p.opp, won: p.won, lost: p.lost, games: p.games });
+      if (p && p.games >= MIN_GAMES) nights.push({ day: day, score: p.score, opp: p.opp, won: p.won, lost: p.lost, games: p.games, results: byDay[day] });
     });
     if (!nights.length) return null;
     nights.sort(function (a, b) {
@@ -122,6 +122,52 @@
     return (b.rating || 0) - (a.rating || 0);
   }
 
+  // 🧗 how to climb: the fewest k (1 to max) for which passes(k) holds - null when even max won't
+  function fewest(passes, max) {
+    for (var k = 1; k <= max; k++) if (passes(k)) return k;
+    return null;
+  }
+
+  // k games in a row, all won (or all lost), against opponents rated opp, named names, a second
+  // apart from ts
+  function streak(k, won, opp, names, ts) {
+    var t = new Date(ts).getTime();
+    var out = [];
+    for (var i = 0; i < k; i++) out.push({ ts: new Date(t + i * 1000).toISOString(), won: won, opp: opp, names: names || [] });
+    return out;
+  }
+
+  // the games by opponent, most played first: [{names, won, lost, opp (their average rating, null
+  // when none), games}]
+  function byOpponent(games) {
+    var groups = {};
+    var order = [];
+    (games || []).forEach(function (g) {
+      var names = (g.names || []).slice().sort();
+      var key = names.join("\n");
+      if (!groups[key]) {
+        groups[key] = { names: names, won: 0, lost: 0, oppSum: 0, oppCount: 0, games: [] };
+        order.push(key);
+      }
+      var o = groups[key];
+      if (g.won) o.won += 1;
+      else o.lost += 1;
+      if (typeof g.opp === "number" && isFinite(g.opp)) {
+        o.oppSum += g.opp;
+        o.oppCount += 1;
+      }
+      o.games.push(g);
+    });
+    return order
+      .map(function (key) {
+        var o = groups[key];
+        return { names: o.names, won: o.won, lost: o.lost, opp: o.oppCount ? o.oppSum / o.oppCount : null, games: o.games };
+      })
+      .sort(function (a, b) {
+        return b.games.length - a.games.length || b.won - a.won;
+      });
+  }
+
   // "7½" for 7.5 - the last-10 score as said
   function halves(n) {
     var whole = Math.floor(n);
@@ -140,6 +186,9 @@
     bestNights: bestNights,
     score: score,
     compare: compare,
+    fewest: fewest,
+    streak: streak,
+    byOpponent: byOpponent,
     halves: halves
   };
   root.PMCLib = root.PMCLib || {};
