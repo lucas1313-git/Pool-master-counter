@@ -4,7 +4,8 @@
 # minified app with this machine's real data. rebuild_server.sh puts the plain one back.
 set -e
 SB=/Users/lucmartin/Pool-master-counter/tests/publicbuild
-DC=/private/tmp/claude-501/-Users-lucmartin/955cf1c9-ee76-47df-9aa6-1e62c9263742/scratchpad/devcert
+DC=$HOME/.pool-master-counter/local-server  # (was a session temp folder - cleaned away 2026-11-18)
+mkdir -p $DC
 N24=${N24:-$HOME/.cache/pmc-node/node-v24.21.0-darwin-arm64/bin/node}  # official Node 24 (nodejs.org); Homebrew's node@24 lacks a library
 SITE=$SB/site
 node $SB/build-public.js /Users/lucmartin/Pool-master-counter $SITE
