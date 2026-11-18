@@ -30916,7 +30916,10 @@
       };
       var played = entry.gamesPlayed + added.length - removed.length;
       if (played <= 0) return null;
-      var moved = Object.assign({}, entry, { wins: entry.wins + won(added) - won(removed), gamesPlayed: played });
+      var races = added.filter(function (g) {
+        return g.race;
+      }).length;
+      var moved = Object.assign({}, entry, { wins: entry.wins + won(added) - won(removed), gamesPlayed: played, tournamentWins: entry.tournamentWins + races });
       return { score: computeLeaderboardScoreBreakdown(moved, minGames).total };
     }
     var games = leaderboardEntryGames(entry, method).filter(function (g) {
@@ -30925,11 +30928,12 @@
     return PMCLib.leaderboardMethods.score(method, games.concat(added), entry.rating, localDateStrFromTs);
   }
 
-  // a (with aRes) ranked above b (with bRes)?
+  // a (with aRes) ranked above b (with bRes)? (MVP: by the scores as shown, so a route never ends
+  // on what reads as a tie)
   function leaderboardAhead(method, a, aRes, b, bRes) {
     if (!aRes) return false;
     if (!bRes) return true;
-    if (method === "mvp") return aRes.score > bRes.score;
+    if (method === "mvp") return Number(aRes.score.toFixed(1)) > Number(bRes.score.toFixed(1));
     return PMCLib.leaderboardMethods.compare(method, { result: aRes, rating: a.rating }, { result: bRes, rating: b.rating }) < 0;
   }
 
@@ -30950,8 +30954,39 @@
     );
   }
 
-  // How `climber` gets past `target`: beating them k times in a row (not between teams), or k wins
-  // in a row against the usual opponents - each the fewest that does it, with the scores after.
+  // The race an entry usually plays (the one its races ended at most often, races to 1 aside; the
+  // scoreboard's when none) and the racks it would drop winning one, at its usual rack rate
+  function leaderboardUsualRace(entry) {
+    var racks = entry.methodRacks || entry.mvpRacks || [];
+    var counts = {};
+    var race = 0;
+    var won = 0;
+    racks.forEach(function (g) {
+      if (g.result === "won") won += 1;
+      if (!g.wonRace || !(g.raceTarget > 1)) return;
+      counts[g.raceTarget] = (counts[g.raceTarget] || 0) + 1;
+      if (!race || counts[g.raceTarget] > counts[race]) race = g.raceTarget;
+    });
+    race = race || Math.max(2, state.raceToWinsTarget || 0);
+    return { race: race, lost: won ? Math.min(race - 1, Math.round((race * (racks.length - won)) / won)) : race - 1 };
+  }
+
+  // k races won (MVP: each a tournament win, its racks games): {race, lost} each
+  function leaderboardRaceGames(k, usual) {
+    var games = [];
+    for (var i = 0; i < k; i++) {
+      for (var w = 0; w < usual.race; w++) games.push({ won: true });
+      for (var l = 0; l < usual.lost; l++) games.push({ won: false });
+      games.push({ won: true, race: true });
+    }
+    return games;
+  }
+
+  // How `climber` gets past `target`: beating them k times in a row (not between teams), k wins in
+  // a row against the usual opponents, or (the MVP score, where each race or tournament won adds
+  // LEADERBOARD_TOURNAMENT_WIN_WEIGHT) k races won - each the fewest that does it, with the scores
+  // after. The ones that can't, after (2026-11-18, the user, on two "wouldn't be enough" lines and
+  // nothing else: "this makes no sense, there must be a better way").
   function leaderboardClimbRoutes(climber, target, method, minGames, isTeam) {
     var M = PMCLib.leaderboardMethods;
     var nights = method === "bestNights";
@@ -30961,19 +30996,17 @@
     if (nights) from = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1, 20, 0);
     var vars = { name: climber.name, other: target.name, max: max };
     var lines = [];
+    var far = [];
     var mine;
     var theirs;
+    var beat = null;
     if (!isTeam) {
-      var beat = M.fewest(function (k) {
+      beat = M.fewest(function (k) {
         mine = leaderboardScoreWith(climber, method, M.streak(k, true, target.rating, [target.name], from), null, minGames);
         theirs = leaderboardScoreWith(target, method, M.streak(k, false, climber.rating, [climber.name], from), null, minGames);
         return leaderboardAhead(method, climber, mine, target, theirs);
       }, max);
-      lines.push(
-        beat
-          ? TP(nights ? "leaderboard.climbBeatNight" : "leaderboard.climbBeat", beat, Object.assign({ count: beat, mine: leaderboardResultText(method, mine), theirs: leaderboardResultText(method, theirs) }, vars))
-          : T("leaderboard.climbBeatFar", vars)
-      );
+      if (beat) lines.push(TP(nights ? "leaderboard.climbBeatNight" : "leaderboard.climbBeat", beat, Object.assign({ count: beat, mine: leaderboardResultText(method, mine), theirs: leaderboardResultText(method, theirs) }, vars)));
     }
     var rating = leaderboardUsualOpponent(climber, method);
     var targetNow = leaderboardResultOf(target, method);
@@ -30982,8 +31015,20 @@
       return leaderboardAhead(method, climber, mine, target, targetNow);
     }, max);
     var key = method === "performance" ? "leaderboard.climbWinRated" : nights ? "leaderboard.climbNightRated" : "leaderboard.climbWinAny";
-    lines.push(wins ? TP(key, wins, Object.assign({ count: wins, rating: Math.round(rating), mine: leaderboardResultText(method, mine) }, vars)) : T("leaderboard.climbFar", vars));
-    return lines;
+    if (wins) lines.push(TP(key, wins, Object.assign({ count: wins, rating: Math.round(rating), mine: leaderboardResultText(method, mine) }, vars)));
+    if (!wins) far.push(T(isTeam || beat ? "leaderboard.climbFar" : "leaderboard.climbPlainFar", vars));
+    else if (!isTeam && !beat) far.push(T("leaderboard.climbBeatFar", vars));
+    // (a league's matches are races already - no tournament wins there)
+    if (method === "mvp" && (climber.methodRacks || climber.mvpRacks)) {
+      var usual = leaderboardUsualRace(climber);
+      var races = M.fewest(function (k) {
+        mine = leaderboardScoreWith(climber, method, leaderboardRaceGames(k, usual), null, minGames);
+        return leaderboardAhead(method, climber, mine, target, targetNow);
+      }, LEADERBOARD_CLIMB_MAX);
+      if (races) lines.push(TP("leaderboard.climbRaces", races, Object.assign({ count: races, race: usual.race, lost: usual.lost, mine: leaderboardResultText(method, mine) }, vars)));
+      else far.push(T("leaderboard.climbRacesFar", { max: LEADERBOARD_CLIMB_MAX }));
+    }
+    return lines.concat(far);
   }
 
   function leaderboardNamesText(names) {
@@ -31131,10 +31176,10 @@
       leaderboardClimbRoutes(climber, target, method, minGames, isTeam).forEach(function (l) {
         lines.push("• " + l);
       });
-      if (method === "mvp" && rank > 1) {
+      if (method === "mvp") {
         lines.push(
           T("leaderboard.climbMvpGap", {
-            gap: (target.mvpScore - entry.mvpScore).toFixed(1),
+            gap: (target.mvpScore - climber.mvpScore).toFixed(1),
             tournament: LEADERBOARD_TOURNAMENT_WIN_WEIGHT,
             skunk: LEADERBOARD_SKUNK_WIN_WEIGHT
           })

@@ -705,5 +705,7 @@ Not part of the app - helpers for testing and for running this machine's own cop
   above and wins-in-a-row routes with the scores after, #1's "stays on top" (what #2 would need),
   MVP parts + results by opponent (→ what they add), performance's by opponent/best win/costliest
   loss, the last 10 games themselves, the best nights and who they were against, teams (no
-  beating a team), ← Back to ❓, French. `node tests/probe_leaderboard_methods.js [shots]`. The equations:
+  beating a team), ← Back to ❓, French. Races (2026-11-18, "there must be a better way for Chris
+  to get up there"): Host 25 races to 7 won, Star 3 - Host's 🧗 gives "Win N races to 7 (7–2
+  each, as usual)", one "Plain wins won't do it" line and the gap with what a race adds. `node tests/probe_leaderboard_methods.js [shots]`. The equations:
   tests/unit/leaderboard-methods.test.js, in `npm test`.

@@ -20,6 +20,11 @@
 // - the choice kept after a reload; 📤 Share says "Ranked by 🌙 Best 3 nights" and the scores;
 // - New plays 17 more (9-8 with Mid): 20 games, established - ranked, the note gone;
 // - in French: "🌙 3 meilleures soirées", "Comment ce classement est calculé";
+// - races (2026-11-18, the user, on "Beating Luc Martin even 50 times in a row wouldn't be enough.
+//   Wins in a row alone won't do it": "this makes no sense, there must be a better way for Chris to
+//   get up there in first position"): Host won 25 races to 7, Star 3 - Host's 🧗 says how many
+//   races Star would have to win ("Win N races to 7 (7–2 each, as usual)"), "Plain wins won't do
+//   it" once, and the gap with what a race adds;
 // - no page errors.
 // Its own file server on 4313.
 // usage: node tests/probe_leaderboard_methods.js [screenshot dir]
@@ -71,6 +76,40 @@ function logs(newPlayed) {
     if (ago === 2) [0, 0, 0].forEach(() => game(next(), "Mid", "Low"));
     if (ago === 2) [1, 1, 1].forEach(() => game(next(), "New", "Reg"));
   });
+  return out;
+}
+
+// Host: 30 races to 7 with Bob, 25 won 7–4, 5 lost 4–7; Star: 3 races with Bob, won 7–2 - each
+// race's last rack marked wonRace, as the scoreboard does
+function raceLogs() {
+  const out = {};
+  const now = new Date();
+  let t = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 20, 20, 0).getTime();
+  const add = (name, ts, won, opp, last) => {
+    const d = new Date(ts);
+    const day = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    const log = (out[name] = out[name] || { name, sessions: [] });
+    let s = log.sessions.find((x) => x.date === day);
+    if (!s) log.sessions.push((s = { date: day, wins: 0, gamesWon: [], opponents: [], games: [] }));
+    const g = { ts: new Date(ts).toISOString(), gameType: "8ball", gameLabel: "8-Ball", target: 1, unit: "rack", result: won ? "won" : "lost", winnerNames: [won ? name : opp], opponentNames: [opp], teammateNames: [], isTeam: false, raceTarget: 7 };
+    if (last) g.wonRace = true;
+    s.games.push(g);
+    if (won) s.wins += 1;
+  };
+  const race = (a, b, aWins, bWins) => {
+    const racks = [];
+    for (let i = 0; i < bWins; i++) racks.push(false);
+    for (let i = 0; i < aWins; i++) racks.push(true);
+    if (aWins < bWins) racks.reverse();
+    racks.forEach((aWon, i) => {
+      t += 600000;
+      add(a, t, aWon, b, i === racks.length - 1);
+      add(b, t, !aWon, a, i === racks.length - 1);
+    });
+    t += 3600000;
+  };
+  for (let i = 0; i < 30; i++) i < 25 ? race("Host", "Bob", 7, 4) : race("Host", "Bob", 4, 7);
+  for (let i = 0; i < 3; i++) race("Star", "Bob", 7, 2);
   return out;
 }
 
@@ -183,11 +222,11 @@ function logs(newPlayed) {
     let c = await climb("Low");
     check("⭐ ❓ → 🧗 on Low (#4): " + JSON.stringify(c.text.slice(0, 700)),
       c.first === "🧗 How to climb & why here" && c.button === "← Back" && c.back && c.text.startsWith("🧗 How Low can climb - #4 of 4, ⭐ MVP score: ") &&
-      /\nTo pass Mid \(#3, [\d.]+\):\n• Beat Mid \d+ times in a row → Low [\d.]+, Mid [\d.]+\n• Win the next \d+ games, against anyone → Low [\d.]+\nThe gap is [\d.]+ points: a tournament win adds 3, a skunk win 1\./.test(c.text) &&
+      /\nTo pass Mid \(#3, [\d.]+\):\n• Beat Mid \d+ times in a row → Low [\d.]+, Mid [\d.]+\n• Win the next \d+ games, against anyone → Low [\d.]+\n• Win (a race|\d+ races) to 3 \(3–\d( each)?, as usual\) → Low [\d.]+\nThe gap is [\d.]+ points: each race or tournament won adds 3, a skunk win 1\./.test(c.text) &&
       /\n📋 What put Low at #4:\n• Wins: 8 ÷ \(27 games \+ 10\) × 100 = 21\.6\n• Rating: \d+ ÷ 20 = [\d.]+\n/.test(c.text) && /• vs Reg: won 7, lost 13 → \+[\d.]+\n• vs Mid: won 1, lost 6 → [−+][\d.]+$/.test(c.text) && !/Best run/.test(c.text), c);
     c = await climb("Reg");
     check("...on Reg (#1): \"How Reg stays on top\", what Ace would need - " + JSON.stringify(c.text.slice(0, 260)),
-      c.text.startsWith("🧗 How Reg stays on top - #1 of 4, ⭐ MVP score: ") && /\nFor Ace \(#2, [\d.]+\) to pass Reg, it would take:\n• Beat Reg \d+ times in a row → Ace [\d.]+, Reg [\d.]+\n/.test(c.text) && !/The gap/.test(c.text), c);
+      c.text.startsWith("🧗 How Reg stays on top - #1 of 4, ⭐ MVP score: ") && /\nFor Ace \(#2, [\d.]+\) to pass Reg, it would take:\n• Beat Reg \d+ times in a row → Ace [\d.]+, Reg [\d.]+\n/.test(c.text) && /\nThe gap is [\d.]+ points: each race or tournament won adds 3/.test(c.text), c);
 
     // ---- 📈 Performance, the last 30 days ----
     await period("month");
@@ -279,6 +318,19 @@ function logs(newPlayed) {
     await pick("mvp");
     r = await read();
     check("back to ⭐: the MVP board as before (" + names(r) + ")", r.active.join() === "mvp" && r.rows.every((x) => x.score === null) && r.toggle === "ⓘ Comment le score MVP est calculé", r);
+
+    // ---- races: Host's 25 races won, Star's 3 ----
+    await page.evaluate((logs) => {
+      localStorage.setItem("poolMasterCounter.language.v1", "english");
+      localStorage.setItem("poolMasterCounter.playerStats.v1", JSON.stringify(logs));
+    }, raceLogs());
+    await openBoard();
+    await period("all");
+    r = await read();
+    c = await climb("Host", "lb_climb_races.png");
+    const want = /\nFor Star \(#2, [\d.]+\) to pass Host, it would take:\n• Win (\d+) races to 7 \(7–2 each, as usual\) → Star ([\d.]+)\n• Plain wins won't do it - not even 50 in a row, against Host or anyone\.\nThe gap is ([\d.]+) points: each race or tournament won adds 3, a skunk win 1\.\n/.exec(c.text);
+    check("races (" + names(r) + "): 🧗 on Host - " + JSON.stringify(c.text.slice(0, 420)),
+      names(r).startsWith("Host, Star") && !!want && Number(want[1]) > 1 && Number(want[1]) < 50 && Number(want[2]) > Number(c.text.match(/⭐ MVP score: ([\d.]+)/)[1]) && Number(want[3]) > 30, c.text);
   } finally {
     check("no page errors", errors.length === 0, errors);
     await browser.close();
