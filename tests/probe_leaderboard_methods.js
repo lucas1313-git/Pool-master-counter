@@ -140,13 +140,21 @@ function logs(newPlayed) {
   const climb = async (name, shot) => {
     await page.evaluate((name) => [...document.querySelectorAll("#leaderboard-list li")].find((li) => li.querySelector(".leaderboard-name-btn").firstChild.textContent.trim() === name).querySelector(".leaderboard-explain-btn").click(), name);
     await sleep(300);
+    // (the coloured results: "lb-won:won 25", ...)
+    const spans = () => page.evaluate(() => [...document.querySelectorAll("#confirm-modal-message span")].map((x) => x.className + ":" + x.textContent));
     const first = await page.evaluate(() => ({ text: document.getElementById("confirm-modal-message").textContent, button: document.getElementById("btn-confirm-modal-extra").classList.contains("hidden") ? null : document.getElementById("btn-confirm-modal-extra").textContent }));
-    let text = first.text, back = null, button = null;
+    const firstSpans = await spans();
+    let text = first.text, back = null, button = null, climbSpans = [], look = null;
     if (first.button) {
       await page.evaluate(() => document.getElementById("btn-confirm-modal-extra").click());
       await sleep(300);
       text = await page.evaluate(() => document.getElementById("confirm-modal-message").textContent);
       button = await page.evaluate(() => document.getElementById("btn-confirm-modal-extra").textContent);
+      climbSpans = await spans();
+      look = await page.evaluate(() => {
+        const msg = document.getElementById("confirm-modal-message"), px = (el) => el ? parseFloat(getComputedStyle(el).fontSize) : 0, one = (c) => msg.querySelector("." + c);
+        return { text: px(msg), won: px(one("lb-won")), lost: px(one("lb-lost")), impact: px(one("lb-impact")), wonColor: one("lb-won") && getComputedStyle(one("lb-won")).color, lostColor: one("lb-lost") && getComputedStyle(one("lb-lost")).color, impactColor: one("lb-impact") && getComputedStyle(one("lb-impact")).color };
+      });
       if (OUT && shot) await page.screenshot({ path: path.join(OUT, shot) });
       await page.evaluate(() => document.getElementById("btn-confirm-modal-extra").click());
       await sleep(300);
@@ -154,7 +162,7 @@ function logs(newPlayed) {
     }
     await page.evaluate(() => document.getElementById("btn-confirm-modal-ok").click());
     await sleep(250);
-    return { first: first.button, button, text, back };
+    return { first: first.button, button, text, back, firstSpans, climbSpans, look };
   };
   const names = (r) => r.rows.map((x) => x.name).join(", ");
   try {
@@ -189,6 +197,11 @@ function logs(newPlayed) {
     check("...🧗 on Reg (#2): beat Ace 6 times, wins in a row alone not enough, by opponent, best win - " + JSON.stringify(c.text.slice(0, 700)),
       c.text.startsWith("🧗 How Reg can climb - #2 of 4, 📈 Performance: 421") && c.text.includes("\nTo pass Ace (#1, 591):\n• Beat Ace 6 times in a row → Reg 450, Ace 432\n• Wins in a row alone won't do it - even 50 isn't enough.\n(Worked out with today's ratings") &&
       c.text.includes("\n📋 What put Reg at #2:\nResults by opponent (→ what those games add to the score):\n• vs Mid (rated 419): won 25, lost 15 → +204\n• vs Ace (rated 429): won 1, lost 8 → −42\n• vs New (rated 426): won 0, lost 3 → −16\n") && /\nBest win: beat Ace \(rated 429\), .+\.\nCostliest loss: lost to Mid \(rated 419\), .+\.$/.test(c.text), c);
+    check("...🧗 in colour: won green, lost red, a bit bigger; → +204 blue, bigger still - " + JSON.stringify({ spans: c.climbSpans.slice(0, 6), look: c.look }),
+      ["lb-won:won 25", "lb-lost:lost 15", "lb-impact:→ +204", "lb-won:won 1", "lb-lost:lost 8", "lb-impact:→ −42"].every((x) => c.climbSpans.includes(x)) &&
+      c.look.wonColor === "rgb(46, 204, 113)" && c.look.lostColor === "rgb(255, 92, 92)" && c.look.impactColor === "rgb(90, 180, 255)" &&
+      c.look.won > c.look.text && c.look.lost > c.look.text && c.look.impact > c.look.won, c);
+    check("...and ❓'s \"won 8 and lost 1 (+174)\" too: " + JSON.stringify(c.firstSpans), ["lb-won:won 8", "lb-lost:lost 1", "lb-won:won 26", "lb-lost:lost 26"].every((x) => c.firstSpans.includes(x)) && c.firstSpans.some((x) => /^lb-impact:\+\d+$/.test(x)), c.firstSpans);
     c = await climb("Low");
     check("...🧗 on Low (#4): \"Win 3 in a row against players rated around 419 → Low 377\"", c.text.includes("\n• Beat Mid 3 times in a row → Low 377, Mid 352\n• Win 3 in a row against players rated around 419 → Low 377\n"), c.text);
     await view("teams");
@@ -219,7 +232,8 @@ function logs(newPlayed) {
     c = await climb("Low");
     check("...🧗 on Low: one night beating Mid 3 times, the nights and who they were against - " + JSON.stringify(c.text.slice(0, 500)),
       c.text.includes("\nTo pass Mid (#3, 385):\n• One night beating Mid 3 times in a row → Low 394, Mid 385\n• One night winning 3 in a row against players rated around 419 → Low 394\n") &&
-      /\nThe 3 best nights:\n• 🌙 .+: 345 - won 1, lost 3 against opponents rated 419 on average \(Mid 1–3\)\n• 🌙 .+: 287 - won 0, lost 3 against opponents rated 419 on average \(Mid 0–3\)\n• 1 night not had yet, at the rating 309$/.test(c.text), c);
+      /\nThe 3 best nights:\n• 🌙 .+: 345 - won 1, lost 3 against opponents rated 419 on average \(Mid 1–3\)\n• 🌙 .+: 287 - won 0, lost 3 against opponents rated 419 on average \(Mid 0–3\)\n• 1 night not had yet, at the rating 309$/.test(c.text) &&
+      ["lb-won:won 1", "lb-lost:lost 3", "lb-won:1", "lb-lost:3", "lb-won:won 0", "lb-won:0"].every((x) => c.climbSpans.includes(x)), c);
 
     // ---- kept after a reload; 📤 Share ----
     await openBoard();

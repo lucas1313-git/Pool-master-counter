@@ -30756,6 +30756,60 @@
     bestNights: "leaderboard.methodBestNights"
   };
 
+  // The popups' results in colour (2026-11-17, the user: "won 1 should be green and a bit bigger
+  // lost 2 should be red and a bit bigger and "→ +0.7" should be blue and bigger than the rest"):
+  // T as nodes, a value given as {text, className} - or a Node - put in as it is, the rest text.
+  function TStyled(key, vars) {
+    var plain = {};
+    var parts = [];
+    Object.keys(vars).forEach(function (k) {
+      var v = vars[k];
+      if (v && typeof v === "object") {
+        plain[k] = "\u0001" + parts.length + "\u0002";
+        parts.push(v);
+      } else {
+        plain[k] = v;
+      }
+    });
+    var frag = document.createDocumentFragment();
+    T(key, plain)
+      .split(/\u0001(\d+)\u0002/)
+      .forEach(function (piece, i) {
+        if (!(i % 2)) {
+          if (piece) frag.appendChild(document.createTextNode(piece));
+          return;
+        }
+        var v = parts[Number(piece)];
+        frag.appendChild(v instanceof Node ? v : lbSpan(v));
+      });
+    return frag;
+  }
+  function lbSpan(v) {
+    var span = document.createElement("span");
+    span.className = v.className;
+    span.textContent = v.text;
+    return span;
+  }
+  // "won 3" in green, "lost 1" in red (count: the number alone, as in "Mid 1–3"), a contribution blue
+  function lbWon(n, count) {
+    return { text: count ? String(n) : TP("leaderboard.wonCount", n, { count: n }), className: "lb-won" };
+  }
+  function lbLost(n, count) {
+    return { text: count ? String(n) : TP("leaderboard.lostCount", n, { count: n }), className: "lb-lost" };
+  }
+  function lbImpact(text) {
+    return { text: text, className: "lb-impact" };
+  }
+  // text and nodes in one, joined by sep (lines: "\n")
+  function lbJoin(parts, sep) {
+    var frag = document.createDocumentFragment();
+    parts.forEach(function (p, i) {
+      if (i && sep) frag.appendChild(document.createTextNode(sep));
+      frag.appendChild(typeof p === "string" ? document.createTextNode(p) : p);
+    });
+    return frag;
+  }
+
   // An entry's score under one of the 3 other methods, as shown: "586", "7½ / 10"
   function leaderboardMethodScoreText(entry, method) {
     var r = entry.methodResult;
@@ -30769,22 +30823,22 @@
     var halves = PMCLib.leaderboardMethods.halves;
     if (method === "performance") {
       var edge = Math.round(r.edge);
-      return T("leaderboard.howPerformanceOf", { name: entry.name, opp: Math.round(r.opp), won: r.won, lost: r.lost, edge: (edge < 0 ? "−" : "+") + Math.abs(edge), score: Math.round(r.score) });
+      return TStyled("leaderboard.howPerformanceOf", { name: entry.name, opp: Math.round(r.opp), won: lbWon(r.won), lost: lbLost(r.lost), edge: lbImpact((edge < 0 ? "−" : "+") + Math.abs(edge)), score: Math.round(r.score) });
     }
     if (method === "last10") {
       if (!r.missing) return T("leaderboard.howLast10Of", { name: entry.name, won: r.won });
       return T("leaderboard.howLast10Short", { name: entry.name, won: r.won, played: r.played, missing: r.missing, half: halves(r.missing / 2), score: halves(r.score) });
     }
     var nights = r.nights.map(function (n) {
-      return T("leaderboard.howNightItem", {
+      return TStyled("leaderboard.howNightItem", {
         day: new Date(n.day + "T12:00:00").toLocaleDateString(reportLocale(), { month: "short", day: "numeric" }),
         score: Math.round(n.score),
-        won: n.won,
-        lost: n.lost
+        won: lbWon(n.won, true),
+        lost: lbLost(n.lost, true)
       });
     });
     if (r.filled) nights.push(TP("leaderboard.howNightsFill", r.filled, { count: r.filled, rating: Math.round(r.rating) }));
-    return T("leaderboard.howNightsOf", { name: entry.name, nights: nights.join(" · "), score: Math.round(r.score) });
+    return TStyled("leaderboard.howNightsOf", { name: entry.name, nights: lbJoin(nights, " · "), score: Math.round(r.score) });
   }
 
   // ❓ under one of the 3 other methods: the two scores, then what each is made of (and, level,
@@ -30800,8 +30854,8 @@
       }),
       ""
     ];
-    lines.push("• " + leaderboardMethodMakeup(a, method));
-    lines.push("• " + leaderboardMethodMakeup(b, method));
+    lines.push(lbJoin(["• ", leaderboardMethodMakeup(a, method)]));
+    lines.push(lbJoin(["• ", leaderboardMethodMakeup(b, method)]));
     if (Math.abs(a.methodResult.score - b.methodResult.score) < 1e-9) {
       lines.push("");
       lines.push(
@@ -30810,7 +30864,7 @@
           : T("leaderboard.howTieRating", { a: a.name, ratingA: Math.round(a.rating), ratingB: Math.round(b.rating) })
       );
     }
-    return lines.join("\n");
+    return lbJoin(lines, "\n");
   }
 
   function explainLeaderboardRanking(a, b, method) {
@@ -31001,9 +31055,11 @@
       return Math.abs(b.impact || 0) - Math.abs(a.impact || 0) || b.games.length - a.games.length;
     });
     var lines = groups.slice(0, LEADERBOARD_OPPONENTS_SHOWN).map(function (o) {
-      var vars = { names: leaderboardNamesText(o.names), won: o.won, lost: o.lost, rating: Math.round(o.opp) };
-      var line = !o.names.length ? T("leaderboard.whySolo", vars) : method === "performance" ? T("leaderboard.whyVsRated", vars) : T("leaderboard.whyVs", vars);
-      return "• " + line + (o.impact !== null ? " → " + leaderboardSigned(o.impact, digits) : "");
+      var vars = { names: leaderboardNamesText(o.names), won: lbWon(o.won), lost: lbLost(o.lost), rating: Math.round(o.opp) };
+      var key = !o.names.length ? "leaderboard.whySolo" : method === "performance" ? "leaderboard.whyVsRated" : "leaderboard.whyVs";
+      var parts = ["• ", TStyled(key, vars)];
+      if (o.impact !== null) parts.push(" ", lbSpan(lbImpact("→ " + leaderboardSigned(o.impact, digits))));
+      return lbJoin(parts);
     });
     var more = groups.length - LEADERBOARD_OPPONENTS_SHOWN;
     if (more > 0) lines.push("• " + TP("leaderboard.whyMoreOpponents", more, { count: more }));
@@ -31067,18 +31123,20 @@
           return o.names.length;
         })
         .map(function (o) {
-          return T("leaderboard.whyNightVs", { names: leaderboardNamesText(o.names), won: o.won, lost: o.lost });
+          return TStyled("leaderboard.whyNightVs", { names: leaderboardNamesText(o.names), won: lbWon(o.won, true), lost: lbLost(o.lost, true) });
         });
       lines.push(
-        "• " +
-          T("leaderboard.whyNight", {
+        lbJoin([
+          "• ",
+          TStyled("leaderboard.whyNight", {
             day: new Date(n.day + "T12:00:00").toLocaleDateString(reportLocale(), { month: "short", day: "numeric" }),
             score: Math.round(n.score),
-            won: n.won,
-            lost: n.lost,
+            won: lbWon(n.won),
+            lost: lbLost(n.lost),
             opp: Math.round(n.opp),
-            against: against.join(", ")
+            against: lbJoin(against, ", ")
           })
+        ])
       );
     });
     if (r.filled) lines.push("• " + TP("leaderboard.howNightsFill", r.filled, { count: r.filled, rating: Math.round(r.rating) }));
@@ -31124,7 +31182,7 @@
     }
     lines.push("");
     lines.push(T("leaderboard.whyTitle", { name: entry.name, rank: rank }));
-    return lines.concat(leaderboardWhyLines(entry, method, minGames)).join("\n");
+    return lbJoin(lines.concat(leaderboardWhyLines(entry, method, minGames)), "\n");
   }
 
   var LEADERBOARD_RANK_MEDALS = ["🥇", "🥈", "🥉"];
