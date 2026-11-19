@@ -7471,6 +7471,42 @@ body.network-guest-mode #header-group-start {
   font-size: 1.3em;
 }
 
+/* 📤 a player's report, read before it's shared as a PDF (buildLeaderboardReport) */
+.lb-report {
+  text-align: left;
+  white-space: normal;
+}
+.lb-report-title {
+  font-size: 1.5em;
+  font-weight: 800;
+  color: var(--accent);
+}
+.lb-report-sub {
+  font-weight: 700;
+}
+.lb-report-meta {
+  color: var(--text-dim);
+  font-size: 0.9em;
+}
+.lb-report-h {
+  margin-top: 1em;
+  padding-bottom: 2px;
+  border-bottom: 2px solid var(--accent);
+  font-weight: 800;
+  font-size: 1.1em;
+}
+.lb-report-p,
+.lb-report-li {
+  margin-top: 0.3em;
+}
+.lb-report-li {
+  padding-left: 1em;
+  text-indent: -1em;
+}
+.lb-report-gap {
+  height: 0.5em;
+}
+
 /* that method's score, big on the row's right (the MVP score's row has none, as before) */
 .leaderboard-method-score {
   display: flex;

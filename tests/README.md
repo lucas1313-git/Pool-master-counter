@@ -709,3 +709,14 @@ Not part of the app - helpers for testing and for running this machine's own cop
   to get up there"): Host 25 races to 7 won, Star 3 - Host's 🧗 gives "Win N races to 7 (7–2
   each, as usual)", one "Plain wins won't do it" line and the gap with what a race adds. `node tests/probe_leaderboard_methods.js [shots]`. The equations:
   tests/unit/leaderboard-methods.test.js, in `npm test`.
+- **probe_leaderboard_report.js** — the Leaderboard's 📤 player report (2026-11-19: "share their
+  position as a report that would explain in details and easy language what put them in that
+  position and what they could do to ascend ... also in shorter what could be jeoparding their
+  position ... a exportable document"), its own file server on 4318: Host 25 races to 7 won, Star
+  3, Few 6 of 10 games - 📤 on every row; Host's preview (In short, the MVP parts biggest first, why
+  ahead of Star, 👑 what a game / a race is worth, the tip, ⚠️ Star's quickest way past and the
+  losses in a row); 📤 Share as PDF caught from a stubbed share sheet - file name, type, title, the
+  xref, and macOS `sips` opens it; Star's climb; Few last ("Nobody is ranked below"), Bob's win rate
+  "once the extra games are counted"; 📈 Performance, 🌙 Best 3 nights, no share sheet (saved),
+  French. `node tests/probe_leaderboard_report.js [out dir]` (the PDF lands there). The PDF writer:
+  tests/unit/pdf-images.test.js, in `npm test`.

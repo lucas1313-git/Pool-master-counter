@@ -30638,6 +30638,15 @@
       {
         delta: a.scoreBreakdown.winRateTerm - b.scoreBreakdown.winRateTerm,
         describe: function (leader, other) {
+          // (the score counts the extra games: when the plain rates read the other way round -
+          // "a better win rate (41% vs 54%)" - the rates as counted)
+          if (Math.round(leader.winPct * 100) <= Math.round(other.winPct * 100)) {
+            return T("leaderboard.reasonWinRateCounted", {
+              leader: leader.name,
+              leaderVal: leader.scoreBreakdown.winRateTerm.toFixed(1) + "%",
+              otherVal: other.scoreBreakdown.winRateTerm.toFixed(1) + "%"
+            });
+          }
           return T("leaderboard.reasonWinRate", {
             leader: leader.name,
             leaderVal: Math.round(leader.winPct * 100) + "%",
@@ -30836,7 +30845,8 @@
     var supporting = [];
     var against = [];
     categories.forEach(function (cat) {
-      if (Math.abs(cat.delta) < 0.01) return;
+      // (what rounds to +0.0 pts says nothing)
+      if (Math.abs(cat.delta) < 0.05) return;
       var favorsA = cat.delta > 0;
       var leader = favorsA ? a : b;
       var other = favorsA ? b : a;
@@ -31028,7 +31038,10 @@
       if (races) lines.push(TP("leaderboard.climbRaces", races, Object.assign({ count: races, race: usual.race, lost: usual.lost, mine: leaderboardResultText(method, mine) }, vars)));
       else far.push(T("leaderboard.climbRacesFar", { max: LEADERBOARD_CLIMB_MAX }));
     }
-    return lines.concat(far);
+    var out = lines.concat(far);
+    // (the ones that do it come first: how many)
+    out.reachable = lines.length;
+    return out;
   }
 
   function leaderboardNamesText(names) {
@@ -31192,6 +31205,428 @@
     return lbJoin(lines.concat(leaderboardWhyLines(entry, method, minGames)), "\n");
   }
 
+  // 📤 on every row (2026-11-19, the user: "for every player in the leaderboard, I would like to be
+  // able to share their position as a report that would explain in details and easy language what
+  // put them in that position and what they could do to ascend ... also in shorter what could be
+  // jeoparding their position ... a exportable document that I could share"): a report worked out
+  // like ❓ and 🧗 - no AI, the app's own numbers - shown first, then shared as a PDF. Sections: in
+  // short; what put them there (the score's parts or results, then against the one above and the
+  // one below); how to climb (or stay on top), what one more result is worth, a tip; and, short,
+  // what could cost them the spot.
+
+  // a gap between two scores, in words: "46.1 points", "1½ wins"
+  function leaderboardGapText(method, a, b) {
+    var M = PMCLib.leaderboardMethods;
+    var d = Math.abs(leaderboardResultOf(a, method).score - leaderboardResultOf(b, method).score);
+    if (method === "last10") return TP("report.gapWins", d === 1 ? 1 : 2, { n: M.halves(d) });
+    var n = method === "mvp" ? Number(d.toFixed(1)) : Math.round(d);
+    return TP("report.gapPoints", n, { n: method === "mvp" ? d.toFixed(1) : String(n) });
+  }
+
+  // a change in score, signed and coloured: green up, red down
+  function leaderboardDeltaSpan(method, d) {
+    var M = PMCLib.leaderboardMethods;
+    var digits = method === "mvp" ? 1 : 0;
+    var flat = method === "last10" ? Math.abs(d) < 0.25 : Math.abs(d) < (digits ? 0.05 : 0.5);
+    if (flat) return lbSpan({ text: "±0", className: "lb-impact" });
+    var text = method === "last10" ? (d < 0 ? "−" : "+") + M.halves(Math.abs(d)) : leaderboardSigned(d, digits);
+    return lbSpan({ text: text, className: d < 0 ? "lb-lost" : "lb-won" });
+  }
+
+  // What one more result does to the entry's score: a game won, a game lost (🌙: a night of 3), and
+  // for the MVP score a race won
+  function leaderboardWorthLines(entry, method, minGames) {
+    var M = PMCLib.leaderboardMethods;
+    var now = leaderboardResultOf(entry, method).score;
+    var rating = leaderboardUsualOpponent(entry, method);
+    var from = new Date();
+    if (method === "bestNights") from = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1, 20, 0);
+    var delta = function (games) {
+      var r = leaderboardScoreWith(entry, method, games, null, minGames);
+      return r ? r.score - now : 0;
+    };
+    var vars = { rating: Math.round(rating), games: M.MIN_GAMES };
+    var line = function (key, games) {
+      return lbJoin(["• ", TStyled(key, Object.assign({ delta: leaderboardDeltaSpan(method, delta(games)) }, vars))]);
+    };
+    var lines = [];
+    if (method === "bestNights") {
+      lines.push(line("report.worthNightWon", M.streak(M.MIN_GAMES, true, rating, [], from)));
+      lines.push(line("report.worthNightLost", M.streak(M.MIN_GAMES, false, rating, [], from)));
+      return lines;
+    }
+    var rated = method === "performance";
+    lines.push(line(rated ? "report.worthWinRated" : "report.worthWin", M.streak(1, true, rating, [], from)));
+    lines.push(line(rated ? "report.worthLossRated" : "report.worthLoss", M.streak(1, false, rating, [], from)));
+    if (method === "mvp" && (entry.methodRacks || entry.mvpRacks)) {
+      var usual = leaderboardUsualRace(entry);
+      vars.race = usual.race;
+      vars.lost = usual.lost;
+      lines.push(line("report.worthRace", leaderboardRaceGames(1, usual)));
+    }
+    return lines;
+  }
+
+  // the fewest losses in a row (against the usual opponents) that would put `below` ahead - null
+  // when even the most tried wouldn't
+  function leaderboardLossesToDrop(entry, below, method, minGames) {
+    var M = PMCLib.leaderboardMethods;
+    var rating = leaderboardUsualOpponent(entry, method);
+    var belowNow = leaderboardResultOf(below, method);
+    return M.fewest(function (k) {
+      var res = leaderboardScoreWith(entry, method, M.streak(k, false, rating, [], new Date()), null, minGames);
+      return leaderboardAhead(method, below, belowNow, entry, res);
+    }, method === "last10" ? M.LAST_GAMES : LEADERBOARD_CLIMB_MAX);
+  }
+
+  // the MVP score's parts in easy words, biggest first (the ones worth nothing left out)
+  function leaderboardMvpPartLines(entry, minGames) {
+    var b = entry.scoreBreakdown;
+    var pts = function (n) {
+      return n.toFixed(1);
+    };
+    var parts = [
+      { points: b.tournamentTerm, key: "report.partTournament", label: "report.partLabelTournament", vars: { count: entry.tournamentWins, weight: LEADERBOARD_TOURNAMENT_WIN_WEIGHT } },
+      { points: b.winRateTerm, key: "report.partWinRate", label: "report.partLabelWinRate", vars: { wins: entry.wins, games: entry.gamesPlayed, minGames: minGames } },
+      { points: b.ratingTerm, key: "report.partRating", label: "report.partLabelRating", vars: { rating: Math.round(entry.rating) } },
+      { points: b.activityTerm, key: "report.partActivity", label: "report.partLabelActivity", vars: { games: entry.gamesPlayed } },
+      { points: b.skunkTerm, key: "report.partSkunk", label: "report.partLabelSkunk", vars: { count: entry.skunkWins } },
+      { points: b.dominanceTerm, key: "report.partDominance", label: "report.partLabelDominance", vars: { pct: Math.round(entry.avgDominanceRatio * 100) } }
+    ]
+      .filter(function (p) {
+        return p.points > 0.05;
+      })
+      .sort(function (x, y) {
+        return y.points - x.points;
+      });
+    var lines = parts.map(function (p) {
+      return lbJoin(["• ", TStyled(p.key, Object.assign({ points: lbImpact(pts(p.points)) }, p.vars))]);
+    });
+    lines.biggest = parts[0] || null;
+    return lines;
+  }
+
+  // the report as blocks - {kind: "title" | "sub" | "meta" | "h" | "p" | "li" | "gap", node} - plus
+  // its title and file name
+  function buildLeaderboardReport(entry, rank, entries) {
+    var method = entries.method;
+    var minGames = entries.minGames;
+    var isTeam = !!entry.members;
+    var count = entries.length;
+    var above = rank > 1 ? entries[rank - 2] : null;
+    var below = entries[rank] || null;
+    var top = rank > 2 ? entries[0] : null;
+    var label = T(LEADERBOARD_METHOD_LABEL_KEYS[method]);
+    var scoreOf = function (e) {
+      return leaderboardResultText(method, leaderboardResultOf(e, method));
+    };
+    var date = new Date().toLocaleDateString(reportLocale(), { year: "numeric", month: "short", day: "numeric" });
+    var blocks = [];
+    // (a line with "\n"s in it is several; "• " starts a bullet, "" is a gap)
+    var add = function (kind, item) {
+      leaderboardReportLines(item).forEach(function (line) {
+        var text = line.textContent;
+        if (kind !== "p") blocks.push({ kind: kind, node: line });
+        else if (!text) blocks.push({ kind: "gap", node: line });
+        else if (text.indexOf("• ") === 0) blocks.push({ kind: "li", node: leaderboardStripBullet(line) });
+        else blocks.push({ kind: "p", node: line });
+      });
+    };
+    var firstRoute = function (climber, target) {
+      var routes = leaderboardClimbRoutes(climber, target, method, minGames, isTeam);
+      return routes.reachable ? routes[0] : null;
+    };
+
+    add("title", (LEADERBOARD_RANK_MEDALS[rank - 1] || "#" + rank) + " " + entry.name);
+    add("sub", T("report.position", { rank: rank, count: count, method: label, score: scoreOf(entry) }));
+    add("meta", T("report.meta", { scope: T(leaderboardScopeLabelKey(leaderboardViewMode())), period: T(PLAYER_PAGE_PERIOD_LABEL_KEYS[leaderboardPeriod] || "period.allTime"), date: date }));
+
+    // ---- in short ----
+    add("h", T("report.inShort"));
+    var gapVars = { name: entry.name, rank: rank, count: count };
+    if (count < 2) add("p", T("report.summaryAlone", gapVars));
+    else if (rank === 1) add("p", T("report.summaryTop", Object.assign({ other: below.name, gap: leaderboardGapText(method, entry, below) }, gapVars)));
+    else if (below) add("p", T("report.summaryMid", Object.assign({ above: above.name, up: leaderboardGapText(method, above, entry), below: below.name, down: leaderboardGapText(method, entry, below) }, gapVars)));
+    else add("p", T("report.summaryLast", Object.assign({ above: above.name, up: leaderboardGapText(method, above, entry) }, gapVars)));
+    var parts = method === "mvp" ? leaderboardMvpPartLines(entry, minGames) : null;
+    if (parts && parts.biggest) add("p", T("report.summaryBiggest", { name: entry.name, part: T(parts.biggest.label), points: parts.biggest.points.toFixed(1), total: entry.mvpScore.toFixed(1) }));
+    if (method !== "mvp") add("p", leaderboardMethodMakeup(entry, method));
+    var upRoute = above ? firstRoute(entry, above) : null;
+    if (upRoute) add("p", T("report.summaryClimb", { route: upRoute, other: above.name }));
+
+    // ---- what put them there ----
+    add("h", T("report.whyTitle", { name: entry.name, rank: rank }));
+    add("p", T(method === "mvp" ? "report.mvpIntro" : LEADERBOARD_METHOD_HINT_KEYS[method]));
+    if (parts) {
+      parts.forEach(function (l) {
+        add("p", l);
+      });
+      add("p", "");
+      add("p", T("leaderboard.whyByOpponent"));
+      leaderboardOpponentLines(entry, method, minGames).forEach(function (l) {
+        add("p", l);
+      });
+    } else {
+      leaderboardWhyLines(entry, method, minGames).forEach(function (l) {
+        add("p", l);
+      });
+    }
+    if (above) {
+      add("h", T("report.vsAbove", { other: above.name, rank: rank - 1 }));
+      add("p", explainLeaderboardRanking(above, entry, method));
+    }
+    if (below) {
+      add("h", T("report.vsBelow", { name: entry.name, other: below.name, rank: rank + 1 }));
+      add("p", explainLeaderboardRanking(entry, below, method));
+    }
+
+    // ---- how to climb (on top: how to stay there) ----
+    add("h", T(rank === 1 ? "report.stayTitle" : "report.climbTitle", { name: entry.name }));
+    if (above) {
+      add("p", T("leaderboard.climbTo", { other: above.name, rank: rank - 1, score: scoreOf(above) }));
+      leaderboardClimbRoutes(entry, above, method, minGames, isTeam).forEach(function (l) {
+        add("p", "• " + l);
+      });
+      if (method === "mvp") add("p", T("leaderboard.climbMvpGap", { gap: (above.mvpScore - entry.mvpScore).toFixed(1), tournament: LEADERBOARD_TOURNAMENT_WIN_WEIGHT, skunk: LEADERBOARD_SKUNK_WIN_WEIGHT }));
+    }
+    if (top) {
+      var topRoute = firstRoute(entry, top);
+      add("p", T("report.climbToTop", { other: top.name, score: scoreOf(top) }));
+      add("p", "• " + (topRoute || T("report.climbTopFar", { max: method === "last10" ? PMCLib.leaderboardMethods.LAST_GAMES : LEADERBOARD_CLIMB_MAX })));
+    }
+    if (above || top) add("p", T("leaderboard.climbAssume"));
+    add("p", T(method === "bestNights" ? "report.worthTitleNights" : "report.worthTitle", { name: entry.name, games: PMCLib.leaderboardMethods.MIN_GAMES }));
+    leaderboardWorthLines(entry, method, minGames).forEach(function (l) {
+      add("p", l);
+    });
+    add("p", T("report.tip_" + method));
+
+    // ---- what could cost them the spot (short) ----
+    add("h", T("report.riskTitle", { name: entry.name, rank: rank }));
+    if (!below) {
+      add("p", T("report.riskNone", { name: entry.name }));
+    } else {
+      var downRoute = firstRoute(below, entry);
+      add("p", "• " + T(downRoute ? "report.riskBelow" : "report.riskBelowFar", { name: entry.name, other: below.name, rank: rank + 1, gap: leaderboardGapText(method, entry, below), route: downRoute || "" }));
+      if (method === "bestNights") {
+        add("p", "• " + T("report.riskNightsSafe", { name: entry.name, other: below.name }));
+      } else {
+        var losses = leaderboardLossesToDrop(entry, below, method, minGames);
+        add("p", "• " + (losses ? TP("report.riskLosses", losses, { count: losses, name: entry.name, other: below.name }) : T("report.riskLossesFar", { max: method === "last10" ? PMCLib.leaderboardMethods.LAST_GAMES : LEADERBOARD_CLIMB_MAX, name: entry.name, other: below.name })));
+      }
+    }
+    if (leaderboardPeriod !== "all") add("p", "• " + T("report.riskWindow", { period: T(PLAYER_PAGE_PERIOD_LABEL_KEYS[leaderboardPeriod] || "period.allTime") }));
+
+    var title = T("report.docTitle", { name: entry.name, rank: rank, count: count });
+    // (the calendar day, as in the header - not the pool day, which runs to 5 a.m.)
+    var now = new Date();
+    var day = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+    return { blocks: blocks, title: title, fileName: T("report.fileName", { name: entry.name, date: day }).replace(/[\\/:*?"<>|]+/g, "-") + ".pdf" };
+  }
+
+  // an item (string or fragment) as its lines, each a fragment
+  function leaderboardReportLines(item) {
+    var lines = [document.createDocumentFragment()];
+    var nodes = typeof item === "string" ? [document.createTextNode(item)] : item.nodeType === 11 ? Array.prototype.slice.call(item.childNodes) : [item];
+    nodes.forEach(function (n) {
+      if (n.nodeType !== 3) return lines[lines.length - 1].appendChild(n.cloneNode(true));
+      n.textContent.split("\n").forEach(function (piece, i) {
+        if (i) lines.push(document.createDocumentFragment());
+        if (piece) lines[lines.length - 1].appendChild(document.createTextNode(piece));
+      });
+    });
+    return lines;
+  }
+
+  function leaderboardStripBullet(line) {
+    var first = line.firstChild;
+    if (first && first.nodeType === 3) first.textContent = first.textContent.replace(/^• /, "");
+    return line;
+  }
+
+  // shown before it's shared: the same blocks, as they'll read
+  function leaderboardReportPreview(report) {
+    var box = document.createElement("div");
+    box.className = "lb-report";
+    report.blocks.forEach(function (b) {
+      var el = document.createElement("div");
+      el.className = "lb-report-" + b.kind;
+      if (b.kind === "li") el.appendChild(document.createTextNode("• "));
+      el.appendChild(b.node.cloneNode(true));
+      box.appendChild(el);
+    });
+    return box;
+  }
+
+  // The PDF's pages: A4 at 150 dpi, drawn on canvases - a document's light page whatever the theme
+  var REPORT_PAGE = { width: 1240, height: 1754, margin: 100, footer: 70 };
+  var REPORT_FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang HK", "Noto Sans CJK TC", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+  var REPORT_STYLES = {
+    title: { size: 64, weight: 800, color: "#7a1414", lh: 1.25 },
+    sub: { size: 36, weight: 700, color: "#1d1d1d", lh: 1.4 },
+    meta: { size: 27, weight: 500, color: "#6b6b6b", lh: 1.4 },
+    h: { size: 38, weight: 800, color: "#7a1414", lh: 1.3, before: 40, after: 18 },
+    p: { size: 29, weight: 500, color: "#1d1d1d", lh: 1.45 },
+    li: { size: 29, weight: 500, color: "#1d1d1d", lh: 1.45, indent: 42 },
+    gap: { size: 29, lh: 0.5 }
+  };
+  var REPORT_SPAN_COLORS = { "lb-won": "#12804a", "lb-lost": "#c62828", "lb-impact": "#1a5fc4" };
+
+  // a line's text as spans {text, cls} (the coloured ones whole)
+  function leaderboardReportSpans(node) {
+    var out = [];
+    (function walk(n, cls) {
+      Array.prototype.forEach.call(n.childNodes, function (c) {
+        if (c.nodeType === 3) out.push({ text: c.textContent, cls: cls });
+        else if (c.nodeType === 1) walk(c, REPORT_SPAN_COLORS[c.className] ? c.className : cls);
+      });
+    })(node, "");
+    return out;
+  }
+
+  // Lays the blocks out on pages: [[{x, y, text, font, color}], ...] (and each heading's rule)
+  function leaderboardReportLayout(ctx, blocks) {
+    var P = REPORT_PAGE;
+    var width = P.width - 2 * P.margin;
+    var bottom = P.height - P.margin - P.footer;
+    var pages = [[]];
+    var y = P.margin;
+    var cjk = /[⺀-鿿가-힯豈-﫿＀-￯]/;
+    var fontOf = function (st, cls) {
+      return (cls ? 800 : st.weight) + " " + Math.round(cls ? st.size * 1.1 : st.size) + "px " + REPORT_FONT;
+    };
+    var newPage = function () {
+      pages.push([]);
+      y = P.margin;
+    };
+    blocks.forEach(function (b, bi) {
+      var st = REPORT_STYLES[b.kind];
+      var lh = Math.round(st.size * st.lh);
+      if (b.kind === "gap") {
+        if (y > P.margin) y += lh;
+        return;
+      }
+      if (b.kind === "h") {
+        if (y > P.margin) y += st.before;
+        // (a heading never alone at the foot of a page)
+        if (y + lh + st.after + 2 * Math.round(REPORT_STYLES.p.size * REPORT_STYLES.p.lh) > bottom) newPage();
+      }
+      // the tokens: words (and the spaces after them), each CJK character, each coloured span whole
+      var tokens = [];
+      leaderboardReportSpans(b.node).forEach(function (sp) {
+        if (sp.cls) return tokens.push({ text: sp.text, cls: sp.cls });
+        sp.text.split(/(\s+)/).forEach(function (w) {
+          if (!w) return;
+          if (cjk.test(w)) Array.from(w).forEach(function (ch) {
+            tokens.push({ text: ch, cls: "" });
+          });
+          else tokens.push({ text: w, cls: "" });
+        });
+      });
+      var indent = st.indent || 0;
+      var lines = [[]];
+      var x = indent;
+      tokens.forEach(function (t) {
+        ctx.font = fontOf(st, t.cls);
+        var w = ctx.measureText(t.text).width;
+        var space = /^\s+$/.test(t.text);
+        if (space && x === indent) return;
+        if (x + w > width && x > indent && !space) {
+          lines.push([]);
+          x = indent;
+        }
+        // (a word wider than the whole line: as many characters as fit, then the rest)
+        if (w > width - indent) {
+          Array.from(t.text).forEach(function (ch) {
+            ctx.font = fontOf(st, t.cls);
+            var cw = ctx.measureText(ch).width;
+            if (x + cw > width && x > indent) {
+              lines.push([]);
+              x = indent;
+            }
+            lines[lines.length - 1].push({ x: x, text: ch, font: fontOf(st, t.cls), color: t.cls ? REPORT_SPAN_COLORS[t.cls] : st.color });
+            x += cw;
+          });
+          return;
+        }
+        lines[lines.length - 1].push({ x: x, text: t.text, font: fontOf(st, t.cls), color: t.cls ? REPORT_SPAN_COLORS[t.cls] : st.color });
+        x += w;
+      });
+      lines.forEach(function (line, li) {
+        if (y + lh > bottom) newPage();
+        var base = y + Math.round(lh * 0.74);
+        if (b.kind === "li" && li === 0) pages[pages.length - 1].push({ x: P.margin + 6, y: base, text: "•", font: fontOf(st, ""), color: st.color });
+        line.forEach(function (t) {
+          pages[pages.length - 1].push({ x: P.margin + t.x, y: base, text: t.text, font: t.font, color: t.color });
+        });
+        y += lh;
+      });
+      if (b.kind === "h") {
+        pages[pages.length - 1].push({ rule: true, y: y + 4 });
+        y += st.after;
+      }
+      if (b.kind === "meta" && blocks[bi + 1] && blocks[bi + 1].kind !== "meta") y += 10;
+    });
+    return pages;
+  }
+
+  // The report as a PDF (Uint8Array)
+  function leaderboardReportPdf(report) {
+    var P = REPORT_PAGE;
+    var probe = document.createElement("canvas").getContext("2d");
+    var laid = leaderboardReportLayout(probe, report.blocks);
+    var pages = laid.map(function (items, i) {
+      var canvas = document.createElement("canvas");
+      canvas.width = P.width;
+      canvas.height = P.height;
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, P.width, P.height);
+      // (the app's gold along the top of every page)
+      ctx.fillStyle = "#e8b923";
+      ctx.fillRect(0, 0, P.width, 14);
+      ctx.textBaseline = "alphabetic";
+      items.forEach(function (it) {
+        if (it.rule) {
+          ctx.fillStyle = "#e8b923";
+          ctx.fillRect(P.margin, it.y, P.width - 2 * P.margin, 4);
+          return;
+        }
+        ctx.font = it.font;
+        ctx.fillStyle = it.color;
+        ctx.fillText(it.text, it.x, it.y);
+      });
+      ctx.font = "500 22px " + REPORT_FONT;
+      ctx.fillStyle = "#8a8a8a";
+      ctx.textAlign = "center";
+      ctx.fillText(T("report.pageFooter", { page: i + 1, pages: laid.length }), P.width / 2, P.height - P.margin / 2);
+      ctx.textAlign = "left";
+      return PMCLib.pdfImages.canvasJpeg(canvas, 0.9);
+    });
+    return PMCLib.pdfImages.imagesToPdf(pages, { title: report.title });
+  }
+
+  // 📤 Share as PDF: the share sheet (iPad, iPhone, Mac Safari), else saved to Downloads
+  function shareLeaderboardReport(report) {
+    var file;
+    try {
+      file = new File([leaderboardReportPdf(report)], report.fileName, { type: "application/pdf" });
+    } catch (e) {
+      return alertModal(T("report.failed"));
+    }
+    var save = function () {
+      downloadFileObject(file);
+      showToast(T("report.downloaded"), "");
+    };
+    if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: report.title }).catch(function (err) {
+        if (!err || err.name !== "AbortError") save();
+      });
+    } else {
+      save();
+    }
+  }
+
   var LEADERBOARD_RANK_MEDALS = ["🥇", "🥈", "🥉"];
 
   // The row of unlocked-achievement icons shown under a player's name on
@@ -31309,6 +31744,19 @@
       });
     });
     nameRow.appendChild(explainBtn);
+    // 📤 this one's report: read it, then share it as a PDF
+    var reportBtn = document.createElement("button");
+    reportBtn.type = "button";
+    reportBtn.className = "leaderboard-explain-btn leaderboard-report-btn";
+    reportBtn.textContent = "📤";
+    reportBtn.setAttribute("aria-label", T("report.shareAria", { name: entry.name }));
+    reportBtn.addEventListener("click", function () {
+      var report = buildLeaderboardReport(entry, rank, entries);
+      alertModalWithAction(leaderboardReportPreview(report), T("report.shareButton"), function () {
+        shareLeaderboardReport(report);
+      });
+    });
+    nameRow.appendChild(reportBtn);
     body.appendChild(nameRow);
 
     if (!isTeamEntry) {
