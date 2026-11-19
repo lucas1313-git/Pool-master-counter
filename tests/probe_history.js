@@ -18,7 +18,7 @@
 //   a sport commentator"): Ace sets the early pace (the first night: nothing before it to compare),
 //   Cid comes in, Bob slips, "👑 … Bob …
 //   Ace … won 2 races" and "Top-3 clash: Bob beats Ace 6–3" (no slip line for Ace - same news),
-//   Ace slips, Dee comes in;
+//   Ace slips, "🦨 Skunk! Dee shuts out Cid." (Dee's biggest moment - his coming in only at 🔎);
 // - 🎯 following Bob ("view the animation from his point of view ... much more details ... more
 //   comments"): his races night - the headline, "🎱 Bob goes 6–3 tonight: beats Ace 6–3. 🏁 2
 //   races won!", career best, the gap, his rating, his first race (no clash line, no "moves up" -
@@ -30,6 +30,11 @@
 //   🔇 off: nothing said;
 // - the page stays put during a replay, scrolled down to a graph ("the window is scrolling up when
 //   the timeline is moving"); the commentary a fixed bar along the bottom, ✕ closes it;
+// - the amount of detail (2026-11-19, "a drop list for the amount of detail to see and hear"): 📰
+//   headlines - the lead change only; 🔎 everything - everyone's night ("🎱 Ace: 8–4.", "🔥 Ace wins
+//   8 in a row."), the skunk (Dee shuts out Cid - said at normal too, nobody moved for it); 🎙️
+//   Earlier scrolls ("when I press past events I cannot scroll the popup"); 🔥 lots of trash talk:
+//   a quip under the lead change, about Ace; 😇 none: no quip;
 // - ✕ removes a graph; it's all there after a reload; French; no page errors.
 // Its own file server on 4322.
 // usage: node tests/probe_history.js [screenshot dir]
@@ -72,7 +77,8 @@ function logs() {
   const r = { raceTarget: 3 };
   const last = { raceTarget: 3, wonRace: true };
   night(4, [["Bob", "Ace", r], ["Ace", "Bob", r], ["Bob", "Ace", r], ["Bob", "Ace", last], ["Ace", "Bob", r], ["Bob", "Ace", r], ["Ace", "Bob", r], ["Bob", "Ace", r], ["Bob", "Ace", last]]);
-  night(1, [].concat(many("Dee", "Cid", 5), many("Cid", "Dee", 5)));
+  // (the last night: one of Dee's racks a skunk - Cid potted nothing)
+  night(1, [["Dee", "Cid", { skunk: true }]].concat(many("Dee", "Cid", 4), many("Cid", "Dee", 5)));
   return out;
 }
 
@@ -275,6 +281,7 @@ function logs() {
     await page.evaluate(() => [...document.querySelectorAll("#history-range-presets button")][0].click());
     await sleep(200);
     await page.select("#history-speed", "veryFast");
+    await page.select("#history-trash", "none");
     // each night's commentary as it comes up, until the replay ends
     const replay = async (pauseAt) => {
       await page.evaluate(() => document.getElementById("btn-history-replay").click());
@@ -316,7 +323,7 @@ function logs() {
       /🏁 Ace sets the early pace at #1\.$/.test(flat[0]) &&
       /👋 Cid enters the rankings at #2\./.test(flat[1]) && /↘️ Bob slips from #2 to #3\./.test(flat[1]) &&
       /👑 [^|]*Bob[^|]*Ace[^|]*won 2 races/.test(flat[2]) && /⚔️ Top-3 clash: Bob beats Ace 6–3\./.test(flat[2]) && !/Ace slips/.test(flat[2]) &&
-      /↘️ Ace slips from #2 to #3\./.test(flat[3]) && /👋 Dee enters the rankings at #4\./.test(flat[3]), flat);
+      /↘️ Ace slips from #2 to #3\./.test(flat[3]) && /🦨 Skunk! Dee shuts out Cid\./.test(flat[3]) && !/Dee enters/.test(flat[3]), flat);
 
     // ---- 🎯 following Bob: his whole night, the timeline, his line on top; ⏸ / ▶ Resume ----
     await page.select("#history-follow", "Bob");
@@ -385,6 +392,41 @@ function logs() {
     await sleep(200);
     const closed = await page.evaluate(() => document.getElementById("history-commentary").classList.contains("hidden"));
     check("✕ closes the commentary", closed);
+
+    // ---- the amount of detail, and the trash talk ----
+    await page.select("#history-detail", "headlines");
+    rp = await replay();
+    const heads = rp.seen.map((x) => x.replace(/\n+/g, " | "));
+    await page.select("#history-detail", "everything");
+    rp = await replay();
+    const every = rp.seen.map((x) => x.replace(/\n+/g, " | "));
+    check("📰 headlines - the moves at the top only: " + JSON.stringify(heads),
+      /👑 [^|]*Bob/.test(heads[2]) && !/Top-3 clash/.test(heads[2]) && !/slips/.test(heads.join()) && !/Skunk/.test(heads[3]), heads);
+    check("🔎 everything - every moment: " + JSON.stringify(every[0]) + " … " + JSON.stringify(every[3]),
+      /🎱 Ace: 8–4\./.test(every[0]) && /🔥 Ace wins 8 in a row\./.test(every[0]) && /🎱 Bob: 4–8\./.test(every[0]) && /🦨 Skunk! Dee shuts out Cid\./.test(every[3]) && /👋 Dee enters the rankings at #4\./.test(every[3]) && /🎱 Dee: 5–5\./.test(every[3]), every);
+    // (🎙️ Earlier, after everything: a long list that scrolls)
+    const scrolled = await page.evaluate(async () => {
+      const d = document.getElementById("history-say-earlier");
+      d.open = true;
+      await new Promise((r) => setTimeout(r, 200));
+      const log = document.getElementById("history-say-log");
+      return { overflow: getComputedStyle(log).overflowY, tall: log.scrollHeight > log.clientHeight };
+    });
+    const logBox = await (await page.$("#history-say-log")).boundingBox();
+    await page.mouse.move(logBox.x + logBox.width / 2, logBox.y + logBox.height / 2);
+    await page.mouse.wheel({ deltaY: 300 });
+    await sleep(300);
+    const after = await page.evaluate(() => ({ top: document.getElementById("history-say-log").scrollTop, page: window.scrollY }));
+    check("🎙️ Earlier scrolls (" + JSON.stringify(scrolled) + ", scrolled to " + after.top + ")", scrolled.overflow === "auto" && scrolled.tall && after.top > 0, { scrolled, after });
+    await page.evaluate(() => { document.getElementById("history-say-earlier").open = false; });
+    await page.select("#history-detail", "normal");
+    await page.select("#history-trash", "lots");
+    rp = await replay();
+    const lots = rp.seen.map((x) => x.replace(/\n+/g, " | "));
+    check("🔥 lots of trash talk: a quip under the news it teases - " + JSON.stringify(lots[2]), /😏/.test(lots.join()) && /👑 [^|]*\| 😏 [^|]*Ace/.test(lots[2]), lots);
+    await page.select("#history-trash", "none");
+    rp = await replay();
+    check("😇 no trash talk: no quip", !/😏/.test(rp.seen.join()), rp.seen);
 
     // ---- ✕, then a reload ----
     await page.evaluate(() => document.querySelector('#history-cards .history-card[data-type="winTrend"] .history-card-remove').click());

@@ -733,6 +733,7 @@ Not part of the app - helpers for testing and for running this machine's own cop
   Bob (his whole races night, his line the thick one, his timeline); 🔊 the voice (a stand-in
   speechSynthesis: each night's day and date first, every line said without emoji, "6 to 3",
   "number 1", the replay waiting for it;
-  🔇 nothing said); the page staying put during a replay, the commentary a fixed bar, ✕; ✕ a
-  graph; a reload; French. `node tests/probe_history.js [shots]` (PMC_SITE=<dir> to test another build). The
+  🔇 nothing said); the page staying put during a replay, the commentary a fixed bar, ✕; the
+  detail levels (📰 headlines, 🔎 everything - everyone's night, the skunk), 🎙️ Earlier scrolling,
+  😏 trash talk (lots / none); ✕ a graph; a reload; French. `node tests/probe_history.js [shots]` (PMC_SITE=<dir> to test another build). The
   influencers and ticks: tests/unit/history-charts.test.js, in `npm test`.

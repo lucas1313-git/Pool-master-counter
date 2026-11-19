@@ -12988,10 +12988,15 @@ body.network-guest-mode #league-add-member-contact-fields {
   overflow-y: auto;
 }
 .history-say-close {
-  float: right;
+  position: absolute;
+  top: 6px;
+  right: 6px;
   min-width: 40px;
   min-height: 40px;
-  margin: -4px -4px 0 8px;
+  z-index: 1;
+}
+.history-say-date {
+  padding-right: 48px;
 }
 .history-say-date {
   font-weight: 800;
@@ -13031,6 +13036,36 @@ body.network-guest-mode #league-add-member-contact-fields {
 .history-say-log .history-say-line {
   font-size: 1rem;
   font-weight: 600;
+}
+/* 😏 the trash talk: a quip under the news it teases */
+.history-say-line.is-trash {
+  font-style: italic;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+/* 🎙️ Earlier: its own scrolling list, so the bar keeps its size and the list scrolls by finger,
+   wheel or keys without dragging the page along */
+.history-commentary {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: calc(100vh - 24px);
+}
+#history-say-now {
+  flex: none;
+}
+.history-say-earlier {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.history-say-log {
+  overflow-y: auto;
+  max-height: 34vh;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 /* 🎯 the player followed, night by night */
 .history-timeline-list {

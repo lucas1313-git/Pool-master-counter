@@ -66,14 +66,17 @@ function season() {
 
 test("commentary: the first leader, a newcomer's clean sweep, a lead change with its races, a top-3 clash, neck and neck", () => {
   const c = H.commentary(season());
-  const kinds = (i) => c[i].general.map((x) => x.kind + ":" + x.name);
+  // (each player's most notable - top; 🔎 everything gets the rest too)
+  const kinds = (i) => c[i].general.filter((x) => x.top).map((x) => x.kind + ":" + x.name);
   assert.deepEqual(kinds(0), ["firstLeader:Ace"]);
   // (one item per player: Cid's sweep and his entry - the entry at #3 counts more)
   assert.deepEqual(kinds(1), ["enter:Cid"]);
+  assert.deepEqual(c[1].general.map((x) => x.kind), ["enter", "sweep", "nightLine"]);
   // (the clash told from the winner's side)
   assert.deepEqual(kinds(2), ["leadChange:Bob", "clash:Bob"]);
   assert.deepEqual(c[2].general[0].how, { won: 6, lost: 3, races: 2 });
-  assert.deepEqual([c[2].general[1].wa, c[2].general[1].wb, c[2].general[1].other], [6, 3, "Ace"]);
+  const clash = c[2].general.find((x) => x.kind === "clash");
+  assert.deepEqual([clash.wa, clash.wb, clash.other], [6, 3, "Ace"]);
   assert.deepEqual(kinds(3), ["closeRace:Bob"]);
   assert.equal(c[3].general[0].gap, 0.5 + 1);
   assert.ok(c.every((n) => n.personal.length === 0));
@@ -104,9 +107,42 @@ test("commentary: a reign every 5 nights at #1, a winning streak for the one fol
 test("commentary: a top-3 clash only when one-sided enough - 5 games, won by 3", () => {
   const ranks = { Ace: [1, 1], Bob: [2, 2] };
   const night = (aw, al) => ({ Ace: [null, { won: aw, lost: al, races: 0, vs: { Bob: { won: aw, lost: al } } }], Bob: [null, { won: al, lost: aw, races: 0, vs: { Ace: { won: al, lost: aw } } }] });
-  const clash = (aw, al) => H.commentary({ names: ["Ace", "Bob"], count: 2, ranks, played: night(aw, al), events: [] })[1].general.filter((g) => g.kind === "clash");
+  const clash = (aw, al) => H.commentary({ names: ["Ace", "Bob"], count: 2, ranks, played: night(aw, al), events: [] })[1].general.filter((g) => g.kind === "clash" && g.top);
   assert.equal(clash(3, 3).length, 0);
   assert.equal(clash(3, 1).length, 0);
   assert.equal(clash(4, 2).length, 0);
   assert.deepEqual(clash(1, 5).map((g) => [g.name, g.wa, g.wb, g.other]), [["Bob", 5, 1, "Ace"]]);
+});
+
+test("commentary: the big moments even when nobody moves - skunks, a race won, an upset, a run, a record night, 50 wins, the lead stretched", () => {
+  const n = 4;
+  const ranks = { Ace: [1, 1, 1, 1], Bob: [2, 2, 2, 2] };
+  const quiet = { won: 0, lost: 0, races: 0, vs: {} };
+  const played = {
+    Ace: [{ won: 6, lost: 2, races: 0, vs: {} }, { won: 30, lost: 4, races: 1, raceTo: [7], vs: {}, skunks: ["Bob", "Bob"], run: 9 }, quiet, quiet],
+    Bob: [{ won: 2, lost: 6, races: 0, vs: {} }, { won: 4, lost: 30, races: 0, vs: {}, skunked: ["Ace", "Ace"] }, { won: 3, lost: 1, races: 0, vs: {}, upset: { other: "Ace", mine: 380, theirs: 470 } }, quiet]
+  };
+  const scores = { Ace: [60, 70, 70, 80], Bob: [50, 50, 51, 50] };
+  const c = H.commentary({ names: ["Ace", "Bob"], count: n, ranks, played, scores, events: [], closeGap: 2, follow: "Bob" });
+  const all = (i) => c[i].general.map((x) => x.kind + ":" + x.name);
+  for (const k of ["skunk:Ace", "raceWon:Ace", "winRun:Ace", "recordNight:Ace"]) assert.ok(all(1).includes(k), k + " in " + all(1));
+  assert.ok(!all(0).some((k) => k.startsWith("recordNight")), "no record on the first night");
+  assert.deepEqual(c[1].general.find((x) => x.kind === "skunk").others, ["Bob"]);
+  assert.equal(c[1].general.find((x) => x.kind === "skunk").count, 2);
+  assert.equal(c[1].general.find((x) => x.kind === "raceWon").race, 7);
+  assert.ok(all(2).includes("upset:Bob"));
+  assert.ok(all(1).includes("milestone:Ace") === false && all(1).some((k) => k === "milestone:Ace") === false);
+  // (Ace 36 wins after night 2 - 50 not yet; the lead from 20 to 31 between nights 0 and 1: stretched)
+  assert.ok(all(1).includes("leadStretch:Ace"));
+  // following Bob: skunked, the upset
+  assert.ok(c[1].personal.some((p) => p.kind === "fSkunked" && p.names.join() === "Ace"));
+  assert.ok(c[2].personal.some((p) => p.kind === "fUpset" && p.theirs === 470));
+});
+
+test("commentary: 50 wins - a milestone, and the followed player's own", () => {
+  const ranks = { Ace: [1, 1], Bob: [2, 2] };
+  const played = { Ace: [{ won: 45, lost: 0, races: 0, vs: {} }, { won: 6, lost: 1, races: 0, vs: {} }], Bob: [null, null] };
+  const c = H.commentary({ names: ["Ace", "Bob"], count: 2, ranks, played, events: [], follow: "Ace" });
+  assert.ok(c[1].general.some((x) => x.kind === "milestone" && x.name === "Ace" && x.count === 50));
+  assert.ok(c[1].personal.some((x) => x.kind === "fMilestone" && x.count === 50));
 });

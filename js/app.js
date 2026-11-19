@@ -3318,6 +3318,8 @@
   var historyEmptyHint = document.getElementById("history-empty");
   var btnHistoryStop = document.getElementById("btn-history-stop");
   var btnHistoryVoice = document.getElementById("btn-history-voice");
+  var historyDetailSelect = document.getElementById("history-detail");
+  var historyTrashSelect = document.getElementById("history-trash");
   var historyFollowSelect = document.getElementById("history-follow");
   var historySpeedSelect = document.getElementById("history-speed");
   var historyCommentaryEl = document.getElementById("history-commentary");
@@ -31716,7 +31718,12 @@
       var counted = points.filter(function (p) {
         return p.counts;
       }).length;
-      ctx.ratings[name] = { points: points, before: entry ? Math.max(0, (entry.gamesPlayed || 0) - counted) : 0 };
+      // (cum[k]: the rated games among points 0..k)
+      var cum = [];
+      points.forEach(function (p, k) {
+        cum[k] = (k ? cum[k - 1] : 0) + (p.counts ? 1 : 0);
+      });
+      ctx.ratings[name] = { points: points, cum: cum, before: entry ? Math.max(0, (entry.gamesPlayed || 0) - counted) : 0 };
     }
     return ctx.ratings[name];
   }
@@ -31735,6 +31742,23 @@
       asOf.ratings[name] = { rating: rating, games: games };
     }
     return asOf.ratings[name];
+  }
+
+  // a player's rating just before moment t, and how many rated games it stood on then
+  function historyRatingAt(ctx, name, t) {
+    var tl = leaderboardRatingTimeline(ctx, name);
+    var pts = tl.points;
+    var lo = 0;
+    var hi = pts.length - 1;
+    var found = -1;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (pts[mid].t < t) {
+        found = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    return found === -1 ? { rating: DEFAULT_RATING, games: tl.before } : { rating: pts[found].rating, games: tl.before + tl.cum[found] };
   }
 
   // the end of a pool night ("2026-11-15" -> Nov 16, 5 a.m.)
@@ -31764,17 +31788,46 @@
         var per = (nightly[n] = {});
         var at = function (ts) {
           var d = localDateStrFromTs(ts);
-          return per[d] || (per[d] = { won: 0, lost: 0, races: 0, vs: {} });
+          return per[d] || (per[d] = { won: 0, lost: 0, races: 0, vs: {}, skunks: [], skunked: [], raceTo: [], run: 0, upset: null });
         };
+        var byDay = {};
         g.all.forEach(function (x) {
           if (!x.ts) return;
-          days[localDateStrFromTs(x.ts)] = true;
+          var d = localDateStrFromTs(x.ts);
+          days[d] = true;
           var r = at(x.ts);
-          var side = x.result === "won" ? "won" : "lost";
-          r[side] += 1;
-          // (and by opponent, playing on their own - "Bob", or "Ace & Cid" - for the commentator)
-          var opp = (x.opponentNames || []).filter(Boolean).join(" & ");
-          if (opp && !(x.teammateNames || []).length) (r.vs[opp] = r.vs[opp] || { won: 0, lost: 0 })[side] += 1;
+          var won = x.result === "won";
+          r[won ? "won" : "lost"] += 1;
+          // (and by opponent, playing on their own - "Bob", or "Ace & Cid" - for the commentator;
+          // the skunks either way; the race lengths won)
+          var opps = (x.opponentNames || []).filter(Boolean);
+          var solo = !(x.teammateNames || []).length;
+          var opp = opps.join(" & ");
+          if (opp && solo) (r.vs[opp] = r.vs[opp] || { won: 0, lost: 0 })[won ? "won" : "lost"] += 1;
+          if (x.skunk && opp) r[won ? "skunks" : "skunked"].push(opp);
+          if (x.wonRace && won && x.raceTarget) r.raceTo.push(x.raceTarget);
+          (byDay[d] = byDay[d] || []).push({ t: new Date(x.ts).getTime(), won: won, opp: solo && opps.length === 1 ? opps[0] : null });
+        });
+        // (each night: the longest run of wins, and the biggest upset - a one-on-one win over
+        // someone rated higher as the night began, both ratings established by then: a night's
+        // own swings, or a newcomer's first rating, are no upset)
+        Object.keys(byDay).forEach(function (d) {
+          var run = 0;
+          var start = historyNightEnd(d) - 86400000;
+          byDay[d]
+            .sort(function (a, b) {
+              return a.t - b.t;
+            })
+            .forEach(function (gm) {
+              run = gm.won ? run + 1 : 0;
+              per[d].run = Math.max(per[d].run, run);
+              if (!gm.won || !gm.opp) return;
+              var me = historyRatingAt(ctx, n, start);
+              var them = historyRatingAt(ctx, gm.opp, start);
+              if (me.games < RATING_PROVISIONAL_GAMES || them.games < RATING_PROVISIONAL_GAMES) return;
+              var u = per[d].upset;
+              if (them.rating - me.rating > (u ? u.theirs - u.mine : 0)) per[d].upset = { other: gm.opp, mine: Math.round(me.rating), theirs: Math.round(them.rating) };
+            });
         });
         g.titles.forEach(function (x) {
           if (x.ts && x.result === "won") at(x.ts).races += 1;
@@ -32481,54 +32534,122 @@
       if (item.passedBy && item.passedBy.length) return T("history.say.fDownPassed", Object.assign(vars, { names: item.passedBy.join(", ") }));
     }
     if (item.kind === "fRating" && item.delta < 0) key = "history.say.fRatingDown";
+    if (Array.isArray(item.names)) vars.names = item.names.join(", ");
+    if (item.kind === "skunk") return item.count > 1 ? T("history.say.skunkMany", Object.assign(vars, { names: item.others.join(", ") })) : T("history.say.skunk", Object.assign(vars, { other: item.others[0] }));
+    // (a race to 1 is one game: just "a race")
+    if (item.kind === "raceWon") return item.count > 1 ? T("history.say.raceWonMany", vars) : item.race > 1 ? T("history.say.raceWon", vars) : item.race ? T("history.say.raceWonPlain", vars) : T("history.say.titleWon", vars);
     return T(key, vars);
   }
 
-  // night i, in words: following someone - the headlines about them, their night, then up to 2
-  // other headlines; otherwise the night's 3 biggest
+  // How much the commentator says (2026-11-19, the user: "i would like to hear of there was a skunk
+  // and major events that defines a change in the position even if the position dont change, add a
+  // drop list for the amount of detail to see and hear"): 📰 headlines - the moves at the top only;
+  // 🎙️ normal - each player's biggest moment, moved or not (a skunk, a race, an upset, a record...),
+  // 4 at most; 🔎 everything - every moment of everyone's night. And how much trash talk ("also a
+  // certain amount of shit talk (adjustable using a droplist)"): none, a little (a quip some
+  // nights), lots (a few every night) - cheeky, between friends.
+  var HISTORY_DETAILS = { headlines: 1, normal: 1, everything: 1 };
+  var HISTORY_TRASH = { none: 1, little: 1, lots: 1 };
+  var HISTORY_HEADLINES = { leadChange: 1, leadChangeAbsent: 1, firstLeader: 1, topThree: 1, bigClimb: 1, bigDrop: 1, raceClimb: 1 };
+  var HISTORY_CORE_PERSONAL = { fNight: 1, fUp: 1, fDown: 1, fEnter: 1, fLeave: 1, fHold: 1, fBest: 1 };
+  // (their own night tells these already, when following them)
+  var HISTORY_TOLD = { clash: 1, sweep: 1, onFire: 1, skunk: 1, upset: 1, winRun: 1, raceWon: 1, milestone: 1, nightLine: 1 };
+  var HISTORY_QUIPS = { leadChange: 2, leadChangeAbsent: 2, bigDrop: 2, slip: 1, skunk: 2, clash: 2, sweep: 1, onFire: 1, upset: 2, reign: 1, closeRace: 1, winRun: 1, recordNight: 1, fSkunked: 1, fDown: 1 };
+
+  function historyDetail() {
+    return HISTORY_DETAILS[historyView.detail] ? historyView.detail : "normal";
+  }
+
+  function historyTrash() {
+    return HISTORY_TRASH[historyView.trash] ? historyView.trash : "little";
+  }
+
+  function historyPick(list, level, keep) {
+    if (level === "everything") return list;
+    if (level === "headlines")
+      return list
+        .filter(function (it) {
+          return it.top && HISTORY_HEADLINES[it.kind];
+        })
+        .slice(0, keep || 2);
+    return list
+      .filter(function (it) {
+        return it.top && it.sig >= 30;
+      })
+      .slice(0, keep || 4);
+  }
+
+  // a quip about an item: who it teases, a variant picked from the night
+  function historyQuip(it, i) {
+    var n = HISTORY_QUIPS[it.kind];
+    var victim = { leadChange: it.other, leadChangeAbsent: it.other, skunk: it.others && it.others[0], clash: it.other, upset: it.other, closeRace: it.other };
+    var vars = { name: it.name, other: victim[it.kind] || (it.names && it.names[0]) || it.other || it.name };
+    return T("history.trash." + it.kind + (1 + (historyHash("q|" + it.kind + "|" + it.name + "|" + i) % n)), vars);
+  }
+
+  // night i, in words, as much as the detail asks: following someone - the headlines about them,
+  // their night, then the rest of the news; otherwise the night's news. Then the trash talk.
   function historyNightLines(i) {
     var c = historyCommentary();
     var night = c[i];
     if (!night) return [];
     var follow = historyFollow();
-    var say = function (it, mine) {
-      return { text: historySayText(it, i, c.method), mine: !!mine };
-    };
+    var level = historyDetail();
+    var picked;
     if (!follow) {
-      return night.general.slice(0, 3).map(function (it) {
-        return say(it);
+      picked = historyPick(night.general, level, level === "headlines" ? 2 : 4).map(function (it) {
+        return { it: it };
       });
-    }
-    // (their own clash, sweep or night on fire: their night says it already)
-    var told = { clash: 1, sweep: 1, onFire: 1 };
-    var about = night.general.filter(function (it) {
-      return (it.name === follow || it.other === follow) && !told[it.kind];
-    });
-    var skipped = night.general.filter(function (it) {
-      return (it.name === follow || it.other === follow) && told[it.kind];
-    });
-    var others = night.general.filter(function (it) {
-      return about.indexOf(it) === -1 && skipped.indexOf(it) === -1;
-    });
-    // (a headline about the move says it already)
-    var moves = { fUp: 1, fDown: 1, fEnter: 1, fLeave: 1 };
-    var personal = night.personal.filter(function (it) {
-      return !(about.length && moves[it.kind]);
-    });
-    return about
-      .map(function (it) {
-        return say(it, true);
-      })
-      .concat(
-        personal.map(function (it) {
-          return say(it, true);
-        })
-      )
-      .concat(
-        others.slice(0, 2).map(function (it) {
-          return say(it);
-        })
+    } else {
+      var mineOf = function (it) {
+        return it.name === follow || it.other === follow;
+      };
+      var about = historyPick(
+        night.general.filter(function (it) {
+          return mineOf(it) && !HISTORY_TOLD[it.kind];
+        }),
+        level === "everything" ? "everything" : level,
+        3
       );
+      // (a headline about the move says it already)
+      var moves = { fUp: 1, fDown: 1, fEnter: 1, fLeave: 1 };
+      var personal = night.personal.filter(function (it) {
+        return !(about.length && moves[it.kind]) && (level !== "headlines" || HISTORY_CORE_PERSONAL[it.kind]);
+      });
+      var others = historyPick(
+        night.general.filter(function (it) {
+          return !mineOf(it);
+        }),
+        level,
+        level === "headlines" ? 1 : 2
+      );
+      picked = about
+        .map(function (it) {
+          return { it: it, mine: true };
+        })
+        .concat(
+          personal.map(function (it) {
+            return { it: it, mine: true };
+          })
+        )
+        .concat(
+          others.map(function (it) {
+            return { it: it };
+          })
+        );
+    }
+    // the trash talk: a little - one quip, every other night or so; lots - up to 3 a night
+    var trash = historyTrash();
+    var quips = trash === "lots" ? 3 : trash === "little" && historyHash("trash|" + i) % 2 === 0 ? 1 : 0;
+    var lines = [];
+    picked.forEach(function (p) {
+      lines.push({ text: historySayText(p.it, i, c.method), mine: !!p.mine });
+      if (quips > 0 && HISTORY_QUIPS[p.it.kind]) {
+        quips -= 1;
+        lines.push({ text: historyQuip(p.it, i), mine: !!p.mine, trash: true });
+      }
+    });
+    return lines;
   }
 
   function renderHistoryCommentary() {
@@ -32542,7 +32663,7 @@
     var follow = historyFollow();
     var lineEl = function (l) {
       var p = document.createElement("p");
-      p.className = "history-say-line" + (l.mine ? " is-mine" : "");
+      p.className = "history-say-line" + (l.mine ? " is-mine" : "") + (l.trash ? " is-trash" : "");
       p.textContent = l.text;
       return p;
     };
@@ -32566,6 +32687,9 @@
     // (always there with the bar, even at 0 - so it keeps one height)
     historySayEarlier.classList.remove("hidden");
     historySayEarlierSummary.textContent = T("history.earlier", { count: historySay.log.length });
+    // (the newest night goes on top: whoever's scrolled down reading stays on the same night)
+    var keep = historySayLog.scrollTop;
+    var grew = historySayLog.scrollHeight;
     historySayLog.textContent = "";
     historySay.log.forEach(function (n) {
       var li = document.createElement("li");
@@ -32577,6 +32701,7 @@
       });
       historySayLog.appendChild(li);
     });
+    if (keep > 0) historySayLog.scrollTop = keep + (historySayLog.scrollHeight - grew);
     historyBarRoom();
   }
 
@@ -32652,6 +32777,8 @@
         historyFollowSelect.appendChild(opt);
       });
     historySpeedSelect.value = HISTORY_SPEEDS[historyView.speed] ? historyView.speed : "normal";
+    historyDetailSelect.value = historyDetail();
+    historyTrashSelect.value = historyTrash();
     renderHistoryVoiceButton();
   }
 
@@ -45763,6 +45890,21 @@
     saveHistoryView();
     stopHistoryReplay();
     renderHistoryCards();
+  });
+  // (more or less said, or teased: the night on screen says it again that way)
+  var historyRetell = function () {
+    saveHistoryView();
+    if (historySay && historySay.now) historySay.now.lines = historyNightLines(historySay.now.i);
+    renderHistoryCommentary();
+    renderHistoryCards();
+  };
+  historyDetailSelect.addEventListener("change", function () {
+    historyView.detail = historyDetailSelect.value;
+    historyRetell();
+  });
+  historyTrashSelect.addEventListener("change", function () {
+    historyView.trash = historyTrashSelect.value;
+    historyRetell();
   });
   historySpeedSelect.addEventListener("change", function () {
     // (the next beat goes at the new speed)

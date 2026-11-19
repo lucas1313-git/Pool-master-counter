@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261119e">
+<link rel="stylesheet" href="css/style.css?v=20261119f">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2650,6 +2650,16 @@
         <option value="fast" data-i18n="history.speedFast">🏃 Fast</option>
         <option value="veryFast" data-i18n="history.speedVeryFast">⚡ Very fast</option>
       </select>
+      <select id="history-detail" class="history-select" aria-label="Amount of detail" data-i18n-aria-label="history.detailAria">
+        <option value="headlines" data-i18n="history.detailHeadlines">📰 Headlines</option>
+        <option value="normal" data-i18n="history.detailNormal">🎙️ Normal detail</option>
+        <option value="everything" data-i18n="history.detailEverything">🔎 Everything</option>
+      </select>
+      <select id="history-trash" class="history-select" aria-label="Trash talk" data-i18n-aria-label="history.trashAria">
+        <option value="none" data-i18n="history.trashNone">😇 No trash talk</option>
+        <option value="little" data-i18n="history.trashLittle">😏 A little trash talk</option>
+        <option value="lots" data-i18n="history.trashLots">🔥 Lots of trash talk</option>
+      </select>
       <button type="button" id="btn-history-voice" class="btn btn-ghost" aria-pressed="true" data-i18n="history.voiceOn">🔊 Voice on</button>
       <button type="button" id="btn-history-replay" class="btn btn-primary" data-i18n="history.replay">▶ Replay</button>
       <button type="button" id="btn-history-stop" class="btn btn-ghost hidden" data-i18n="history.stop">⏹ Stop</button>
@@ -3347,35 +3357,35 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261119e"></script>
-<script src="js/big-store.js?v=20261119e"></script>
-<script src="js/mp4-clip.js?v=20261119e"></script>
-<script src="js/recording-consent.js?v=20261119e"></script>
-<script src="js/local-recorder.js?v=20261119e"></script>
-<script src="js/lib/pool-day.js?v=20261119e"></script>
-<script src="js/lib/race-math.js?v=20261119e"></script>
-<script src="js/lib/leaderboard-methods.js?v=20261119e"></script>
-<script src="js/lib/pdf-images.js?v=20261119e"></script>
-<script src="js/lib/history-charts.js?v=20261119e"></script>
-<script src="js/lib/handicaps.js?v=20261119e"></script>
-<script src="js/lib/brackets.js?v=20261119e"></script>
-<script src="js/lib/league.js?v=20261119e"></script>
-<script src="js/lib/events.js?v=20261119e"></script>
-<script src="js/lib/chips.js?v=20261119e"></script>
-<script src="js/lib/highlights.js?v=20261119e"></script>
-<script src="js/lib/score-bug.js?v=20261119e"></script>
-<script src="js/lib/payouts.js?v=20261119e"></script>
-<script src="js/lib/night-timeline.js?v=20261119e"></script>
-<script src="js/lib/day-races.js?v=20261119e"></script>
-<script src="js/night-map.js?v=20261119e"></script>
-<script src="js/night-braid.js?v=20261119e"></script>
-<script src="js/app.js?v=20261119e"></script>
-<script src="js/camera-client.js?v=20261119e"></script>
-<script src="js/voice.js?v=20261119e"></script>
+<script src="js/pairing.js?v=20261119f"></script>
+<script src="js/big-store.js?v=20261119f"></script>
+<script src="js/mp4-clip.js?v=20261119f"></script>
+<script src="js/recording-consent.js?v=20261119f"></script>
+<script src="js/local-recorder.js?v=20261119f"></script>
+<script src="js/lib/pool-day.js?v=20261119f"></script>
+<script src="js/lib/race-math.js?v=20261119f"></script>
+<script src="js/lib/leaderboard-methods.js?v=20261119f"></script>
+<script src="js/lib/pdf-images.js?v=20261119f"></script>
+<script src="js/lib/history-charts.js?v=20261119f"></script>
+<script src="js/lib/handicaps.js?v=20261119f"></script>
+<script src="js/lib/brackets.js?v=20261119f"></script>
+<script src="js/lib/league.js?v=20261119f"></script>
+<script src="js/lib/events.js?v=20261119f"></script>
+<script src="js/lib/chips.js?v=20261119f"></script>
+<script src="js/lib/highlights.js?v=20261119f"></script>
+<script src="js/lib/score-bug.js?v=20261119f"></script>
+<script src="js/lib/payouts.js?v=20261119f"></script>
+<script src="js/lib/night-timeline.js?v=20261119f"></script>
+<script src="js/lib/day-races.js?v=20261119f"></script>
+<script src="js/night-map.js?v=20261119f"></script>
+<script src="js/night-braid.js?v=20261119f"></script>
+<script src="js/app.js?v=20261119f"></script>
+<script src="js/camera-client.js?v=20261119f"></script>
+<script src="js/voice.js?v=20261119f"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261119e").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261119f").catch(function () {}); });
   }
 </script>
 </body>

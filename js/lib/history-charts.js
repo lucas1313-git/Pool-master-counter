@@ -102,6 +102,16 @@
     var streak = 0;
     var raced = false;
     var lastRating = null;
+    // (the most games anyone has won in a night so far; everyone's wins so far; the followed
+    // player's best night)
+    var recordNight = 0;
+    var winsSoFar = {};
+    var bestNight = 0;
+    var uniq = function (list) {
+      return list.filter(function (x, k) {
+        return list.indexOf(x) === k;
+      });
+    };
     var rankAt = function (i, r) {
       for (var k = 0; k < names.length; k++) if (ranks[names[k]][i] === r) return names[k];
       return null;
@@ -122,18 +132,17 @@
       var prevLeader = i > 0 ? rankAt(i - 1, 1) : null;
       var used = {};
       if (leader && leader !== prevLeader) {
-        if (!prevLeader) items.push({ kind: "firstLeader", name: leader, sig: 60 });
-        else items.push({ kind: res(prevLeader) ? "leadChange" : "leadChangeAbsent", name: leader, other: prevLeader, how: how(leader), sig: 100 });
+        if (!prevLeader) items.push({ kind: "firstLeader", name: leader, sig: 60, top: true });
+        else items.push({ kind: res(prevLeader) ? "leadChange" : "leadChangeAbsent", name: leader, other: prevLeader, how: how(leader), sig: 100, top: true });
         // (the old leader's slip is the same news)
         used[leader] = true;
         if (prevLeader) used[prevLeader] = true;
         reign = 1;
       } else if (leader) {
         reign += 1;
-        if (reign % 5 === 0) items.push({ kind: "reign", name: leader, nights: reign, sig: 45 });
+        if (reign % 5 === 0) items.push({ kind: "reign", name: leader, nights: reign, sig: 45, top: true });
       } else reign = 0;
       names.forEach(function (nm) {
-        if (used[nm]) return;
         var e = ev[nm];
         var r = res(nm);
         var cands = [];
@@ -141,7 +150,7 @@
           var places = e.from != null && e.to != null ? Math.abs(e.from - e.to) : 0;
           if (e.kind === "race") cands.push({ kind: "raceClimb", races: e.races, from: e.from, to: e.to, sig: 62 + 4 * places });
           if (e.kind === "up" && places >= 2) cands.push({ kind: "bigClimb", from: e.from, to: e.to, places: places, sig: 58 + 4 * places });
-          if ((e.kind === "up" || e.kind === "race" || e.kind === "passiveUp") && e.to <= 3 && e.from > 3) cands.push({ kind: "topThree", to: e.to, sig: 55 });
+          if ((e.kind === "up" || e.kind === "race" || e.kind === "passiveUp") && e.to <= 3 && e.to > 1 && e.from > 3) cands.push({ kind: "topThree", to: e.to, sig: 55 });
           if (e.kind === "down" && places >= 2) cands.push({ kind: "bigDrop", won: e.won, lost: e.lost, to: e.to, places: places, sig: 52 + 3 * places });
           if ((e.kind === "down" || e.kind === "passiveDown") && places === 1 && e.from <= 3) cands.push({ kind: "slip", from: e.from, to: e.to, sig: 38 });
           if (e.kind === "enter") cands.push({ kind: "enter", to: e.to, sig: e.to <= 3 ? 50 : 30 });
@@ -149,11 +158,31 @@
         }
         if (r && r.won >= 5 && r.lost === 0) cands.push({ kind: "sweep", won: r.won, sig: 50 });
         else if (r && r.won >= 8 && r.won / (r.won + r.lost) >= 0.75) cands.push({ kind: "onFire", won: r.won, lost: r.lost, sig: 48 });
+        // (the night's big moments, moved or not: skunks, races won, an upset, a run of wins, a
+        // record night, a round number of wins)
+        if (r && r.skunks && r.skunks.length) cands.push({ kind: "skunk", count: r.skunks.length, others: uniq(r.skunks), sig: 46 });
+        if (r && r.races && !(e && e.kind === "race")) cands.push({ kind: "raceWon", count: r.races, race: r.raceTo && r.raceTo.length ? r.raceTo[0] : null, sig: 40 });
+        if (r && r.upset && r.upset.theirs - r.upset.mine >= 75) cands.push({ kind: "upset", other: r.upset.other, mine: r.upset.mine, theirs: r.upset.theirs, sig: 50 });
+        if (r && r.run >= 5) cands.push({ kind: "winRun", count: r.run, sig: 42 });
+        if (r && recordNight >= 5 && r.won > recordNight) cands.push({ kind: "recordNight", won: r.won, sig: 50 });
+        var before = winsSoFar[nm] || 0;
+        var after = before + (r ? r.won : 0);
+        winsSoFar[nm] = after;
+        if (Math.floor(after / 50) > Math.floor(before / 50)) cands.push({ kind: "milestone", count: Math.floor(after / 50) * 50, sig: 44 });
+        if (r) cands.push({ kind: "nightLine", won: r.won, lost: r.lost, sig: 5 });
         if (!cands.length) return;
         cands.sort(function (a, b) {
           return b.sig - a.sig;
         });
-        items.push(Object.assign({ name: nm }, cands[0]));
+        // (all of them for 🔎 everything; the best one - top - for the rest, unless a lead change
+        // already tells their night)
+        cands.forEach(function (c, k) {
+          items.push(Object.assign({ name: nm, top: k === 0 && !used[nm] }, c));
+        });
+      });
+      names.forEach(function (nm) {
+        var r = res(nm);
+        if (r && r.won > recordNight) recordNight = r.won;
       });
       // two of the top 3 (as the night began) one-on-one, 5 games or more, won clearly (by 3): the
       // biggest such night only
@@ -170,7 +199,7 @@
             var v = r && r.vs && r.vs[b];
             if (!v || v.won + v.lost < 5 || Math.abs(v.won - v.lost) < 3) return;
             if (clash && clash.wa + clash.wb >= v.won + v.lost) return;
-            clash = v.won > v.lost ? { kind: "clash", name: a, other: b, wa: v.won, wb: v.lost, sig: 52 } : { kind: "clash", name: b, other: a, wa: v.lost, wb: v.won, sig: 52 };
+            clash = v.won > v.lost ? { kind: "clash", name: a, other: b, wa: v.won, wb: v.lost, sig: 52, top: true } : { kind: "clash", name: b, other: a, wa: v.lost, wb: v.won, sig: 52, top: true };
           });
         });
         if (clash) items.push(clash);
@@ -178,7 +207,9 @@
       // neck and neck at the top: once, when the gap first closes in
       if (leader && second && scores[leader] && scores[second] && input.closeGap) {
         var gap = scores[leader][i] - scores[second][i];
-        if (gap >= 0 && gap < input.closeGap && (prevGap == null || prevGap >= input.closeGap)) items.push({ kind: "closeRace", name: leader, other: second, gap: gap, sig: 42 });
+        if (gap >= 0 && gap < input.closeGap && (prevGap == null || prevGap >= input.closeGap)) items.push({ kind: "closeRace", name: leader, other: second, gap: gap, sig: 42, top: true });
+        // (the leader pulling away: the gap up by twice a close one in a night)
+        else if (leader === prevLeader && prevGap != null && gap - prevGap >= 2 * input.closeGap) items.push({ kind: "leadStretch", name: leader, gap: gap, sig: 34, top: true });
         prevGap = gap;
       } else prevGap = null;
       items.sort(function (a, b) {
@@ -225,7 +256,18 @@
           if (streak >= 3) personal.push({ kind: "fStreak", name: follow, nights: streak });
           if (fr.races && !raced) personal.push({ kind: "fFirstRace", name: follow });
           if (fr.races) raced = true;
+          if (fr.skunks && fr.skunks.length) personal.push({ kind: "fSkunk", name: follow, names: uniq(fr.skunks) });
+          if (fr.skunked && fr.skunked.length) personal.push({ kind: "fSkunked", name: follow, names: uniq(fr.skunked) });
+          if (fr.upset && fr.upset.theirs - fr.upset.mine >= 75) personal.push({ kind: "fUpset", name: follow, other: fr.upset.other, mine: fr.upset.mine, theirs: fr.upset.theirs });
+          if (fr.run >= 4) personal.push({ kind: "fRun", name: follow, count: fr.run });
+          if (bestNight >= 3 && fr.won > bestNight) personal.push({ kind: "fBestNight", name: follow, won: fr.won });
+          bestNight = Math.max(bestNight, fr.won);
         }
+        // (a round number of wins - from the night's own count, worked out above)
+        var mine = items.filter(function (it) {
+          return it.name === follow && it.kind === "milestone";
+        })[0];
+        if (mine) personal.push({ kind: "fMilestone", name: follow, count: mine.count });
       }
       out.push({ general: items, personal: personal });
     }
