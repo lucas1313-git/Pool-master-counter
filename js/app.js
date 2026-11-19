@@ -32600,7 +32600,7 @@
   var HISTORY_CORE_PERSONAL = { fNight: 1, fUp: 1, fDown: 1, fEnter: 1, fLeave: 1, fHold: 1, fBest: 1 };
   // (their own night tells these already, when following them)
   var HISTORY_TOLD = { clash: 1, sweep: 1, onFire: 1, skunk: 1, upset: 1, winRun: 1, raceWon: 1, milestone: 1, nightLine: 1 };
-  var HISTORY_QUIPS = { leadChange: 2, leadChangeAbsent: 2, bigDrop: 2, slip: 1, skunk: 2, clash: 2, sweep: 1, onFire: 1, upset: 2, reign: 1, closeRace: 1, winRun: 1, recordNight: 1, fSkunked: 1, fDown: 1 };
+  var HISTORY_QUIPS = { leadChange: 2, leadChangeAbsent: 2, bigDrop: 2, slip: 1, skunk: 2, clash: 2, sweep: 1, onFire: 1, upset: 2, reign: 1, closeRace: 1, winRun: 7, recordNight: 1, fSkunked: 1, fDown: 1 };
 
   function historyDetail() {
     return HISTORY_DETAILS[historyView.detail] ? historyView.detail : "normal";
@@ -32625,12 +32625,22 @@
       .slice(0, keep || 4);
   }
 
-  // a quip about an item: who it teases, a variant picked from the night
+  // a quip about an item: who it teases, and in which words - each kind's versions take turns (none
+  // said twice before all have been, 2026-11-19: "should have 7 different ways to say the same some
+  // should be really funny"), and a night keeps the words it got, replay after replay
+  var historyQuipTurns = {};
+  var historyQuipPicks = {};
   function historyQuip(it, i) {
     var n = HISTORY_QUIPS[it.kind];
     var victim = { leadChange: it.other, leadChangeAbsent: it.other, skunk: it.others && it.others[0], clash: it.other, upset: it.other, closeRace: it.other };
     var vars = { name: it.name, other: victim[it.kind] || (it.names && it.names[0]) || it.other || it.name };
-    return T("history.trash." + it.kind + (1 + (historyHash("q|" + it.kind + "|" + it.name + "|" + i) % n)), vars);
+    var key = it.kind + "|" + it.name + "|" + i;
+    if (historyQuipPicks[key] == null) {
+      var turn = historyQuipTurns[it.kind] == null ? historyHash(it.kind) : historyQuipTurns[it.kind];
+      historyQuipPicks[key] = turn % n;
+      historyQuipTurns[it.kind] = turn + 1;
+    }
+    return T("history.trash." + it.kind + (1 + historyQuipPicks[key]), vars);
   }
 
   // night i, in words, as much as the detail asks: following someone - the headlines about them,
