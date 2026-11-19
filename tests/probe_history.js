@@ -24,8 +24,9 @@
 //   races won!", career best, the gap, his rating, his first race (no clash line, no "moves up" -
 //   said already); ⏸ holds the night, ▶ Resume; his line the thick one; his timeline (3 nights, the
 //   one on screen marked); ⏹ mid-way keeps the commentary; the speed kept;
-// - 🔊 the voice ("i mean voice talking to us"): every line said, no emoji, "6 to 3", "number 1",
-//   at the speed's rate; the replay waits for it (a 3-line night of 0.9 s lines stays up 2.7 s);
+// - 🔊 the voice ("i mean voice talking to us"; "also tell the date and day"): each night's day and
+//   date first ("Sunday, November 15"), every line said, no emoji, "6 to 3", "number 1", at the
+//   speed's rate; the replay waits for it (the date and 3 lines of 0.9 s: 3.6 s);
 //   🔇 off: nothing said;
 // - the page stays put during a replay, scrolled down to a graph ("the window is scrolling up when
 //   the timeline is moving"); the commentary a fixed bar along the bottom, ✕ closes it;
@@ -353,9 +354,11 @@ function logs() {
     }
     const said = await page.evaluate(() => window.__said.map((x) => x.text + " [" + x.lang + " " + x.rate + "]"));
     const racesNight = times[3] - times[2];
-    check("🔊 \"" + voice0 + "\": every line said, no emoji, \"6 to 3\", \"number 1\" - " + JSON.stringify(said.slice(0, 7)),
-      voice0 === "🔊 Voice on" && said.some((t) => /^Top-3 clash: Bob beats Ace 6 to 3\. \[en-GB 1\.(3|29\d*)\]$/.test(t)) && said.some((t) => /^Ace sets the early pace at number 1\./.test(t)) && said.every((t) => !/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(t)) && said.length >= 8, said);
-    check("...the replay waits for the voice: the races night (3 lines, 0.9 s each) stayed up " + racesNight + " ms", racesNight >= 2700, times);
+    check("🔊 \"" + voice0 + "\": each night's day and date first, every line said, no emoji, \"6 to 3\", \"number 1\" - " + JSON.stringify(said.slice(0, 7)),
+      voice0 === "🔊 Voice on" && said.some((t) => /^Top-3 clash: Bob beats Ace 6 to 3\. \[en-GB 1\.(3|29\d*)\]$/.test(t)) &&
+      said.filter((t) => /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), (January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}( \[|, \d{4} \[)/.test(t)).length === 4 &&
+      /^(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day, /.test(said[0]) && said.some((t) => /^Ace sets the early pace at number 1\./.test(t)) && said.every((t) => !/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(t)) && said.length >= 8, said);
+    check("...the replay waits for the voice: the races night (its date and 3 lines, 0.9 s each) stayed up " + racesNight + " ms", racesNight >= 3600, times);
     // (voice off: nothing said)
     await page.evaluate(() => { window.__said = []; window.__speechMs = 0; document.getElementById("btn-history-voice").click(); });
     const voiceOff = await page.evaluate(() => document.getElementById("btn-history-voice").textContent);

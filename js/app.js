@@ -32248,13 +32248,13 @@
     historySay.now = { i: i, lines: lines };
     renderHistoryCommentary();
     renderHistoryCards();
-    historySpeak(lines);
+    historySpeak(lines, i);
     return lines;
   }
 
   function historyReplaySchedule(lines) {
     var base = historySpeed();
-    if (historyVoiceOn() && lines.length) {
+    if (historyVoiceOn()) {
       // (out loud: the next night a breath after the voice stops - half a minute at most, should a
       // voice never say it's done)
       var since = Date.now();
@@ -32294,7 +32294,7 @@
     // (⏸ stops the voice; ▶ Resume says the night again from the start)
     if (historyReplay.paused) return historyHush();
     var current = historySay && historySay.now ? historySay.now.lines : [];
-    historySpeak(current);
+    if (historySay && historySay.now) historySpeak(current, historySay.now.i);
     historyReplaySchedule(current);
   }
 
@@ -32364,14 +32364,27 @@
       .trim();
   }
 
-  function historySpeak(lines) {
-    if (!historyVoiceOn() || !lines.length) return;
+  // night i out loud: its day and date first, in full ("Sunday, November 15" - the year too when
+  // it isn't this one; 2026-11-19, the user: "i need te voice to also tell the date and day"), then
+  // its lines - a quiet night says so
+  function historySpokenDate(i) {
+    var day = historyData().nights[i];
+    if (!day) return "";
+    var d = new Date(day + "T12:00:00");
+    var opts = { weekday: "long", month: "long", day: "numeric" };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+    return d.toLocaleDateString(reportLocale(), opts);
+  }
+
+  function historySpeak(lines, i) {
+    if (!historyVoiceOn()) return;
     var synth = window.speechSynthesis;
     historyHush();
     var lang = HISTORY_SPEECH_LANGS[activeLanguageCode] || "en-GB";
     var voice = lang === "en-GB" ? resolveKeypadVoice(keypadSpeechVoicePreset) : pickKeypadVoice(lang);
     var rate = HISTORY_SPEECH_RATES[historyView.speed] || 1;
-    lines.forEach(function (l) {
+    var said = [{ text: historySpokenDate(i) }].concat(lines.length ? lines : [{ text: T("history.say.quiet") }]);
+    said.forEach(function (l) {
       var text = historySpeechText(l.text);
       if (!text) return;
       try {
@@ -45742,7 +45755,7 @@
     historyView.voice = !historyVoiceOn();
     saveHistoryView();
     if (!historyView.voice) historyHush();
-    else if (historyReplay && !historyReplay.paused && historySay && historySay.now) historySpeak(historySay.now.lines);
+    else if (historyReplay && !historyReplay.paused && historySay && historySay.now) historySpeak(historySay.now.lines, historySay.now.i);
     renderHistoryVoiceButton();
   });
   historyFollowSelect.addEventListener("change", function () {
