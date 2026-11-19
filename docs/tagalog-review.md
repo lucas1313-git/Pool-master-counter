@@ -6,7 +6,7 @@ Some are English on purpose - the app's Taglish keeps a few pool and app words a
 practice, Winner stays, bracket). Keep those where they read naturally; translate the rest.
 Written by `node tests/tagalog_review.js` - run it again after changes.
 
-## Identical to English (246)
+## Identical to English (248)
 
 | Key | English (= Tagalog now) |
 |---|---|
@@ -255,6 +255,8 @@ Written by `node tests/tagalog_review.js` - run it again after changes.
 | `leaderboard.methodPerformance` | 📈 Performance |
 | `leaderboard.scorePerformance` | performance |
 | `report.fileName` | - leaderboard report |
+| `history.type.rating` | 📈 Rating |
+| `history.type.headToHead` | ⚔️ Head-to-head |
 | `leaderboard.whyTermRating` | Rating: ÷ 20 = |
 
 ## Mostly English words (16)

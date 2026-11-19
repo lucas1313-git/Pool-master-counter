@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261119a">
+<link rel="stylesheet" href="css/style.css?v=20261119b">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2614,6 +2614,7 @@
   <div class="leaderboard-action-row">
     <button type="button" id="btn-leaderboard-play" class="btn btn-primary leaderboard-play-btn" data-i18n="leaderboard.playButton">▶️ Back to the Game</button>
     <button type="button" id="btn-leaderboard-share" class="btn btn-ghost leaderboard-share-btn" data-i18n="leaderboard.shareButton">📤 Share</button>
+    <button type="button" id="btn-leaderboard-history" class="btn btn-ghost leaderboard-share-btn" data-i18n="history.button">📈 History</button>
   </div>
 
   <!-- the MVP score's formula, for whoever asks (ⓘ) -->
@@ -2621,6 +2622,42 @@
     <summary id="leaderboard-formula-toggle">ⓘ How the MVP score works</summary>
     <p id="leaderboard-formula-note" class="leaderboard-formula-note"></p>
   </details>
+
+</div>
+
+<!-- 📈 History: the leaderboard night by night and the graph library (js/lib/history-charts.js) -->
+<div id="view-history-page" class="hidden">
+
+  <header class="app-header player-page-header">
+    <button type="button" id="btn-history-back" class="btn btn-ghost screen-back-btn" aria-label="Back" data-i18n-aria-label="common.back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <h1 data-i18n="history.heading">📈 History</h1>
+  </header>
+
+  <p class="player-stats-note" data-i18n="history.intro">The leaderboard night by night. Pick the players, set the time range, ▶ replay it, and add graphs from the library.</p>
+
+  <div id="history-controls" class="history-controls">
+    <div id="history-players" class="history-players" role="group" aria-label="Players to show" data-i18n-aria-label="history.playersAria"></div>
+    <div id="history-range-presets" class="row period-filter-row history-presets"></div>
+    <div id="history-brush" class="history-brush" aria-label="Time range" data-i18n-aria-label="history.brushAria">
+      <div id="history-brush-window" class="history-brush-window" tabindex="0" role="slider" aria-label="Time range" data-i18n-aria-label="history.brushAria"></div>
+    </div>
+    <p id="history-range-label" class="history-range-label"></p>
+    <div class="row history-action-row">
+      <button type="button" id="btn-history-replay" class="btn btn-primary" data-i18n="history.replay">▶ Replay</button>
+      <select id="history-add" class="history-select history-add" aria-label="Add a graph" data-i18n-aria-label="history.addGraph">
+        <option value="" selected disabled data-i18n="history.addGraph">➕ Add a graph…</option>
+        <option value="leaderboard" data-i18n="history.type.leaderboard">🏆 Leaderboard position</option>
+        <option value="rating" data-i18n="history.type.rating">📈 Rating</option>
+        <option value="winTrend" data-i18n="history.type.winTrend">🎯 Win % trend</option>
+        <option value="headToHead" data-i18n="history.type.headToHead">⚔️ Head-to-head</option>
+        <option value="activity" data-i18n="history.type.activity">📅 Activity</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="history-cards" class="history-cards"></div>
+
+  <p id="history-empty" class="empty-hint hidden" data-i18n="history.empty">No games yet - the history starts with the first night played.</p>
 
 </div>
 
@@ -3289,34 +3326,35 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261119a"></script>
-<script src="js/big-store.js?v=20261119a"></script>
-<script src="js/mp4-clip.js?v=20261119a"></script>
-<script src="js/recording-consent.js?v=20261119a"></script>
-<script src="js/local-recorder.js?v=20261119a"></script>
-<script src="js/lib/pool-day.js?v=20261119a"></script>
-<script src="js/lib/race-math.js?v=20261119a"></script>
-<script src="js/lib/leaderboard-methods.js?v=20261119a"></script>
-<script src="js/lib/pdf-images.js?v=20261119a"></script>
-<script src="js/lib/handicaps.js?v=20261119a"></script>
-<script src="js/lib/brackets.js?v=20261119a"></script>
-<script src="js/lib/league.js?v=20261119a"></script>
-<script src="js/lib/events.js?v=20261119a"></script>
-<script src="js/lib/chips.js?v=20261119a"></script>
-<script src="js/lib/highlights.js?v=20261119a"></script>
-<script src="js/lib/score-bug.js?v=20261119a"></script>
-<script src="js/lib/payouts.js?v=20261119a"></script>
-<script src="js/lib/night-timeline.js?v=20261119a"></script>
-<script src="js/lib/day-races.js?v=20261119a"></script>
-<script src="js/night-map.js?v=20261119a"></script>
-<script src="js/night-braid.js?v=20261119a"></script>
-<script src="js/app.js?v=20261119a"></script>
-<script src="js/camera-client.js?v=20261119a"></script>
-<script src="js/voice.js?v=20261119a"></script>
+<script src="js/pairing.js?v=20261119b"></script>
+<script src="js/big-store.js?v=20261119b"></script>
+<script src="js/mp4-clip.js?v=20261119b"></script>
+<script src="js/recording-consent.js?v=20261119b"></script>
+<script src="js/local-recorder.js?v=20261119b"></script>
+<script src="js/lib/pool-day.js?v=20261119b"></script>
+<script src="js/lib/race-math.js?v=20261119b"></script>
+<script src="js/lib/leaderboard-methods.js?v=20261119b"></script>
+<script src="js/lib/pdf-images.js?v=20261119b"></script>
+<script src="js/lib/history-charts.js?v=20261119b"></script>
+<script src="js/lib/handicaps.js?v=20261119b"></script>
+<script src="js/lib/brackets.js?v=20261119b"></script>
+<script src="js/lib/league.js?v=20261119b"></script>
+<script src="js/lib/events.js?v=20261119b"></script>
+<script src="js/lib/chips.js?v=20261119b"></script>
+<script src="js/lib/highlights.js?v=20261119b"></script>
+<script src="js/lib/score-bug.js?v=20261119b"></script>
+<script src="js/lib/payouts.js?v=20261119b"></script>
+<script src="js/lib/night-timeline.js?v=20261119b"></script>
+<script src="js/lib/day-races.js?v=20261119b"></script>
+<script src="js/night-map.js?v=20261119b"></script>
+<script src="js/night-braid.js?v=20261119b"></script>
+<script src="js/app.js?v=20261119b"></script>
+<script src="js/camera-client.js?v=20261119b"></script>
+<script src="js/voice.js?v=20261119b"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261119a").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261119b").catch(function () {}); });
   }
 </script>
 </body>

@@ -3302,6 +3302,20 @@
   var btnLeaderboardPlay = document.getElementById("btn-leaderboard-play");
   var btnLeaderboardPlayTop = document.getElementById("btn-leaderboard-play-top");
   var btnLeaderboardShare = document.getElementById("btn-leaderboard-share");
+  // 📈 History (renderHistoryPage)
+  var btnLeaderboardHistory = document.getElementById("btn-leaderboard-history");
+  var historyPageView = document.getElementById("view-history-page");
+  var btnHistoryBack = document.getElementById("btn-history-back");
+  var historyControls = document.getElementById("history-controls");
+  var historyPlayersEl = document.getElementById("history-players");
+  var historyPresetsEl = document.getElementById("history-range-presets");
+  var historyBrush = document.getElementById("history-brush");
+  var historyBrushWindow = document.getElementById("history-brush-window");
+  var historyRangeLabel = document.getElementById("history-range-label");
+  var btnHistoryReplay = document.getElementById("btn-history-replay");
+  var historyAddSelect = document.getElementById("history-add");
+  var historyCardsEl = document.getElementById("history-cards");
+  var historyEmptyHint = document.getElementById("history-empty");
   var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
   var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
   var leaderboardViewLeagueRadio = document.getElementById("leaderboard-view-league");
@@ -18936,6 +18950,7 @@
   // The rating to use for someone who hasn't played a rated game yet —
   // shows DEFAULT_RATING without creating a stored entry for them.
   function getPlayerRating(name) {
+    if (LEADERBOARD_AS_OF) return leaderboardAsOfRating(name).rating;
     var key = findRatingKey(name);
     return key ? PLAYER_RATINGS[key].rating : DEFAULT_RATING;
   }
@@ -18954,6 +18969,7 @@
   // honest, transparent number rather than an invented approximation
   // of Fargo's real algorithm.
   function getPlayerRobustness(name) {
+    if (LEADERBOARD_AS_OF) return leaderboardAsOfRating(name).games;
     var entry = getPlayerRatingEntry(name);
     return entry ? entry.gamesPlayed || 0 : 0;
   }
@@ -22069,8 +22085,8 @@
       "pmc-camera-settings", "pmc-camera-calibration", "pmc-camera-background-ref", "pmc-camera-empty-room",
       "pmc-camera-selected-device", "pmc-camera-wizard-done",
       "pmc-room-plan", "pmc-camera-room-tags", "pmc-room-map-options", "pmc-camera-view", "poolMasterCounter.quickGameRace.v1",
-      // (how the Leaderboard picks its leader)
-      "poolMasterCounter.leaderboardMethod.v1"];
+      // (how the Leaderboard picks its leader; 📈 History's graphs, players and range)
+      "poolMasterCounter.leaderboardMethod.v1", "poolMasterCounter.historyView.v1"];
   }
   function collectDeviceSettings() {
     var out = {};
@@ -26523,12 +26539,15 @@
   }
 
   function filterGamesByPeriod(games, period) {
-    var start = periodStartDate(period);
-    if (!start) return games;
-    var startMs = start.getTime();
+    // (📈 History, a past night: the period counts back from that night's end, nothing after it)
+    var asOf = LEADERBOARD_AS_OF;
+    var start = periodStartDate(period, asOf ? new Date(asOf.end - 1) : undefined);
+    if (!start && !asOf) return games;
+    var startMs = start ? start.getTime() : -Infinity;
+    var endMs = asOf ? asOf.end : Infinity;
     return games.filter(function (g) {
       var t = g.ts ? new Date(g.ts).getTime() : NaN;
-      return !isNaN(t) && t >= startMs;
+      return !isNaN(t) && t >= startMs && t < endMs;
     });
   }
 
@@ -27475,6 +27494,11 @@
       else if (!contactSheetPageView.classList.contains("hidden")) closeContactSheetPage(true);
       else if (!graveyardPageView.classList.contains("hidden")) closeContactSheetPage(true);
       else if (!leaderboardPageView.classList.contains("hidden")) closeLeaderboardPage(true);
+      else if (!historyPageView.classList.contains("hidden")) {
+        stopHistoryReplay();
+        historyPageView.classList.add("hidden");
+        appRoot.classList.remove("hidden");
+      }
       else if (!groupSessionPageView.classList.contains("hidden")) closeGroupSessionPage(true);
       else if (!leaguePageView.classList.contains("hidden")) closeLeaguePage(true);
       return;
@@ -27485,6 +27509,7 @@
     else if (state.screen === "contact-sheet") openContactSheetPage(true);
     else if (state.screen === "graveyard") openGraveyardPage(true);
     else if (state.screen === "leaderboard") openLeaderboardPage(true);
+    else if (state.screen === "history") openHistoryPage(true);
     else if (state.screen === "group-session") openGroupSessionPage(true);
     else if (state.screen === "league") openLeaguePage(true);
   });
@@ -27680,6 +27705,7 @@
   // from these)
   var careerStatsCache = { key: null, byName: {} };
   function computePlayerCareerStats(name, period) {
+    if (LEADERBOARD_AS_OF) return computePlayerCareerStatsNow(name, period);
     var cacheKey = dataVersion + "|" + todayDateStr();
     if (careerStatsCache.key !== cacheKey) careerStatsCache = { key: cacheKey, byName: {} };
     var k = name + "\n" + period;
@@ -27687,10 +27713,11 @@
     return careerStatsCache.byName[k];
   }
   function computePlayerCareerStatsNow(name, period) {
-    var allGames = allGamesForPlayerName(name);
+    var asOf = LEADERBOARD_AS_OF;
+    var allGames = asOf ? leaderboardAsOfGames(asOf.ctx, name).all : allGamesForPlayerName(name);
     var games = filterGamesByPeriod(allGames, period);
     var tournamentGames = filterGamesByPeriod(
-      tournamentGamesForPlayerName(name).concat(sessionRaceTournamentGames(allGames)),
+      asOf ? leaderboardAsOfGames(asOf.ctx, name).titles : tournamentGamesForPlayerName(name).concat(sessionRaceTournamentGames(allGames)),
       period
     );
     var wins = 0;
@@ -30194,8 +30221,9 @@
   // leaderboardMinGamesForPeriod, the only caller.
   function leaderboardElapsedDaysInPeriod(period) {
     if (period === "all") return null;
-    var start = periodStartDate(period).getTime();
-    return Math.max(1, Math.round((Date.now() - start) / 86400000));
+    var now = LEADERBOARD_AS_OF ? LEADERBOARD_AS_OF.end - 1 : Date.now();
+    var start = periodStartDate(period, new Date(now)).getTime();
+    return Math.max(1, Math.round((now - start) / 86400000));
   }
 
   // A regularized win rate (so a 2-0 newcomer can't outrank a proven
@@ -30233,6 +30261,7 @@
   // settings (a backup takes it along - deviceSettingKeys).
   var LEADERBOARD_METHOD_KEY = "poolMasterCounter.leaderboardMethod.v1";
   function leaderboardMethod() {
+    if (LEADERBOARD_AS_OF) return LEADERBOARD_AS_OF.method;
     var m = null;
     try {
       m = localStorage.getItem(LEADERBOARD_METHOD_KEY);
@@ -31627,6 +31656,1086 @@
     }
   }
 
+  // ---- 📈 History (2026-11-19, the user: "represent the leaderboard as a historical graph with each
+  // player represented by a line, there should be "influencers" these would be events that makes a
+  // player leaderboard position change these should be up and down graphic arrows of diferent colors
+  // ... multiple timelines dynamically ... a library of graph to help visualize the timeline and
+  // players progresses"; then, of the options: rank position, one point per pool night, stacked
+  // graphs + a zoomable time range + players picked + ▶ replay, and the rating, win % trend,
+  // head-to-head and activity graphs). Graphs stacked over the same nights - 🏆 leaderboard position
+  // (any method and period, with its ▲▼ influencers: js/lib/history-charts.js), 📈 rating, 🎯 win %
+  // trend, ⚔️ head-to-head, 📅 activity - for the players picked (8 at most, each keeping its colour),
+  // one time range and ▶ replay for all of them. The leaderboard after a night is the leaderboard's
+  // own code run as of that night's end (LEADERBOARD_AS_OF).
+
+  // while set - only inside withLeaderboardAsOf, synchronously - games after `end` don't exist,
+  // periods count back from it, ratings and rated-game counts are as they were then, `method` ranks
+  var LEADERBOARD_AS_OF = null;
+
+  function withLeaderboardAsOf(end, method, ctx, fn) {
+    var was = LEADERBOARD_AS_OF;
+    LEADERBOARD_AS_OF = { end: end, method: method, ctx: ctx, ratings: {} };
+    try {
+      return fn();
+    } finally {
+      LEADERBOARD_AS_OF = was;
+    }
+  }
+
+  // a player's games and titles (races and tournaments won or lost), read once for every night
+  function leaderboardAsOfGames(ctx, name) {
+    if (!ctx.games[name]) {
+      var all = allGamesForPlayerName(name);
+      ctx.games[name] = { all: all, titles: tournamentGamesForPlayerName(name).concat(sessionRaceTournamentGames(all)) };
+    }
+    return ctx.games[name];
+  }
+
+  // a player's rating history as times, oldest first: [{t, rating, counts}] (counts: a game rated -
+  // not a rating set by hand), and the rated games older than the history kept (RATING_HISTORY_CAP)
+  function leaderboardRatingTimeline(ctx, name) {
+    if (!ctx.ratings[name]) {
+      var entry = getPlayerRatingEntry(name);
+      var hist = (entry && entry.history) || [];
+      var flagged = hist.some(function (h) {
+        return h.fromGame;
+      });
+      var points = hist.map(function (h) {
+        return { t: new Date(h.ts).getTime(), rating: h.rating, counts: flagged ? !!h.fromGame : !h.reset };
+      });
+      var counted = points.filter(function (p) {
+        return p.counts;
+      }).length;
+      ctx.ratings[name] = { points: points, before: entry ? Math.max(0, (entry.gamesPlayed || 0) - counted) : 0 };
+    }
+    return ctx.ratings[name];
+  }
+
+  // {rating, games} at the end of the night being replayed
+  function leaderboardAsOfRating(name) {
+    var asOf = LEADERBOARD_AS_OF;
+    if (!asOf.ratings[name]) {
+      var tl = leaderboardRatingTimeline(asOf.ctx, name);
+      var rating = DEFAULT_RATING;
+      var games = tl.before;
+      for (var i = 0; i < tl.points.length && tl.points[i].t < asOf.end; i++) {
+        rating = tl.points[i].rating;
+        if (tl.points[i].counts) games += 1;
+      }
+      asOf.ratings[name] = { rating: rating, games: games };
+    }
+    return asOf.ratings[name];
+  }
+
+  // the end of a pool night ("2026-11-15" -> Nov 16, 5 a.m.)
+  function historyNightEnd(day) {
+    var p = day.split("-");
+    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]) + 1, POOL_DAY_START_HOUR).getTime();
+  }
+
+  function historyDayLabel(day, long) {
+    var d = new Date(day + "T12:00:00");
+    return d.toLocaleDateString(reportLocale(), long ? { weekday: "short", month: "short", day: "numeric", year: "numeric" } : { month: "short", day: "numeric" });
+  }
+
+  // Everything the graphs share, worked out once until something's saved or the day turns: the
+  // nights played, each player's results each night ({won, lost, races}), and the leaderboards
+  // after each night by method and period (historyBoard)
+  var historyCache = { key: null };
+  function historyData() {
+    var key = dataVersion + "|" + todayDateStr() + "|" + reportLocale();
+    if (historyCache.key !== key) {
+      var ctx = { games: {}, ratings: {} };
+      var names = getAllKnownPlayerNames();
+      var days = {};
+      var nightly = {};
+      names.forEach(function (n) {
+        var g = leaderboardAsOfGames(ctx, n);
+        var per = (nightly[n] = {});
+        var at = function (ts) {
+          var d = localDateStrFromTs(ts);
+          return per[d] || (per[d] = { won: 0, lost: 0, races: 0 });
+        };
+        g.all.forEach(function (x) {
+          if (!x.ts) return;
+          days[localDateStrFromTs(x.ts)] = true;
+          at(x.ts)[x.result === "won" ? "won" : "lost"] += 1;
+        });
+        g.titles.forEach(function (x) {
+          if (x.ts && x.result === "won") at(x.ts).races += 1;
+        });
+      });
+      var nights = Object.keys(days).sort();
+      historyCache = {
+        key: key,
+        ctx: ctx,
+        names: names,
+        nights: nights,
+        nightly: nightly,
+        labels: nights.map(function (d) {
+          return historyDayLabel(d);
+        }),
+        longLabels: nights.map(function (d) {
+          return historyDayLabel(d, true);
+        }),
+        boards: {}
+      };
+    }
+    return historyCache;
+  }
+
+  // the leaderboard after each night: each player's rank (null: not ranked) and score, what they
+  // played, and the influencers - the nights their position changed, and why
+  function historyBoard(method, period) {
+    var data = historyData();
+    var k = method + "|" + period;
+    if (!data.boards[k]) {
+      var ranks = {};
+      var scores = {};
+      var played = {};
+      data.names.forEach(function (n) {
+        ranks[n] = [];
+        scores[n] = [];
+        played[n] = [];
+      });
+      data.nights.forEach(function (day, i) {
+        var entries = withLeaderboardAsOf(historyNightEnd(day), method, data.ctx, function () {
+          return computeLeaderboardEntries(period);
+        });
+        data.names.forEach(function (n) {
+          ranks[n][i] = null;
+          scores[n][i] = null;
+          played[n][i] = data.nightly[n][day] || null;
+        });
+        entries.forEach(function (e, r) {
+          if (!ranks[e.name]) return;
+          ranks[e.name][i] = r + 1;
+          scores[e.name][i] = leaderboardResultText(method, leaderboardResultOf(e, method));
+        });
+      });
+      data.boards[k] = { ranks: ranks, scores: scores, played: played, events: PMCLib.historyCharts.influencers(ranks, played) };
+    }
+    return data.boards[k];
+  }
+
+  // a player's rating after each night (null before their first rated game)
+  function historyRatings(name) {
+    var data = historyData();
+    var tl = leaderboardRatingTimeline(data.ctx, name);
+    var out = [];
+    var j = 0;
+    var rating = null;
+    data.nights.forEach(function (day) {
+      var end = historyNightEnd(day);
+      while (j < tl.points.length && tl.points[j].t < end) rating = tl.points[j++].rating;
+      out.push(rating);
+    });
+    return out;
+  }
+
+  // a player's win % over their last HISTORY_TREND_GAMES games after each night (from 5 games)
+  var HISTORY_TREND_GAMES = 20;
+  function historyWinTrend(name) {
+    var data = historyData();
+    var games = leaderboardAsOfGames(data.ctx, name)
+      .all.filter(function (g) {
+        return g.ts;
+      })
+      .map(function (g) {
+        return { t: new Date(g.ts).getTime(), won: g.result === "won" };
+      })
+      .sort(function (a, b) {
+        return a.t - b.t;
+      });
+    var j = 0;
+    return data.nights.map(function (day) {
+      var end = historyNightEnd(day);
+      while (j < games.length && games[j].t < end) j++;
+      var last = games.slice(Math.max(0, j - HISTORY_TREND_GAMES), j);
+      if (last.length < 5) return null;
+      return Math.round(
+        (last.filter(function (g) {
+          return g.won;
+        }).length /
+          last.length) *
+          100
+      );
+    });
+  }
+
+  // a and b one-on-one: each one's wins so far after each night, and each night's own score
+  function historyHeadToHead(a, b) {
+    var data = historyData();
+    var per = {};
+    leaderboardAsOfGames(data.ctx, a).all.forEach(function (g) {
+      var opp = g.opponentNames || [];
+      if (!g.ts || (g.teammateNames || []).length || opp.length !== 1 || normalizeNameKey(opp[0]) !== normalizeNameKey(b)) return;
+      var d = localDateStrFromTs(g.ts);
+      var r = per[d] || (per[d] = { a: 0, b: 0 });
+      r[g.result === "won" ? "a" : "b"] += 1;
+    });
+    var wa = 0;
+    var wb = 0;
+    var out = { a: [], b: [], nights: [] };
+    data.nights.forEach(function (day) {
+      var r = per[day] || null;
+      if (r) {
+        wa += r.a;
+        wb += r.b;
+      }
+      out.a.push(wa || wb ? wa : null);
+      out.b.push(wa || wb ? wb : null);
+      out.nights.push(r);
+    });
+    out.wa = wa;
+    out.wb = wb;
+    return out;
+  }
+
+  // ---- the page's state: the graphs, the players picked (each with its colour slot), the range
+  var HISTORY_VIEW_KEY = "poolMasterCounter.historyView.v1";
+  var HISTORY_TYPES = ["leaderboard", "rating", "winTrend", "headToHead", "activity"];
+  var HISTORY_MAX_PICKED = 8;
+  var HISTORY_PRESETS = [
+    { key: "history.rangeAll", span: null },
+    { key: "history.range3m", span: 90 },
+    { key: "history.range1m", span: 30 },
+    { key: "history.range2w", span: 14 }
+  ];
+  var historyView = null;
+  var historyReplay = null;
+  var historyTablesOpen = {};
+
+  function loadHistoryView() {
+    try {
+      var v = JSON.parse(localStorage.getItem(HISTORY_VIEW_KEY) || "null");
+      if (v && Array.isArray(v.cards) && Array.isArray(v.picked)) return v;
+    } catch (e) {}
+    return null;
+  }
+
+  function saveHistoryView() {
+    try {
+      localStorage.setItem(HISTORY_VIEW_KEY, JSON.stringify(historyView));
+    } catch (e) {
+      noteSaveFailure("history view", e);
+    }
+  }
+
+  // everyone with a game, the most games first
+  function historyActivePlayers() {
+    var data = historyData();
+    return data.names
+      .map(function (n) {
+        return { n: n, c: leaderboardAsOfGames(data.ctx, n).all.length };
+      })
+      .filter(function (x) {
+        return x.c > 0;
+      })
+      .sort(function (a, b) {
+        return b.c - a.c || a.n.localeCompare(b.n);
+      })
+      .map(function (x) {
+        return x.n;
+      });
+  }
+
+  // first time: one leaderboard graph as the leaderboard is shown, its top 8 picked
+  function historyDefaultView() {
+    var names = leaderboardEntriesForView("players", leaderboardPeriod).map(function (e) {
+      return e.name;
+    });
+    historyActivePlayers().forEach(function (n) {
+      if (names.indexOf(n) === -1) names.push(n);
+    });
+    return {
+      cards: [{ id: 1, type: "leaderboard", method: leaderboardMethod(), period: leaderboardPeriod }],
+      picked: names.slice(0, HISTORY_MAX_PICKED).map(function (n, i) {
+        return { name: n, slot: i };
+      }),
+      range: null,
+      nextId: 2
+    };
+  }
+
+  // light or dark graphs, as the theme's text colour says
+  function historyMode() {
+    var m = /(\d+)\D+(\d+)\D+(\d+)/.exec(getComputedStyle(document.body).color || "");
+    if (!m) return "dark";
+    var lum = (0.2126 * m[1] + 0.7152 * m[2] + 0.0722 * m[3]) / 255;
+    return lum > 0.5 ? "dark" : "light";
+  }
+
+  function historyPicked() {
+    return historyView.picked.map(function (p) {
+      return p.name;
+    });
+  }
+
+  function historyColor(name, mode) {
+    var p = historyView.picked.filter(function (x) {
+      return x.name === name;
+    })[0];
+    return p ? PMCLib.historyCharts.PALETTE[mode][p.slot] : null;
+  }
+
+  // the nights shown: {from, to} indices (all, the last `span` days, or a range dragged on the bar)
+  function historyRange() {
+    var nights = historyData().nights;
+    var n = nights.length;
+    var out = { from: 0, to: Math.max(0, n - 1) };
+    var r = historyView.range;
+    if (!r || !n) return out;
+    if (r.span) {
+      var last = new Date(nights[n - 1] + "T12:00:00");
+      var first = new Date(last.getFullYear(), last.getMonth(), last.getDate() - r.span + 1, 12);
+      var firstDay = first.getFullYear() + "-" + String(first.getMonth() + 1).padStart(2, "0") + "-" + String(first.getDate()).padStart(2, "0");
+      for (var i = 0; i < n; i++) {
+        if (nights[i] >= firstDay) {
+          out.from = i;
+          break;
+        }
+      }
+      return out;
+    }
+    var f = -1;
+    var t = -1;
+    nights.forEach(function (d, k) {
+      if (f === -1 && d >= r.from) f = k;
+      if (d <= r.to) t = k;
+    });
+    if (r.toLatest) t = n - 1;
+    if (f !== -1 && t >= f) {
+      out.from = f;
+      out.to = t;
+    }
+    return out;
+  }
+
+  function setHistoryRangeIdx(from, to) {
+    var nights = historyData().nights;
+    historyView.range = from === 0 && to === nights.length - 1 ? null : { from: nights[from], to: nights[to], toLatest: to === nights.length - 1 };
+  }
+
+  // ---- the page
+  function openHistoryPage(skipHistory) {
+    if (!skipHistory) pushScreenHistory("history");
+    if (!historyView) historyView = loadHistoryView() || historyDefaultView();
+    leaderboardPageView.classList.add("hidden");
+    appRoot.classList.add("hidden");
+    historyPageView.classList.remove("hidden");
+    window.scrollTo(0, 0);
+    renderHistoryPage();
+  }
+
+  // ← back to the leaderboard it came from (the browser's back goes to the board, as from the
+  // leaderboard itself)
+  function closeHistoryPage() {
+    stopHistoryReplay();
+    history.replaceState({ screen: "leaderboard" }, "", "#leaderboard");
+    openLeaderboardPage(true);
+  }
+
+  function renderHistoryPage() {
+    var data = historyData();
+    var any = data.nights.length > 0;
+    historyEmptyHint.classList.toggle("hidden", any);
+    historyControls.classList.toggle("hidden", !any);
+    historyCardsEl.classList.toggle("hidden", !any);
+    if (!any) return;
+    // (picked players since gone from the data step aside)
+    var known = historyActivePlayers();
+    historyView.picked = historyView.picked.filter(function (p) {
+      return known.indexOf(p.name) !== -1;
+    });
+    renderHistoryPlayers(known);
+    renderHistoryRange();
+    renderHistoryCards();
+  }
+
+  function renderHistoryPlayers(known) {
+    var mode = historyMode();
+    historyPlayersEl.textContent = "";
+    (known || historyActivePlayers()).forEach(function (name) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "history-player-chip";
+      var color = historyColor(name, mode);
+      btn.setAttribute("aria-pressed", color ? "true" : "false");
+      var key = document.createElement("span");
+      key.className = "history-line-key";
+      key.style.background = color || "transparent";
+      btn.appendChild(key);
+      btn.appendChild(document.createTextNode(name));
+      btn.addEventListener("click", function () {
+        var at = historyPicked().indexOf(name);
+        if (at !== -1) {
+          historyView.picked.splice(at, 1);
+        } else {
+          if (historyView.picked.length >= HISTORY_MAX_PICKED) return showToast(T("history.maxPicked", { max: HISTORY_MAX_PICKED }), "");
+          // (the first colour free: everyone else keeps theirs)
+          var used = historyView.picked.map(function (p) {
+            return p.slot;
+          });
+          var slot = 0;
+          while (used.indexOf(slot) !== -1) slot++;
+          historyView.picked.push({ name: name, slot: slot });
+        }
+        saveHistoryView();
+        renderHistoryPlayers();
+        renderHistoryCards();
+      });
+      historyPlayersEl.appendChild(btn);
+    });
+  }
+
+  function renderHistoryRange() {
+    var data = historyData();
+    var n = data.nights.length;
+    var r = historyRange();
+    var span = historyView.range && historyView.range.span;
+    historyPresetsEl.textContent = "";
+    HISTORY_PRESETS.forEach(function (p) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-ghost period-btn";
+      btn.textContent = T(p.key);
+      var on = p.span ? span === p.span : !historyView.range;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.addEventListener("click", function () {
+        historyView.range = p.span ? { span: p.span } : null;
+        saveHistoryView();
+        renderHistoryRange();
+        renderHistoryCards();
+      });
+      historyPresetsEl.appendChild(btn);
+    });
+    var left = n > 1 ? (r.from / (n - 1)) * 100 : 0;
+    var right = n > 1 ? (r.to / (n - 1)) * 100 : 100;
+    historyBrushWindow.style.left = left + "%";
+    historyBrushWindow.style.width = Math.max(0, right - left) + "%";
+    var count = r.to - r.from + 1;
+    historyRangeLabel.textContent = TP("history.rangeLabel", count, { from: data.labels[r.from], to: data.labels[r.to], count: count });
+  }
+
+  // the range bar: drag the window to move it, its edges to zoom, tap outside to jump there; arrow
+  // keys move it a night (shift: the right edge)
+  function historyBrushDown(e) {
+    var n = historyData().nights.length;
+    if (n < 2) return;
+    stopHistoryReplay();
+    var rect = historyBrush.getBoundingClientRect();
+    var idxAt = function (x) {
+      return Math.round(Math.max(0, Math.min(1, (x - rect.left) / rect.width)) * (n - 1));
+    };
+    var r = historyRange();
+    var winL = rect.left + (r.from / (n - 1)) * rect.width;
+    var winR = rect.left + (r.to / (n - 1)) * rect.width;
+    var grip = 18;
+    var mode = Math.abs(e.clientX - winR) < grip ? "r" : Math.abs(e.clientX - winL) < grip ? "l" : e.clientX > winL && e.clientX < winR ? "move" : "jump";
+    if (mode === "jump") {
+      var width = r.to - r.from;
+      var f = Math.max(0, Math.min(n - 1 - width, idxAt(e.clientX) - Math.round(width / 2)));
+      setHistoryRangeIdx(f, f + width);
+      r = historyRange();
+      mode = "move";
+      renderHistoryRange();
+      renderHistoryCards();
+    }
+    var base = { from: r.from, to: r.to, x: idxAt(e.clientX) };
+    var frame = null;
+    try {
+      historyBrush.setPointerCapture(e.pointerId);
+    } catch (err) {}
+    var move = function (ev) {
+      var i = idxAt(ev.clientX);
+      var from = base.from;
+      var to = base.to;
+      if (mode === "l") from = Math.min(i, to);
+      else if (mode === "r") to = Math.max(i, from);
+      else {
+        var d = Math.max(-base.from, Math.min(n - 1 - base.to, i - base.x));
+        from = base.from + d;
+        to = base.to + d;
+      }
+      setHistoryRangeIdx(from, to);
+      if (frame) return;
+      frame = requestAnimationFrame(function () {
+        frame = null;
+        renderHistoryRange();
+        renderHistoryCards();
+      });
+    };
+    var up = function () {
+      historyBrush.removeEventListener("pointermove", move);
+      historyBrush.removeEventListener("pointerup", up);
+      historyBrush.removeEventListener("pointercancel", up);
+      saveHistoryView();
+      renderHistoryRange();
+    };
+    historyBrush.addEventListener("pointermove", move);
+    historyBrush.addEventListener("pointerup", up);
+    historyBrush.addEventListener("pointercancel", up);
+    e.preventDefault();
+  }
+
+  function historyBrushKey(e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    var n = historyData().nights.length;
+    var r = historyRange();
+    var d = e.key === "ArrowLeft" ? -1 : 1;
+    e.preventDefault();
+    if (e.shiftKey) setHistoryRangeIdx(r.from, Math.max(r.from, Math.min(n - 1, r.to + d)));
+    else if (r.from + d >= 0 && r.to + d <= n - 1) setHistoryRangeIdx(r.from + d, r.to + d);
+    saveHistoryView();
+    renderHistoryRange();
+    renderHistoryCards();
+  }
+
+  // ▶ replay: every graph drawn up to one night more each beat, from the range's first night to its
+  // last; ⏹ stops
+  var HISTORY_REPLAY_MS = 550;
+  function toggleHistoryReplay() {
+    if (historyReplay) return stopHistoryReplay();
+    var r = historyRange();
+    historyReplay = { i: r.from, timer: null };
+    historyReplay.timer = setInterval(function () {
+      if (!historyReplay) return;
+      historyReplay.i += 1;
+      if (historyReplay.i > historyRange().to) return stopHistoryReplay();
+      renderHistoryCards();
+    }, HISTORY_REPLAY_MS);
+    btnHistoryReplay.textContent = T("history.stop");
+    renderHistoryCards();
+  }
+
+  function stopHistoryReplay() {
+    if (!historyReplay) return;
+    clearInterval(historyReplay.timer);
+    historyReplay = null;
+    btnHistoryReplay.textContent = T("history.replay");
+    if (!historyPageView.classList.contains("hidden")) renderHistoryCards();
+  }
+
+  function addHistoryCard(type) {
+    var picked = historyPicked();
+    var card = { id: historyView.nextId++, type: type };
+    if (type === "leaderboard") {
+      card.method = leaderboardMethod();
+      card.period = "all";
+    }
+    if (type === "headToHead") {
+      var active = historyActivePlayers();
+      card.a = picked[0] || active[0] || "";
+      card.b = picked[1] || active[1] || "";
+    }
+    historyView.cards.push(card);
+    saveHistoryView();
+    renderHistoryCards();
+    var el = historyCardsEl.querySelector('[data-card-id="' + card.id + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function historySelect(options, value, aria, onChange) {
+    var sel = document.createElement("select");
+    sel.className = "history-select";
+    sel.setAttribute("aria-label", aria);
+    options.forEach(function (o) {
+      var opt = document.createElement("option");
+      opt.value = o.value;
+      opt.textContent = o.label;
+      if (o.value === value) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener("change", function () {
+      onChange(sel.value);
+    });
+    return sel;
+  }
+
+  // a legend row: a line key and name for each series coloured, then any extra keys
+  function historyLegend(host, series, extra) {
+    host.textContent = "";
+    series.forEach(function (s) {
+      var item = document.createElement("span");
+      item.className = "history-legend-item";
+      var key = document.createElement("span");
+      key.className = "history-line-key";
+      key.style.background = s.color;
+      item.appendChild(key);
+      item.appendChild(document.createTextNode(s.label));
+      host.appendChild(item);
+    });
+    (extra || []).forEach(function (x) {
+      var item = document.createElement("span");
+      item.className = "history-legend-item";
+      if (x.icon) item.appendChild(x.icon);
+      else if (x.color) {
+        var key = document.createElement("span");
+        key.className = x.swatch ? "history-swatch" : "history-line-key";
+        key.style.background = x.color;
+        item.appendChild(key);
+      }
+      item.appendChild(document.createTextNode(x.label));
+      host.appendChild(item);
+    });
+  }
+
+  // an influencer, in words: "▲ from #3 · won a race · 7–4 that night · passed Bob"
+  function historyEventText(e) {
+    var parts = [];
+    if (e.kind === "enter") parts.push(T("history.enter"));
+    else if (e.kind === "leave") parts.push(T("history.leave"));
+    else parts.push((e.to < e.from ? "▲ " : "▼ ") + T("history.fromRank", { rank: e.from }));
+    if (e.races) parts.push(TP("history.racesWon", e.races, { count: e.races }));
+    if (e.won || e.lost) parts.push(T("history.nightResult", { won: e.won, lost: e.lost }));
+    else parts.push(T("history.didntPlay"));
+    if (e.passed.length) parts.push(T("history.passed", { names: e.passed.join(", ") }));
+    if (e.passedBy.length) parts.push(T("history.passedBy", { names: e.passedBy.join(", ") }));
+    return parts.join(" · ");
+  }
+
+  function renderHistoryCards() {
+    var data = historyData();
+    var mode = historyMode();
+    var r = historyRange();
+    var cutoff = historyReplay ? historyReplay.i : null;
+    var cutoffLabel = historyReplay ? data.labels[historyReplay.i] : null;
+    historyCardsEl.textContent = "";
+    if (!historyView.cards.length) {
+      var none = document.createElement("p");
+      none.className = "empty-hint";
+      none.textContent = T("history.noCards");
+      historyCardsEl.appendChild(none);
+    }
+    historyView.cards.forEach(function (card) {
+      var sec = document.createElement("section");
+      sec.className = "history-card";
+      sec.setAttribute("data-card-id", card.id);
+      sec.setAttribute("data-type", card.type);
+      var head = document.createElement("div");
+      head.className = "history-card-head";
+      var title = document.createElement("h2");
+      title.className = "history-card-title";
+      title.textContent = T("history.type." + card.type);
+      head.appendChild(title);
+      var change = function (field) {
+        return function (v) {
+          card[field] = v;
+          saveHistoryView();
+          renderHistoryCards();
+        };
+      };
+      if (card.type === "leaderboard") {
+        head.appendChild(
+          historySelect(
+            ["mvp", "performance", "last10", "bestNights"].map(function (m) {
+              return { value: m, label: T(LEADERBOARD_METHOD_LABEL_KEYS[m]) };
+            }),
+            card.method,
+            T("history.methodAria"),
+            change("method")
+          )
+        );
+        head.appendChild(
+          historySelect(
+            ["all", "month", "week"].map(function (p) {
+              return { value: p, label: T(PLAYER_PAGE_PERIOD_LABEL_KEYS[p]) };
+            }),
+            card.period,
+            T("history.periodAria"),
+            change("period")
+          )
+        );
+      }
+      if (card.type === "headToHead") {
+        var players = historyActivePlayers().map(function (n) {
+          return { value: n, label: n };
+        });
+        head.appendChild(historySelect(players, card.a, T("history.playerAria"), change("a")));
+        var vs = document.createElement("span");
+        vs.className = "history-vs";
+        vs.textContent = "⚔️";
+        head.appendChild(vs);
+        head.appendChild(historySelect(players, card.b, T("history.playerAria"), change("b")));
+      }
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn btn-ghost history-card-remove";
+      remove.textContent = "✕";
+      remove.setAttribute("aria-label", T("history.remove"));
+      remove.addEventListener("click", function () {
+        historyView.cards = historyView.cards.filter(function (c) {
+          return c.id !== card.id;
+        });
+        saveHistoryView();
+        renderHistoryCards();
+      });
+      head.appendChild(remove);
+      sec.appendChild(head);
+      var note = document.createElement("p");
+      note.className = "history-card-note";
+      sec.appendChild(note);
+      var legend = document.createElement("div");
+      legend.className = "history-legend";
+      sec.appendChild(legend);
+      var host = document.createElement("div");
+      sec.appendChild(host);
+      var details = document.createElement("details");
+      details.className = "history-table";
+      details.open = !!historyTablesOpen[card.id];
+      details.addEventListener("toggle", function () {
+        historyTablesOpen[card.id] = details.open;
+      });
+      var summary = document.createElement("summary");
+      summary.textContent = T("history.table");
+      details.appendChild(summary);
+      var tableHost = document.createElement("div");
+      tableHost.className = "history-table-scroll";
+      details.appendChild(tableHost);
+      sec.appendChild(details);
+      historyCardsEl.appendChild(sec);
+      var width = host.clientWidth || sec.clientWidth - 24;
+      drawHistoryCard(card, { host: host, legend: legend, note: note, table: tableHost, mode: mode, range: r, cutoff: cutoff, cutoffLabel: cutoffLabel, width: width });
+    });
+  }
+
+  function drawHistoryCard(card, v) {
+    var data = historyData();
+    var C = PMCLib.historyCharts;
+    var picked = historyPicked();
+    var end = v.cutoff == null ? v.range.to : Math.min(v.range.to, v.cutoff);
+    var inRange = function (values) {
+      for (var i = v.range.from; i <= end; i++) if (values[i] != null) return true;
+      return false;
+    };
+    var base = { mode: v.mode, width: v.width, labels: data.labels, from: v.range.from, to: v.range.to, cutoff: v.cutoff, cutoffLabel: v.cutoffLabel };
+    var tableSpec = function (series, cell) {
+      C.table(v.table, { labels: data.longLabels, from: v.range.from, to: v.range.to, cutoff: v.cutoff, firstColumn: T("history.night"), series: series, cell: cell });
+    };
+    var icon = function (kind) {
+      return C.markerIcon(C.SHAPES[kind], C.ARROWS[v.mode][kind], v.mode);
+    };
+
+    if (card.type === "leaderboard") {
+      var board = historyBoard(card.method, card.period);
+      var series = data.names
+        .filter(function (n) {
+          return inRange(board.ranks[n]);
+        })
+        .map(function (n) {
+          return {
+            key: n,
+            label: n,
+            color: historyColor(n, v.mode),
+            values: board.ranks[n],
+            endLabel: function (rank) {
+              return "#" + rank + " " + n;
+            }
+          };
+        });
+      if (!series.length) {
+        v.note.textContent = T("history.noneRanked");
+        return;
+      }
+      var yMax = 1;
+      series.forEach(function (s) {
+        for (var i = v.range.from; i <= end; i++) if (s.values[i] > yMax) yMax = s.values[i];
+      });
+      var events = board.events.filter(function (e) {
+        return picked.indexOf(e.name) !== -1;
+      });
+      var markers = events.map(function (e) {
+        var moved = e.from != null && e.to != null ? Math.abs(e.from - e.to) : 1;
+        return { i: e.i, value: e.to != null ? e.to : e.from, shape: C.SHAPES[e.kind], color: C.ARROWS[v.mode][e.kind], size: e.kind === "enter" || e.kind === "leave" ? 7 : Math.min(13, 8 + 1.5 * (moved - 1)) };
+      });
+      // (the legend in the order they finish the range)
+      var lastRank = function (s) {
+        for (var i = end; i >= v.range.from; i--) if (s.values[i] != null) return s.values[i];
+        return Infinity;
+      };
+      var coloured = series
+        .filter(function (s) {
+          return s.color;
+        })
+        .sort(function (a, b) {
+          return lastRank(a) - lastRank(b);
+        });
+      historyLegend(
+        v.legend,
+        coloured,
+        (series.length > coloured.length ? [{ color: C.CHROME[v.mode].other, label: T("history.others") }] : []).concat([
+          { icon: icon("up"), label: T("history.legendUp") },
+          { icon: icon("race"), label: T("history.legendRace") },
+          { icon: icon("down"), label: T("history.legendDown") },
+          { icon: icon("passiveUp"), label: T("history.legendPassive") },
+          { icon: icon("enter"), label: T("history.legendEnter") },
+          { icon: icon("leave"), label: T("history.legendLeave") }
+        ])
+      );
+      C.lineChart(
+        v.host,
+        Object.assign({}, base, {
+          rank: true,
+          yMin: 1,
+          yMax: yMax,
+          yFormat: function (rank) {
+            return "#" + rank;
+          },
+          series: series,
+          markers: markers,
+          ariaLabel: T("history.type.leaderboard"),
+          tooltip: function (i) {
+            var rows = series
+              .filter(function (s) {
+                return s.values[i] != null;
+              })
+              .sort(function (a, b) {
+                return a.values[i] - b.values[i];
+              })
+              .map(function (s) {
+                var e = events.filter(function (x) {
+                  return x.name === s.key && x.i === i;
+                })[0];
+                return { color: s.color || C.CHROME[v.mode].other, value: "#" + s.values[i], label: s.label + " · " + board.scores[s.key][i], note: e ? historyEventText(e) : "", noteColor: e ? C.ARROWS[v.mode][e.kind] : null };
+              });
+            var gone = events.filter(function (x) {
+              return x.i === i && x.kind === "leave";
+            });
+            gone.forEach(function (e) {
+              rows.push({ color: historyColor(e.name, v.mode), value: "–", label: e.name, note: historyEventText(e), noteColor: C.ARROWS[v.mode].leave });
+            });
+            return { title: data.longLabels[i], rows: rows };
+          }
+        })
+      );
+      tableSpec(coloured.length ? coloured : series, function (s, i) {
+        return s.values[i] == null ? "–" : "#" + s.values[i];
+      });
+      return;
+    }
+
+    if (!picked.length) {
+      v.note.textContent = T("history.noPlayers");
+      return;
+    }
+
+    if (card.type === "rating" || card.type === "winTrend") {
+      var rating = card.type === "rating";
+      var lines = picked
+        .map(function (n) {
+          return { key: n, label: n, color: historyColor(n, v.mode), values: rating ? historyRatings(n) : historyWinTrend(n) };
+        })
+        .filter(function (s) {
+          return inRange(s.values);
+        });
+      if (!lines.length) {
+        v.note.textContent = T("history.noPlayers");
+        return;
+      }
+      var lo = Infinity;
+      var hi = -Infinity;
+      lines.forEach(function (s) {
+        for (var i = v.range.from; i <= v.range.to; i++) {
+          if (s.values[i] == null) continue;
+          lo = Math.min(lo, s.values[i]);
+          hi = Math.max(hi, s.values[i]);
+        }
+      });
+      var ticks = rating ? C.niceTicks(lo - 10, hi + 10, 5) : [0, 25, 50, 75, 100];
+      var marks = [];
+      var change = {};
+      lines.forEach(function (s) {
+        var prev = null;
+        var best = null;
+        var worst = null;
+        change[s.key] = [];
+        for (var i = 0; i <= v.range.to; i++) {
+          var val = s.values[i];
+          var d = val != null && prev != null ? val - prev : null;
+          change[s.key][i] = d;
+          if (val != null) prev = val;
+          if (!rating || i < v.range.from || d == null || d === 0) continue;
+          if (d > 0 && (!best || d > best.d)) best = { i: i, d: d, value: val };
+          if (d < 0 && (!worst || d < worst.d)) worst = { i: i, d: d, value: val };
+        }
+        if (best) marks.push({ i: best.i, value: best.value, shape: "up", color: C.ARROWS[v.mode].up, size: 9 });
+        if (worst) marks.push({ i: worst.i, value: worst.value, shape: "down", color: C.ARROWS[v.mode].down, size: 9 });
+      });
+      v.note.textContent = rating ? T("history.ratingNote") : T("history.trendNote", { n: HISTORY_TREND_GAMES });
+      historyLegend(v.legend, lines, rating ? [{ icon: icon("up"), label: T("history.ratingBest") }, { icon: icon("down"), label: T("history.ratingWorst") }] : []);
+      var fmt = function (val) {
+        return rating ? String(Math.round(val)) : val + "%";
+      };
+      C.lineChart(
+        v.host,
+        Object.assign({}, base, {
+          yMin: ticks[0],
+          yMax: ticks[ticks.length - 1],
+          yTicks: ticks,
+          yFormat: fmt,
+          refLines: rating ? [] : [{ value: 50 }],
+          series: lines.map(function (s) {
+            return Object.assign({}, s, {
+              endLabel: function (val) {
+                return fmt(val) + " " + s.label;
+              }
+            });
+          }),
+          markers: marks,
+          ariaLabel: T("history.type." + card.type),
+          tooltip: function (i) {
+            return {
+              title: data.longLabels[i],
+              rows: lines
+                .filter(function (s) {
+                  return s.values[i] != null;
+                })
+                .sort(function (a, b) {
+                  return b.values[i] - a.values[i];
+                })
+                .map(function (s) {
+                  var d = change[s.key][i];
+                  return { color: s.color, value: fmt(s.values[i]), label: s.label, note: rating && d ? T("history.ratingChange", { delta: (d > 0 ? "+" : "−") + Math.abs(Math.round(d)) }) : "", noteColor: d > 0 ? C.ARROWS[v.mode].up : C.ARROWS[v.mode].down };
+                })
+            };
+          }
+        })
+      );
+      tableSpec(lines, function (s, i) {
+        return s.values[i] == null ? "–" : fmt(s.values[i]);
+      });
+      return;
+    }
+
+    if (card.type === "headToHead") {
+      if (!card.a || !card.b || card.a === card.b) {
+        v.note.textContent = T("history.h2hPick");
+        return;
+      }
+      var h = historyHeadToHead(card.a, card.b);
+      var mode = v.mode;
+      var ca = historyColor(card.a, mode);
+      var cb = historyColor(card.b, mode);
+      // (not picked: the first colours nobody picked has, so the two still differ)
+      var free = [0, 1, 2, 3, 4, 5, 6, 7]
+        .filter(function (k) {
+          return !historyView.picked.some(function (p) {
+            return p.slot === k;
+          });
+        })
+        .map(function (k) {
+          return C.PALETTE[mode][k];
+        });
+      if (!ca) ca = free.shift() || C.PALETTE[mode][0];
+      if (!cb || cb === ca) cb = free.shift() || C.PALETTE[mode][1];
+      var total = h.wa + h.wb;
+      if (!total) {
+        v.note.textContent = T("history.h2hNone", { a: card.a, b: card.b });
+        return;
+      }
+      v.note.textContent = T("history.h2hSummary", { a: card.a, b: card.b, wa: h.wa, wb: h.wb, count: total });
+      var two = [
+        { key: card.a, label: card.a, color: ca, values: h.a },
+        { key: card.b, label: card.b, color: cb, values: h.b }
+      ];
+      historyLegend(v.legend, two);
+      var top = 1;
+      for (var i = v.range.from; i <= v.range.to; i++) top = Math.max(top, h.a[i] || 0, h.b[i] || 0);
+      var hTicks = C.niceTicks(0, top, 5);
+      C.lineChart(
+        v.host,
+        Object.assign({}, base, {
+          yMin: 0,
+          yMax: hTicks[hTicks.length - 1],
+          yTicks: hTicks,
+          series: two.map(function (s) {
+            return Object.assign({}, s, {
+              endLabel: function (val) {
+                return val + " " + s.label;
+              }
+            });
+          }),
+          ariaLabel: T("history.type.headToHead"),
+          tooltip: function (i) {
+            var night = h.nights[i];
+            return {
+              title: data.longLabels[i],
+              rows: two
+                .filter(function (s) {
+                  return s.values[i] != null;
+                })
+                .map(function (s, k) {
+                  return { color: s.color, value: String(s.values[i]), label: s.label, note: night && k === 0 ? T("history.h2hNight", { wa: night.a, wb: night.b }) : "" };
+                })
+            };
+          }
+        })
+      );
+      tableSpec(
+        [{ key: "score", label: card.a + " – " + card.b }],
+        function (s, i) {
+          return h.a[i] == null ? "–" : h.a[i] + "–" + h.b[i] + (h.nights[i] ? " (" + h.nights[i].a + "–" + h.nights[i].b + ")" : "");
+        }
+      );
+      return;
+    }
+
+    // 📅 activity: games each night, a ring for a race won
+    var rows = picked.map(function (n) {
+      var per = data.nightly[n] || {};
+      return {
+        key: n,
+        label: n,
+        color: historyColor(n, v.mode),
+        values: data.nights.map(function (d) {
+          return per[d] ? per[d].won + per[d].lost || null : null;
+        }),
+        marks: data.nights.map(function (d) {
+          return !!(per[d] && per[d].races);
+        })
+      };
+    });
+    var heat = C.HEAT[v.mode];
+    var bins = ["1–2", "3–5", "6–10", "11–20", "21+"];
+    historyLegend(
+      v.legend,
+      [],
+      bins
+        .map(function (b, k) {
+          return { color: heat[k], swatch: true, label: b };
+        })
+        .concat([{ icon: C.markerIcon("ring", C.ARROWS[v.mode].race, v.mode), label: T("history.heatRace") }])
+    );
+    v.note.textContent = T("history.heatNote");
+    C.heatmap(
+      v.host,
+      Object.assign({}, base, {
+        rows: rows,
+        ariaLabel: T("history.type.activity"),
+        tooltip: function (i) {
+          return {
+            title: data.longLabels[i],
+            rows: picked
+              .filter(function (n) {
+                return data.nightly[n] && data.nightly[n][data.nights[i]];
+              })
+              .map(function (n) {
+                var x = data.nightly[n][data.nights[i]];
+                var games = x.won + x.lost;
+                var note = T("history.nightResult", { won: x.won, lost: x.lost }) + (x.races ? " · " + TP("history.racesWon", x.races, { count: x.races }) : "");
+                return { color: historyColor(n, v.mode), value: TP("history.games", games, { count: games }), label: n, note: note };
+              })
+          };
+        }
+      })
+    );
+    tableSpec(rows, function (s, i) {
+      return s.values[i] == null ? "–" : String(s.values[i]);
+    });
+  }
+
   var LEADERBOARD_RANK_MEDALS = ["🥇", "🥈", "🥉"];
 
   // The row of unlocked-achievement icons shown under a player's name on
@@ -31964,6 +33073,8 @@
     contactSheetPageView.classList.add("hidden");
     graveyardPageView.classList.add("hidden");
     leaguePageView.classList.add("hidden");
+    historyPageView.classList.add("hidden");
+    stopHistoryReplay();
     leaderboardPageView.classList.remove("hidden");
     window.scrollTo(0, 0);
     localStorage.setItem(LEADERBOARD_LAST_SHOWN_KEY, String(Date.now()));
@@ -44184,6 +45295,25 @@
     closeLeaderboardPage();
   });
   btnLeaderboardShare.addEventListener("click", shareLeaderboard);
+  btnLeaderboardHistory.addEventListener("click", function () {
+    openHistoryPage();
+  });
+  btnHistoryBack.addEventListener("click", closeHistoryPage);
+  btnHistoryReplay.addEventListener("click", toggleHistoryReplay);
+  historyBrush.addEventListener("pointerdown", historyBrushDown);
+  historyBrushWindow.addEventListener("keydown", historyBrushKey);
+  historyAddSelect.addEventListener("change", function () {
+    var type = historyAddSelect.value;
+    historyAddSelect.value = "";
+    if (HISTORY_TYPES.indexOf(type) !== -1) addHistoryCard(type);
+  });
+  // (the graphs fit the width they have)
+  var historyResizeTimer = null;
+  window.addEventListener("resize", function () {
+    if (historyPageView.classList.contains("hidden")) return;
+    clearTimeout(historyResizeTimer);
+    historyResizeTimer = setTimeout(renderHistoryCards, 150);
+  });
   [leaderboardViewPlayersRadio, leaderboardViewTeamsRadio, leaderboardViewLeagueRadio].forEach(function (radio) {
     radio.addEventListener("change", renderLeaderboardPage);
   });

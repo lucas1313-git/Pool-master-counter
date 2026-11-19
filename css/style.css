@@ -12722,3 +12722,248 @@ body.network-guest-mode #league-add-member-contact-fields {
   background: var(--accent);
   color: var(--on-accent, #111);
 }
+
+/* 📈 History - the leaderboard night by night and the graph library (js/lib/history-charts.js).
+   The graphs sit on their own chart surface (light or dark as the theme reads), so the validated
+   palette keeps its contrast whatever the theme's colours. */
+.history-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 8px 0 16px;
+}
+.history-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.history-player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-glow);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.history-player-chip[aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.history-line-key {
+  display: inline-block;
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.history-player-chip[aria-pressed="false"] .history-line-key {
+  border: 1px dashed var(--text-dim);
+  height: 2px;
+}
+.history-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.history-presets {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.history-brush {
+  position: relative;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--bg-glow);
+  border: 1px solid var(--border);
+  touch-action: none;
+  cursor: pointer;
+}
+.history-brush-window {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  min-width: 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  border: 2px solid var(--accent);
+  border-left-width: 6px;
+  border-right-width: 6px;
+  cursor: grab;
+  box-sizing: border-box;
+}
+.history-range-label {
+  margin: 0;
+  color: var(--text-dim);
+  text-align: center;
+  font-size: 1rem;
+}
+.history-action-row {
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.history-select {
+  font: inherit;
+  font-size: 1rem;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  max-width: 100%;
+}
+.history-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.history-card {
+  background: var(--panel-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 12px;
+}
+.history-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.history-card-title {
+  margin: 0 auto 0 0;
+  font-size: 1.25rem;
+}
+.history-card-remove {
+  min-width: 44px;
+  min-height: 44px;
+}
+.history-vs {
+  font-size: 1.2rem;
+}
+.history-card-note {
+  margin: 8px 0 0;
+  color: var(--text-dim);
+}
+.history-card-note:empty {
+  display: none;
+}
+.history-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 10px 0;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.history-legend:empty {
+  display: none;
+}
+.history-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.hc-host {
+  position: relative;
+  background: var(--hc-surface);
+  border-radius: 10px;
+  padding: 6px 4px 2px;
+}
+.hc-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: var(--font-family);
+  overflow: visible;
+}
+.hc-svg text {
+  font-variant-numeric: tabular-nums;
+}
+.hc-svg rect:focus {
+  outline: none;
+}
+.hc-svg rect:focus-visible {
+  outline: 2px solid var(--hc-ink2);
+}
+.hc-tip {
+  position: absolute;
+  z-index: 3;
+  max-width: min(360px, 88%);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--hc-surface);
+  color: var(--hc-ink);
+  border: 1px solid var(--hc-grid);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  font-size: 0.95rem;
+}
+.hc-tip-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--hc-ink2);
+}
+.hc-tip-row {
+  display: grid;
+  grid-template-columns: 16px auto 1fr;
+  align-items: baseline;
+  column-gap: 8px;
+  margin: 3px 0;
+}
+.hc-tip-key {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  align-self: center;
+}
+.hc-tip-row strong {
+  font-variant-numeric: tabular-nums;
+}
+.hc-tip-label {
+  color: var(--hc-ink2);
+}
+.hc-tip-note {
+  grid-column: 2 / -1;
+  padding-left: 8px;
+  border-left: 3px solid var(--hc-grid);
+  color: var(--hc-ink2);
+  font-size: 0.88rem;
+}
+.hc-tip-note:empty {
+  display: none;
+}
+.history-table summary {
+  cursor: pointer;
+  margin-top: 8px;
+  color: var(--text-dim);
+}
+.history-table-scroll {
+  overflow-x: auto;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.hc-table {
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  margin-top: 6px;
+}
+.hc-table th,
+.hc-table td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.hc-table th:first-child {
+  text-align: left;
+}

@@ -720,3 +720,13 @@ Not part of the app - helpers for testing and for running this machine's own cop
   "once the extra games are counted"; 📈 Performance, 🌙 Best 3 nights, no share sheet (saved),
   French. `node tests/probe_leaderboard_report.js [out dir]` (the PDF lands there). The PDF writer:
   tests/unit/pdf-images.test.js, in `npm test`.
+- **probe_history.js** — the Leaderboard's 📈 History (2026-11-19: "a historical graph with each
+  player represented by a line ... "influencers" ... up and down graphic arrows of diferent colors
+  ... multiple timelines dynamically ... a library of graph"), its own file server on 4322: 4
+  nights (Ace beats Bob, Cid beats Bob, Bob wins two races to 3 against Ace, Dee v Cid) - one 🏆
+  graph, a line and an end label per player, the ▲▼ legend; the races night's tooltip rows (Bob ▲
+  from #3, won 2 races, passed Ace, Cid; Ace ▼ passed by Bob; Cid didn't play) and their arrows;
+  📈 rating, 🎯 win % trend, ⚔️ head-to-head ("One-on-one: Ace 11 – 10 Bob"), 📅 activity; colours
+  kept when a player's taken off; the table; a range preset and the bar dragged; ▶ replay; ✕; a
+  reload; French. `node tests/probe_history.js [shots]` (PMC_SITE=<dir> to test another build). The
+  influencers and ticks: tests/unit/history-charts.test.js, in `npm test`.
