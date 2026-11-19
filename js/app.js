@@ -3316,6 +3316,14 @@
   var historyAddSelect = document.getElementById("history-add");
   var historyCardsEl = document.getElementById("history-cards");
   var historyEmptyHint = document.getElementById("history-empty");
+  var btnHistoryStop = document.getElementById("btn-history-stop");
+  var historyFollowSelect = document.getElementById("history-follow");
+  var historySpeedSelect = document.getElementById("history-speed");
+  var historyCommentaryEl = document.getElementById("history-commentary");
+  var historySayNow = document.getElementById("history-say-now");
+  var historySayEarlier = document.getElementById("history-say-earlier");
+  var historySayEarlierSummary = document.getElementById("history-say-earlier-summary");
+  var historySayLog = document.getElementById("history-say-log");
   var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
   var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
   var leaderboardViewLeagueRadio = document.getElementById("leaderboard-view-league");
@@ -31754,12 +31762,17 @@
         var per = (nightly[n] = {});
         var at = function (ts) {
           var d = localDateStrFromTs(ts);
-          return per[d] || (per[d] = { won: 0, lost: 0, races: 0 });
+          return per[d] || (per[d] = { won: 0, lost: 0, races: 0, vs: {} });
         };
         g.all.forEach(function (x) {
           if (!x.ts) return;
           days[localDateStrFromTs(x.ts)] = true;
-          at(x.ts)[x.result === "won" ? "won" : "lost"] += 1;
+          var r = at(x.ts);
+          var side = x.result === "won" ? "won" : "lost";
+          r[side] += 1;
+          // (and by opponent, playing on their own - "Bob", or "Ace & Cid" - for the commentator)
+          var opp = (x.opponentNames || []).filter(Boolean).join(" & ");
+          if (opp && !(x.teammateNames || []).length) (r.vs[opp] = r.vs[opp] || { won: 0, lost: 0 })[side] += 1;
         });
         g.titles.forEach(function (x) {
           if (x.ts && x.result === "won") at(x.ts).races += 1;
@@ -31792,10 +31805,12 @@
     if (!data.boards[k]) {
       var ranks = {};
       var scores = {};
+      var nums = {};
       var played = {};
       data.names.forEach(function (n) {
         ranks[n] = [];
         scores[n] = [];
+        nums[n] = [];
         played[n] = [];
       });
       data.nights.forEach(function (day, i) {
@@ -31805,15 +31820,17 @@
         data.names.forEach(function (n) {
           ranks[n][i] = null;
           scores[n][i] = null;
+          nums[n][i] = null;
           played[n][i] = data.nightly[n][day] || null;
         });
         entries.forEach(function (e, r) {
           if (!ranks[e.name]) return;
           ranks[e.name][i] = r + 1;
           scores[e.name][i] = leaderboardResultText(method, leaderboardResultOf(e, method));
+          nums[e.name][i] = leaderboardResultOf(e, method).score;
         });
       });
-      data.boards[k] = { ranks: ranks, scores: scores, played: played, events: PMCLib.historyCharts.influencers(ranks, played) };
+      data.boards[k] = { ranks: ranks, scores: scores, nums: nums, played: played, events: PMCLib.historyCharts.influencers(ranks, played) };
     }
     return data.boards[k];
   }
@@ -32050,7 +32067,14 @@
     });
     renderHistoryPlayers(known);
     renderHistoryRange();
+    renderHistoryFollowSpeed();
+    renderHistoryReplayState();
     renderHistoryCards();
+  }
+
+  function renderHistoryReplayState() {
+    historyReplayButtons();
+    renderHistoryCommentary();
   }
 
   function renderHistoryPlayers(known) {
@@ -32083,6 +32107,7 @@
         }
         saveHistoryView();
         renderHistoryPlayers();
+        renderHistoryFollowSpeed();
         renderHistoryCards();
       });
       historyPlayersEl.appendChild(btn);
@@ -32104,6 +32129,7 @@
       btn.classList.toggle("is-active", on);
       btn.setAttribute("aria-pressed", on ? "true" : "false");
       btn.addEventListener("click", function () {
+        stopHistoryReplay();
         historyView.range = p.span ? { span: p.span } : null;
         saveHistoryView();
         renderHistoryRange();
@@ -32186,6 +32212,7 @@
     var r = historyRange();
     var d = e.key === "ArrowLeft" ? -1 : 1;
     e.preventDefault();
+    stopHistoryReplay();
     if (e.shiftKey) setHistoryRangeIdx(r.from, Math.max(r.from, Math.min(n - 1, r.to + d)));
     else if (r.from + d >= 0 && r.to + d <= n - 1) setHistoryRangeIdx(r.from + d, r.to + d);
     saveHistoryView();
@@ -32193,29 +32220,323 @@
     renderHistoryCards();
   }
 
-  // ▶ replay: every graph drawn up to one night more each beat, from the range's first night to its
-  // last; ⏹ stops
-  var HISTORY_REPLAY_MS = 550;
+  // ▶ replay (2026-11-19, then: "the animation runs too fast, i would like to be able to select a
+  // speed" and "some text when an event of signifiance occurs, like a sport commentator"): every
+  // graph drawn up to one night more each beat, the commentator on what that night changed; a night
+  // with something to say stays up longer, a quiet one goes by faster. ⏸ pauses, ⏹ stops (the
+  // commentary stays to read).
+  var HISTORY_SPEEDS = { slow: 4500, normal: 2500, fast: 1200, veryFast: 500 };
+  var historySay = null;
+
+  function historySpeed() {
+    return HISTORY_SPEEDS[historyView.speed] || HISTORY_SPEEDS.normal;
+  }
+
+  function historyReplayButtons() {
+    btnHistoryReplay.textContent = T(!historyReplay ? "history.replay" : historyReplay.paused ? "history.resume" : "history.pause");
+    btnHistoryStop.classList.toggle("hidden", !historyReplay);
+  }
+
+  // night i on screen: its commentary up (the last one's into "earlier"), the graphs to there
+  function historyReplayShow(i) {
+    var lines = historyNightLines(i);
+    if (!historySay) historySay = { now: null, log: [] };
+    if (historySay.now && historySay.now.lines.length) historySay.log.unshift(historySay.now);
+    historySay.log = historySay.log.slice(0, 60);
+    historySay.now = { i: i, lines: lines };
+    renderHistoryCommentary();
+    renderHistoryCards();
+    return lines;
+  }
+
+  function historyReplaySchedule(lines) {
+    // (time to read: longer the more there is to say, up to 3½ beats; a quiet night half of one)
+    var base = historySpeed();
+    var ms = lines.length ? base * Math.min(3.5, 0.8 + 0.35 * lines.length) : base * 0.45;
+    historyReplay.timer = setTimeout(historyReplayNext, ms);
+  }
+
+  function historyReplayNext() {
+    if (!historyReplay || historyReplay.paused) return;
+    historyReplay.i += 1;
+    if (historyReplay.i > historyRange().to) return finishHistoryReplay();
+    historyReplaySchedule(historyReplayShow(historyReplay.i));
+  }
+
   function toggleHistoryReplay() {
-    if (historyReplay) return stopHistoryReplay();
-    var r = historyRange();
-    historyReplay = { i: r.from, timer: null };
-    historyReplay.timer = setInterval(function () {
-      if (!historyReplay) return;
-      historyReplay.i += 1;
-      if (historyReplay.i > historyRange().to) return stopHistoryReplay();
-      renderHistoryCards();
-    }, HISTORY_REPLAY_MS);
-    btnHistoryReplay.textContent = T("history.stop");
+    if (!historyReplay) {
+      historySay = null;
+      historyReplay = { i: historyRange().from, timer: null, paused: false };
+      historyReplayButtons();
+      historyReplaySchedule(historyReplayShow(historyReplay.i));
+      // (the commentator and the graphs under it in view - it stays at the top from there)
+      if (historyCommentaryEl.scrollIntoView) historyCommentaryEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    clearTimeout(historyReplay.timer);
+    historyReplay.paused = !historyReplay.paused;
+    historyReplayButtons();
+    if (!historyReplay.paused) historyReplaySchedule(historySay && historySay.now ? historySay.now.lines : []);
+  }
+
+  // the end (or ⏹): the graphs whole again, the commentary kept to read
+  function finishHistoryReplay() {
+    if (historyReplay) clearTimeout(historyReplay.timer);
+    historyReplay = null;
+    historyReplayButtons();
+    if (historyPageView.classList.contains("hidden")) return;
+    renderHistoryCommentary();
     renderHistoryCards();
   }
 
+  // leaving the page, or a new range or player followed: stopped, and the commentary gone
   function stopHistoryReplay() {
-    if (!historyReplay) return;
-    clearInterval(historyReplay.timer);
+    var was = historyReplay || historySay;
+    historySay = null;
+    if (historyReplay) clearTimeout(historyReplay.timer);
     historyReplay = null;
-    btnHistoryReplay.textContent = T("history.replay");
-    if (!historyPageView.classList.contains("hidden")) renderHistoryCards();
+    historyReplayButtons();
+    if (was && !historyPageView.classList.contains("hidden")) {
+      renderHistoryCommentary();
+      renderHistoryCards();
+    }
+  }
+
+  // ---- the commentator's words. It speaks about the first 🏆 graph's leaderboard (MVP, all time
+  // when there's none); following a player: their whole night first, then the rest of the news.
+  var HISTORY_CLOSE_GAPS = { mvp: 2, performance: 10, last10: 0.5, bestNights: 10 };
+  var HISTORY_SAY_VARIANTS = { leadChange: 3, raceClimb: 2, bigClimb: 2, bigDrop: 2 };
+
+  function historyFollow() {
+    var f = historyView.follow;
+    return f && historyPicked().indexOf(f) !== -1 ? f : null;
+  }
+
+  function historyCommentarySource() {
+    var c = historyView.cards.filter(function (x) {
+      return x.type === "leaderboard";
+    })[0];
+    return c ? { method: c.method, period: c.period } : { method: "mvp", period: "all" };
+  }
+
+  function historyCommentary() {
+    var src = historyCommentarySource();
+    var data = historyData();
+    var follow = historyFollow();
+    var k = "say|" + src.method + "|" + src.period + "|" + (follow || "");
+    if (!data.boards[k]) {
+      var board = historyBoard(src.method, src.period);
+      var ratings = {};
+      if (follow) ratings[follow] = historyRatings(follow);
+      var said = PMCLib.historyCharts.commentary({ names: data.names, count: data.nights.length, ranks: board.ranks, scores: board.nums, played: board.played, events: board.events, closeGap: HISTORY_CLOSE_GAPS[src.method], follow: follow, ratings: ratings });
+      said.method = src.method;
+      said.ranks = board.ranks;
+      data.boards[k] = said;
+    }
+    return data.boards[k];
+  }
+
+  // a gap in a method's own units: "1.5 points", "½ win"
+  function historyGapWords(method, gap) {
+    var M = PMCLib.leaderboardMethods;
+    var d = Math.abs(gap);
+    if (method === "last10") return TP("report.gapWins", d === 1 ? 1 : 2, { n: M.halves(d) });
+    var n = method === "mvp" ? Number(d.toFixed(1)) : Math.round(d);
+    return TP("report.gapPoints", n, { n: method === "mvp" ? d.toFixed(1) : String(n) });
+  }
+
+  // the same words each replay: a variant picked from the night, the player and what happened
+  function historyHash(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+
+  function historySayText(item, i, method) {
+    var n = HISTORY_SAY_VARIANTS[item.kind];
+    var key = "history.say." + item.kind + (n ? 1 + (historyHash(item.kind + "|" + item.name + "|" + i) % n) : "");
+    var vars = Object.assign({}, item);
+    if (item.races) vars.racesText = TP("history.say.races", item.races, { count: item.races });
+    if (item.gap != null) vars.gap = historyGapWords(method, item.gap);
+    if (item.delta != null) vars.delta = (item.delta > 0 ? "+" : "−") + Math.abs(Math.round(item.delta));
+    if (item.rating != null) vars.rating = Math.round(item.rating);
+    if (item.kind === "leadChange") {
+      var h = item.how || {};
+      vars.how = h.races ? TP("history.say.howRaces", h.races, { count: h.races }) : T("history.say.howGames", { won: h.won, lost: h.lost });
+    }
+    if (item.kind === "fNight") {
+      var vs = item.vs.slice(0, 3).map(function (v) {
+        return T(v.won > v.lost ? "history.say.fVsBeat" : v.won < v.lost ? "history.say.fVsLose" : "history.say.fVsEven", { other: v.other, won: v.won, lost: v.lost });
+      });
+      var text = vs.length ? T("history.say.fNightVs", Object.assign(vars, { vs: vs.join(", ") })) : T("history.say.fNight", vars);
+      return item.races ? text + " " + TP("history.say.fRaces", item.races, { count: item.races }) : text;
+    }
+    if (item.kind === "fUp" && item.passed && item.passed.length) return T("history.say.fUpPassing", Object.assign(vars, { names: item.passed.join(", ") }));
+    if (item.kind === "fDown") {
+      if (!item.played) return T("history.say.fDownAbsent", vars);
+      if (item.passedBy && item.passedBy.length) return T("history.say.fDownPassed", Object.assign(vars, { names: item.passedBy.join(", ") }));
+    }
+    if (item.kind === "fRating" && item.delta < 0) key = "history.say.fRatingDown";
+    return T(key, vars);
+  }
+
+  // night i, in words: following someone - the headlines about them, their night, then up to 2
+  // other headlines; otherwise the night's 3 biggest
+  function historyNightLines(i) {
+    var c = historyCommentary();
+    var night = c[i];
+    if (!night) return [];
+    var follow = historyFollow();
+    var say = function (it, mine) {
+      return { text: historySayText(it, i, c.method), mine: !!mine };
+    };
+    if (!follow) {
+      return night.general.slice(0, 3).map(function (it) {
+        return say(it);
+      });
+    }
+    // (their own clash, sweep or night on fire: their night says it already)
+    var told = { clash: 1, sweep: 1, onFire: 1 };
+    var about = night.general.filter(function (it) {
+      return (it.name === follow || it.other === follow) && !told[it.kind];
+    });
+    var skipped = night.general.filter(function (it) {
+      return (it.name === follow || it.other === follow) && told[it.kind];
+    });
+    var others = night.general.filter(function (it) {
+      return about.indexOf(it) === -1 && skipped.indexOf(it) === -1;
+    });
+    // (a headline about the move says it already)
+    var moves = { fUp: 1, fDown: 1, fEnter: 1, fLeave: 1 };
+    var personal = night.personal.filter(function (it) {
+      return !(about.length && moves[it.kind]);
+    });
+    return about
+      .map(function (it) {
+        return say(it, true);
+      })
+      .concat(
+        personal.map(function (it) {
+          return say(it, true);
+        })
+      )
+      .concat(
+        others.slice(0, 2).map(function (it) {
+          return say(it);
+        })
+      );
+  }
+
+  function renderHistoryCommentary() {
+    var data = historyData();
+    var show = !!(historySay && (historySay.now || historySay.log.length));
+    historyCommentaryEl.classList.toggle("hidden", !show);
+    if (!show) return;
+    var follow = historyFollow();
+    var lineEl = function (l) {
+      var p = document.createElement("p");
+      p.className = "history-say-line" + (l.mine ? " is-mine" : "");
+      p.textContent = l.text;
+      return p;
+    };
+    historySayNow.textContent = "";
+    var now = historySay.now;
+    if (now) {
+      var head = document.createElement("div");
+      head.className = "history-say-date";
+      head.textContent = "🎙️ " + data.longLabels[now.i] + (follow ? " · 🎯 " + follow : "");
+      historySayNow.appendChild(head);
+      if (!now.lines.length) {
+        var quiet = document.createElement("p");
+        quiet.className = "history-say-line is-quiet";
+        quiet.textContent = T("history.say.quiet");
+        historySayNow.appendChild(quiet);
+      }
+      now.lines.forEach(function (l) {
+        historySayNow.appendChild(lineEl(l));
+      });
+    }
+    historySayEarlier.classList.toggle("hidden", !historySay.log.length);
+    historySayEarlierSummary.textContent = T("history.earlier", { count: historySay.log.length });
+    historySayLog.textContent = "";
+    historySay.log.forEach(function (n) {
+      var li = document.createElement("li");
+      var d = document.createElement("strong");
+      d.textContent = data.longLabels[n.i];
+      li.appendChild(d);
+      n.lines.forEach(function (l) {
+        li.appendChild(lineEl(l));
+      });
+      historySayLog.appendChild(li);
+    });
+  }
+
+  // 🎯 the player followed, night by night: their rank and everything the commentator says about
+  // them, newest first - up to the replay's night
+  function historyTimelineCard(follow, r, cutoff) {
+    var data = historyData();
+    var c = historyCommentary();
+    var sec = document.createElement("section");
+    sec.className = "history-card history-timeline";
+    sec.setAttribute("data-type", "timeline");
+    var title = document.createElement("h2");
+    title.className = "history-card-title";
+    title.textContent = T("history.timelineTitle", { name: follow });
+    sec.appendChild(title);
+    var list = document.createElement("ol");
+    list.className = "history-timeline-list";
+    var end = cutoff == null ? r.to : Math.min(r.to, cutoff);
+    for (var i = end; i >= r.from; i--) {
+      var lines = historyNightLines(i).filter(function (l) {
+        return l.mine;
+      });
+      if (!lines.length) continue;
+      var li = document.createElement("li");
+      li.className = "history-timeline-night" + (cutoff === i ? " is-now" : "");
+      var head = document.createElement("div");
+      head.className = "history-timeline-head";
+      var date = document.createElement("strong");
+      date.textContent = data.longLabels[i];
+      var rank = document.createElement("span");
+      rank.className = "history-timeline-rank";
+      var rk = c.ranks[follow] ? c.ranks[follow][i] : null;
+      rank.textContent = rk == null ? "–" : "#" + rk;
+      head.appendChild(date);
+      head.appendChild(rank);
+      li.appendChild(head);
+      lines.forEach(function (l) {
+        var p = document.createElement("p");
+        p.textContent = l.text;
+        li.appendChild(p);
+      });
+      list.appendChild(li);
+    }
+    if (!list.children.length) {
+      var none = document.createElement("p");
+      none.className = "history-card-note";
+      none.textContent = T("history.timelineNone", { name: follow });
+      sec.appendChild(none);
+    } else sec.appendChild(list);
+    return sec;
+  }
+
+  function renderHistoryFollowSpeed() {
+    var follow = historyFollow();
+    historyFollowSelect.textContent = "";
+    [{ value: "", label: T("history.followEveryone") }]
+      .concat(
+        historyPicked().map(function (n) {
+          return { value: n, label: "🎯 " + n };
+        })
+      )
+      .forEach(function (o) {
+        var opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        if (o.value === (follow || "")) opt.selected = true;
+        historyFollowSelect.appendChild(opt);
+      });
+    historySpeedSelect.value = HISTORY_SPEEDS[historyView.speed] ? historyView.speed : "normal";
   }
 
   function addHistoryCard(type) {
@@ -32303,6 +32624,8 @@
     var cutoff = historyReplay ? historyReplay.i : null;
     var cutoffLabel = historyReplay ? data.labels[historyReplay.i] : null;
     historyCardsEl.textContent = "";
+    var follow = historyFollow();
+    if (follow) historyCardsEl.appendChild(historyTimelineCard(follow, r, cutoff));
     if (!historyView.cards.length) {
       var none = document.createElement("p");
       none.className = "empty-hint";
@@ -32410,7 +32733,7 @@
       for (var i = v.range.from; i <= end; i++) if (values[i] != null) return true;
       return false;
     };
-    var base = { mode: v.mode, width: v.width, labels: data.labels, from: v.range.from, to: v.range.to, cutoff: v.cutoff, cutoffLabel: v.cutoffLabel };
+    var base = { mode: v.mode, width: v.width, labels: data.labels, from: v.range.from, to: v.range.to, cutoff: v.cutoff, cutoffLabel: v.cutoffLabel, focus: historyFollow() };
     var tableSpec = function (series, cell) {
       C.table(v.table, { labels: data.longLabels, from: v.range.from, to: v.range.to, cutoff: v.cutoff, firstColumn: T("history.night"), series: series, cell: cell });
     };
@@ -32448,7 +32771,7 @@
       });
       var markers = events.map(function (e) {
         var moved = e.from != null && e.to != null ? Math.abs(e.from - e.to) : 1;
-        return { i: e.i, value: e.to != null ? e.to : e.from, shape: C.SHAPES[e.kind], color: C.ARROWS[v.mode][e.kind], size: e.kind === "enter" || e.kind === "leave" ? 7 : Math.min(13, 8 + 1.5 * (moved - 1)) };
+        return { key: e.name, i: e.i, value: e.to != null ? e.to : e.from, shape: C.SHAPES[e.kind], color: C.ARROWS[v.mode][e.kind], size: e.kind === "enter" || e.kind === "leave" ? 7 : Math.min(13, 8 + 1.5 * (moved - 1)) };
       });
       // (the legend in the order they finish the range)
       var lastRank = function (s) {
@@ -32560,8 +32883,8 @@
           if (d > 0 && (!best || d > best.d)) best = { i: i, d: d, value: val };
           if (d < 0 && (!worst || d < worst.d)) worst = { i: i, d: d, value: val };
         }
-        if (best) marks.push({ i: best.i, value: best.value, shape: "up", color: C.ARROWS[v.mode].up, size: 9 });
-        if (worst) marks.push({ i: worst.i, value: worst.value, shape: "down", color: C.ARROWS[v.mode].down, size: 9 });
+        if (best) marks.push({ key: s.key, i: best.i, value: best.value, shape: "up", color: C.ARROWS[v.mode].up, size: 9 });
+        if (worst) marks.push({ key: s.key, i: worst.i, value: worst.value, shape: "down", color: C.ARROWS[v.mode].down, size: 9 });
       });
       v.note.textContent = rating ? T("history.ratingNote") : T("history.trendNote", { n: HISTORY_TREND_GAMES });
       historyLegend(v.legend, lines, rating ? [{ icon: icon("up"), label: T("history.ratingBest") }, { icon: icon("down"), label: T("history.ratingWorst") }] : []);
@@ -45300,6 +45623,18 @@
   });
   btnHistoryBack.addEventListener("click", closeHistoryPage);
   btnHistoryReplay.addEventListener("click", toggleHistoryReplay);
+  btnHistoryStop.addEventListener("click", finishHistoryReplay);
+  historyFollowSelect.addEventListener("change", function () {
+    historyView.follow = historyFollowSelect.value || null;
+    saveHistoryView();
+    stopHistoryReplay();
+    renderHistoryCards();
+  });
+  historySpeedSelect.addEventListener("change", function () {
+    // (the next beat goes at the new speed)
+    historyView.speed = historySpeedSelect.value;
+    saveHistoryView();
+  });
   historyBrush.addEventListener("pointerdown", historyBrushDown);
   historyBrushWindow.addEventListener("keydown", historyBrushKey);
   historyAddSelect.addEventListener("change", function () {

@@ -12,8 +12,19 @@
 // - every graph from the library: 📈 rating, 🎯 win % trend, ⚔️ head-to-head ("One-on-one: Ace
 //   11 – 10 Bob (21 games)"), 📅 activity (a cell per player per night, a ring for a race won);
 // - a player taken off and put back: the others keep their colours; the 📋 table: a row a night;
-// - the range: "2 weeks" preset, and dragging the bar's left edge in; ▶ replay: ⏹ Stop, the date,
-//   back to ▶ at the end; ✕ removes a graph; it's all there after a reload; French; no page errors.
+// - the range: "2 weeks" preset, and dragging the bar's left edge in; ▶ replay at ⚡ very fast:
+//   ⏸ Pause + ⏹, the date, back to ▶ at the end, the commentary kept;
+// - 🎙️ the commentator (2026-11-19, the user: "some text when an event of signifiance occurs, like
+//   a sport commentator"): Ace sets the early pace (the first night: nothing before it to compare),
+//   Cid comes in, Bob slips, "👑 … Bob …
+//   Ace … won 2 races" and "Top-3 clash: Bob beats Ace 6–3" (no slip line for Ace - same news),
+//   Ace slips, Dee comes in;
+// - 🎯 following Bob ("view the animation from his point of view ... much more details ... more
+//   comments"): his races night - the headline, "🎱 Bob goes 6–3 tonight: beats Ace 6–3. 🏁 2
+//   races won!", career best, the gap, his rating, his first race (no clash line, no "moves up" -
+//   said already); ⏸ holds the night, ▶ Resume; his line the thick one; his timeline (3 nights, the
+//   one on screen marked); ⏹ mid-way keeps the commentary; the speed kept;
+// - ✕ removes a graph; it's all there after a reload; French; no page errors.
 // Its own file server on 4322.
 // usage: node tests/probe_history.js [screenshot dir]
 const puppeteer = require("puppeteer-core");
@@ -217,15 +228,71 @@ function logs() {
     const dragged = await page.evaluate(() => ({ label: document.getElementById("history-range-label").textContent, cols: document.querySelectorAll('#history-cards .history-card[data-type="activity"] .hc-svg rect[rx]:not([width="14"])').length }));
     check("range: \"2 weeks\" → \"" + twoWeeks + "\"; the left edge dragged in → \"" + dragged.label + "\" (" + dragged.cols + " activity cells)", /· 4 nights$/.test(twoWeeks) && /· 2 nights$/.test(dragged.label) && dragged.cols === 8, { twoWeeks, dragged });
 
-    // ---- ▶ replay ----
+    // ---- ▶ replay, the commentator: everyone, at ⚡ very fast ----
     await page.evaluate(() => [...document.querySelectorAll("#history-range-presets button")][0].click());
     await sleep(200);
-    await page.evaluate(() => document.getElementById("btn-history-replay").click());
+    await page.select("#history-speed", "veryFast");
+    // each night's commentary as it comes up, until the replay ends
+    const replay = async (pauseAt) => {
+      await page.evaluate(() => document.getElementById("btn-history-replay").click());
+      const seen = [];
+      const out = { seen, playing: null, paused: null };
+      for (let k = 0; k < 120; k++) {
+        await sleep(100);
+        const st = await page.evaluate(() => ({
+          now: document.getElementById("history-say-now").innerText,
+          btn: document.getElementById("btn-history-replay").textContent,
+          stop: !document.getElementById("btn-history-stop").classList.contains("hidden"),
+          big: [...document.querySelectorAll('#history-cards .history-card[data-type="leaderboard"] .hc-svg text[font-size="28"]')].map((t) => t.textContent),
+          focus: document.querySelectorAll('#history-cards .history-card[data-type="leaderboard"] .hc-svg path[stroke-width="5"]').length,
+          timeline: [...document.querySelectorAll(".history-timeline-night")].map((li) => li.className + ": " + li.innerText.replace(/\n/g, " | "))
+        }));
+        if (!out.playing) out.playing = st;
+        if (st.now && seen[seen.length - 1] !== st.now) {
+          seen.push(st.now);
+          if (pauseAt && seen.length === pauseAt) {
+            // ⏸: the night stays put; ▶ Resume goes on
+            await page.evaluate(() => document.getElementById("btn-history-replay").click());
+            const btn = await page.evaluate(() => document.getElementById("btn-history-replay").textContent);
+            await sleep(2200);
+            const still = await page.evaluate(() => document.getElementById("history-say-now").innerText);
+            out.paused = { btn, same: still === st.now, timeline: st.timeline, focus: st.focus };
+            await page.evaluate(() => document.getElementById("btn-history-replay").click());
+          }
+        }
+        if (k > 3 && st.btn === "▶ Replay") break;
+      }
+      out.end = await page.evaluate(() => ({ btn: document.getElementById("btn-history-replay").textContent, stop: !document.getElementById("btn-history-stop").classList.contains("hidden"), panel: !document.getElementById("history-commentary").classList.contains("hidden"), earlier: document.getElementById("history-say-earlier-summary").textContent, big: document.querySelectorAll(".hc-svg text[font-size=\"28\"]").length }));
+      return out;
+    };
+    let rp = await replay();
+    const flat = rp.seen.map((x) => x.replace(/\n+/g, " | "));
+    check("▶ replay: \"" + rp.playing.btn + "\" + ⏹, the night's date " + JSON.stringify(rp.playing.big) + "; at the end \"" + rp.end.btn + "\", the commentary kept (" + rp.end.earlier + ")",
+      rp.playing.btn === "⏸ Pause" && rp.playing.stop && rp.playing.big.length === 1 && rp.end.btn === "▶ Replay" && !rp.end.stop && rp.end.panel && rp.end.big === 0 && rp.seen.length === 4, rp.end);
+    check("🎙️ the commentator, night by night: " + JSON.stringify(flat),
+      /🏁 Ace sets the early pace at #1\.$/.test(flat[0]) &&
+      /👋 Cid enters the rankings at #2\./.test(flat[1]) && /↘️ Bob slips from #2 to #3\./.test(flat[1]) &&
+      /👑 [^|]*Bob[^|]*Ace[^|]*won 2 races/.test(flat[2]) && /⚔️ Top-3 clash: Bob beats Ace 6–3\./.test(flat[2]) && !/Ace slips/.test(flat[2]) &&
+      /↘️ Ace slips from #2 to #3\./.test(flat[3]) && /👋 Dee enters the rankings at #4\./.test(flat[3]), flat);
+
+    // ---- 🎯 following Bob: his whole night, the timeline, his line on top; ⏸ / ▶ Resume ----
+    await page.select("#history-follow", "Bob");
     await sleep(300);
-    const playing = await page.evaluate(() => ({ btn: document.getElementById("btn-history-replay").textContent, big: [...document.querySelectorAll('#history-cards .history-card[data-type="leaderboard"] .hc-svg text[font-size="28"]')].map((t) => t.textContent) }));
-    await sleep(2800);
-    const done = await page.evaluate(() => ({ btn: document.getElementById("btn-history-replay").textContent, big: document.querySelectorAll('.hc-svg text[font-size="28"]').length }));
-    check("▶ replay: \"" + playing.btn + "\" with the night's date " + JSON.stringify(playing.big) + ", then \"" + done.btn + "\" at the end", playing.btn === "⏹ Stop" && playing.big.length === 1 && done.btn === "▶ Replay" && done.big === 0, { playing, done });
+    rp = await replay(3);
+    const bob = rp.seen.map((x) => x.replace(/\n+/g, " | "));
+    check("🎯 following Bob - the races night: " + JSON.stringify(bob[2]),
+      /· 🎯 Bob/.test(bob[2]) && /👑 [^|]*Bob/.test(bob[2]) && /🎱 Bob goes 6–3 tonight: beats Ace 6–3\. 🏁 2 races won!/.test(bob[2]) && /🌟 Career best for Bob: #1!/.test(bob[2]) && /🛡️ [\d.]+ points ahead of Ace \(#2\)\./.test(bob[2]) && /📈 Rating \+\d+, now \d+\./.test(bob[2]) && /🏆 Bob's first race win!/.test(bob[2]) && !/Top-3 clash/.test(bob[2]) && !/moves up/.test(bob[2]), bob);
+    check("...⏸ \"" + (rp.paused || {}).btn + "\" holds the night; his line on top (" + (rp.paused || {}).focus + "); 🎯 his timeline " + JSON.stringify((rp.paused || {}).timeline),
+      rp.paused && rp.paused.btn === "▶ Resume" && rp.paused.same && rp.paused.focus === 1 && rp.paused.timeline.length === 3 && /is-now/.test(rp.paused.timeline[0]) && /#1/.test(rp.paused.timeline[0]) && /🎱 Bob goes 6–3/.test(rp.paused.timeline[0]), rp.paused);
+    // (⏹ mid-way: stopped, the commentary kept)
+    await page.evaluate(() => document.getElementById("btn-history-replay").click());
+    await sleep(700);
+    await page.evaluate(() => document.getElementById("btn-history-stop").click());
+    await sleep(200);
+    const stopped = await page.evaluate(() => ({ btn: document.getElementById("btn-history-replay").textContent, panel: !document.getElementById("history-commentary").classList.contains("hidden"), speed: document.getElementById("history-speed").value }));
+    check("⏹ mid-way: \"" + stopped.btn + "\", the commentary still there; the speed kept (" + stopped.speed + ")", stopped.btn === "▶ Replay" && stopped.panel && stopped.speed === "veryFast", stopped);
+    await page.select("#history-follow", "");
+    await sleep(200);
 
     // ---- ✕, then a reload ----
     await page.evaluate(() => document.querySelector('#history-cards .history-card[data-type="winTrend"] .history-card-remove').click());

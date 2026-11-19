@@ -75,6 +75,163 @@
     return out;
   }
 
+  // The replay's commentator (2026-11-19, the user: "in the timeline animmation, I would like to
+  // see some text when an event of signifiance occurs, like a sport commentator would do ... select
+  // a player to view the animation from his point of view ... see much more details on his timeline
+  // and more comments"). For each night: `general` - what mattered on the leaderboard, the most
+  // notable first (sig: how much), one item per player at most - and, with `follow`, `personal`:
+  // that player's whole night. Items are {kind, name, sig, ...values}; the app words them.
+  // input: {names, count, ranks, scores (numbers), played ({won, lost, races, vs: {opponents:
+  // {won, lost}}} per night), events (influencers), closeGap (a gap that counts as neck and neck),
+  // follow, ratings ({name: [rating per night]})}
+  function commentary(input) {
+    var names = input.names;
+    var ranks = input.ranks;
+    var scores = input.scores || {};
+    var played = input.played || {};
+    var follow = input.follow && ranks[input.follow] ? input.follow : null;
+    var rating = (follow && input.ratings && input.ratings[follow]) || null;
+    var evAt = {};
+    (input.events || []).forEach(function (e) {
+      (evAt[e.i] = evAt[e.i] || {})[e.name] = e;
+    });
+    var out = [];
+    var reign = 0;
+    var prevGap = null;
+    var best = null;
+    var streak = 0;
+    var raced = false;
+    var lastRating = null;
+    var rankAt = function (i, r) {
+      for (var k = 0; k < names.length; k++) if (ranks[names[k]][i] === r) return names[k];
+      return null;
+    };
+    for (var i = 0; i < input.count; i++) {
+      var items = [];
+      var ev = evAt[i] || {};
+      var res = function (nm) {
+        var r = played[nm] && played[nm][i];
+        return r && r.won + r.lost > 0 ? r : null;
+      };
+      var how = function (nm) {
+        var r = res(nm);
+        return r ? { won: r.won, lost: r.lost, races: r.races || 0 } : { absent: true };
+      };
+      var leader = rankAt(i, 1);
+      var second = rankAt(i, 2);
+      var prevLeader = i > 0 ? rankAt(i - 1, 1) : null;
+      var used = {};
+      if (leader && leader !== prevLeader) {
+        if (!prevLeader) items.push({ kind: "firstLeader", name: leader, sig: 60 });
+        else items.push({ kind: res(prevLeader) ? "leadChange" : "leadChangeAbsent", name: leader, other: prevLeader, how: how(leader), sig: 100 });
+        // (the old leader's slip is the same news)
+        used[leader] = true;
+        if (prevLeader) used[prevLeader] = true;
+        reign = 1;
+      } else if (leader) {
+        reign += 1;
+        if (reign % 5 === 0) items.push({ kind: "reign", name: leader, nights: reign, sig: 45 });
+      } else reign = 0;
+      names.forEach(function (nm) {
+        if (used[nm]) return;
+        var e = ev[nm];
+        var r = res(nm);
+        var cands = [];
+        if (e) {
+          var places = e.from != null && e.to != null ? Math.abs(e.from - e.to) : 0;
+          if (e.kind === "race") cands.push({ kind: "raceClimb", races: e.races, from: e.from, to: e.to, sig: 62 + 4 * places });
+          if (e.kind === "up" && places >= 2) cands.push({ kind: "bigClimb", from: e.from, to: e.to, places: places, sig: 58 + 4 * places });
+          if ((e.kind === "up" || e.kind === "race" || e.kind === "passiveUp") && e.to <= 3 && e.from > 3) cands.push({ kind: "topThree", to: e.to, sig: 55 });
+          if (e.kind === "down" && places >= 2) cands.push({ kind: "bigDrop", won: e.won, lost: e.lost, to: e.to, places: places, sig: 52 + 3 * places });
+          if ((e.kind === "down" || e.kind === "passiveDown") && places === 1 && e.from <= 3) cands.push({ kind: "slip", from: e.from, to: e.to, sig: 38 });
+          if (e.kind === "enter") cands.push({ kind: "enter", to: e.to, sig: e.to <= 3 ? 50 : 30 });
+          if (e.kind === "leave") cands.push({ kind: "leave", sig: 20 });
+        }
+        if (r && r.won >= 5 && r.lost === 0) cands.push({ kind: "sweep", won: r.won, sig: 50 });
+        else if (r && r.won >= 8 && r.won / (r.won + r.lost) >= 0.75) cands.push({ kind: "onFire", won: r.won, lost: r.lost, sig: 48 });
+        if (!cands.length) return;
+        cands.sort(function (a, b) {
+          return b.sig - a.sig;
+        });
+        items.push(Object.assign({ name: nm }, cands[0]));
+      });
+      // two of the top 3 (as the night began) one-on-one, 5 games or more, won clearly (by 3): the
+      // biggest such night only
+      if (i > 0) {
+        var top = [1, 2, 3]
+          .map(function (r) {
+            return rankAt(i - 1, r);
+          })
+          .filter(Boolean);
+        var clash = null;
+        top.forEach(function (a, ia) {
+          top.slice(ia + 1).forEach(function (b) {
+            var r = res(a);
+            var v = r && r.vs && r.vs[b];
+            if (!v || v.won + v.lost < 5 || Math.abs(v.won - v.lost) < 3) return;
+            if (clash && clash.wa + clash.wb >= v.won + v.lost) return;
+            clash = v.won > v.lost ? { kind: "clash", name: a, other: b, wa: v.won, wb: v.lost, sig: 52 } : { kind: "clash", name: b, other: a, wa: v.lost, wb: v.won, sig: 52 };
+          });
+        });
+        if (clash) items.push(clash);
+      }
+      // neck and neck at the top: once, when the gap first closes in
+      if (leader && second && scores[leader] && scores[second] && input.closeGap) {
+        var gap = scores[leader][i] - scores[second][i];
+        if (gap >= 0 && gap < input.closeGap && (prevGap == null || prevGap >= input.closeGap)) items.push({ kind: "closeRace", name: leader, other: second, gap: gap, sig: 42 });
+        prevGap = gap;
+      } else prevGap = null;
+      items.sort(function (a, b) {
+        return b.sig - a.sig;
+      });
+
+      var personal = [];
+      if (follow) {
+        var fr = res(follow);
+        var rk = ranks[follow][i];
+        var fe = ev[follow];
+        if (fr) {
+          var vs = Object.keys(fr.vs || {})
+            .map(function (o) {
+              return { other: o, won: fr.vs[o].won, lost: fr.vs[o].lost };
+            })
+            .sort(function (a, b) {
+              return b.won + b.lost - (a.won + a.lost);
+            });
+          personal.push({ kind: "fNight", name: follow, won: fr.won, lost: fr.lost, races: fr.races || 0, vs: vs });
+        }
+        if (fe && fe.kind === "enter") personal.push({ kind: "fEnter", name: follow, to: fe.to });
+        else if (fe && fe.kind === "leave") personal.push({ kind: "fLeave", name: follow });
+        else if (fe && fe.to < fe.from) personal.push({ kind: "fUp", name: follow, from: fe.from, to: fe.to, passed: fe.passed });
+        else if (fe) personal.push({ kind: "fDown", name: follow, from: fe.from, to: fe.to, passedBy: fe.passedBy, played: !!fr });
+        // (the very first night has no "before": there, they come in)
+        else if (rk != null && fr) personal.push(i > 0 && ranks[follow][i - 1] === rk ? { kind: "fHold", name: follow, rank: rk } : { kind: "fEnter", name: follow, to: rk });
+        if (rk != null) {
+          if (best != null && rk < best) personal.push({ kind: "fBest", name: follow, rank: rk });
+          best = best == null ? rk : Math.min(best, rk);
+        }
+        if (rk != null && (fr || fe)) {
+          var above = rankAt(i, rk - 1);
+          var below = rankAt(i, rk + 1);
+          if (above && scores[above]) personal.push({ kind: "fGapUp", name: follow, other: above, rank: rk - 1, gap: scores[above][i] - scores[follow][i] });
+          if (below && scores[below]) personal.push({ kind: "fGapDown", name: follow, other: below, rank: rk + 1, gap: scores[follow][i] - scores[below][i] });
+        }
+        if (rating && rating[i] != null) {
+          if (lastRating != null && rating[i] !== lastRating) personal.push({ kind: "fRating", name: follow, delta: rating[i] - lastRating, rating: rating[i] });
+          lastRating = rating[i];
+        }
+        if (fr) {
+          streak = fr.won > fr.lost ? streak + 1 : 0;
+          if (streak >= 3) personal.push({ kind: "fStreak", name: follow, nights: streak });
+          if (fr.races && !raced) personal.push({ kind: "fFirstRace", name: follow });
+          if (fr.races) raced = true;
+        }
+      }
+      out.push({ general: items, personal: personal });
+    }
+    return out;
+  }
+
   function el(name, attrs, parent) {
     var e = document.createElementNS(SVG, name);
     Object.keys(attrs || {}).forEach(function (k) {
@@ -355,7 +512,12 @@
         open = true;
       }
       var color = s.color || chrome.other;
-      if (d) el("path", { d: d, fill: "none", stroke: color, "stroke-width": s.color ? 3 : 2, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: s.color ? 1 : 0.7 }, g);
+      // (following someone: their line the thickest, on top; everyone else faded)
+      var focused = spec.focus && s.key === spec.focus;
+      var dim = spec.focus && !focused;
+      var opacity = dim ? 0.28 : s.color ? 1 : 0.7;
+      if (dim) g = el("g", { opacity: opacity }, g);
+      if (d) el("path", { d: d, fill: "none", stroke: color, "stroke-width": focused ? 5 : s.color ? 3 : 2, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: dim ? 1 : opacity }, g);
       // (points: every night while there's room, and a night on its own always)
       for (var j = spec.from; j <= cutoffEnd; j++) {
         if (s.values[j] == null) continue;
@@ -372,14 +534,25 @@
       .forEach(function (s) {
         drawSeries(s, lines);
       });
-    colored.forEach(function (s) {
-      drawSeries(s, lines);
-    });
+    colored
+      .filter(function (s) {
+        return s.key !== spec.focus;
+      })
+      .concat(
+        colored.filter(function (s) {
+          return s.key === spec.focus;
+        })
+      )
+      .forEach(function (s) {
+        drawSeries(s, lines);
+      });
 
     var marks = el("g", {}, svg);
+    var faded = el("g", { opacity: 0.3 }, marks);
+    var front = el("g", {}, marks);
     (spec.markers || []).forEach(function (m) {
       if (m.i < spec.from || m.i > cutoffEnd || m.value == null) return;
-      drawMarker(marks, m, x(m.i), y(m.value), chrome);
+      drawMarker(spec.focus && m.key !== spec.focus ? faded : front, m, x(m.i), y(m.value), chrome);
     });
 
     // labels at the line ends - the series still there on the last night shown; leader lines where
@@ -411,7 +584,8 @@
       ends.forEach(function (e) {
         var lx = plot.right + 14;
         if (Math.abs(e.ly - e.y) > 2) el("path", { d: "M" + (x(cutoffEnd) + 6) + "," + e.y + " L" + (lx - 4) + "," + e.ly, stroke: chrome.muted, "stroke-width": 1, fill: "none" }, lab);
-        text(lab, lx, e.ly + 5, fitText(labelTexts[e.s.key], 15, 600, labelW - 18), { "font-size": 15, "font-weight": 600, fill: chrome.ink });
+        var dimLabel = spec.focus && e.s.key !== spec.focus;
+        text(lab, lx, e.ly + 5, fitText(labelTexts[e.s.key], 15, 600, labelW - 18), { "font-size": 15, "font-weight": dimLabel ? 500 : 700, fill: dimLabel ? chrome.muted : chrome.ink });
       });
     }
     if (spec.cutoff != null && spec.cutoffLabel) {
@@ -446,8 +620,10 @@
       return plot.left + (i - spec.from + 0.5) * cw;
     };
     var g = el("g", {}, svg);
+    var all = g;
     spec.rows.forEach(function (row, r) {
       var top = plot.top + r * (cellH + 2);
+      g = spec.focus && row.key !== spec.focus ? el("g", { opacity: 0.35 }, all) : all;
       if (row.color) el("rect", { x: 6, y: top + cellH / 2 - 2, width: 14, height: 4, rx: 2, fill: row.color }, g);
       text(g, 26, top + cellH / 2 + 5, fitText(row.label, 15, 600, labelW - 32), { "font-size": 15, "font-weight": 600, fill: chrome.ink });
       for (var i = spec.from; i <= cutoffEnd; i++) {
@@ -456,7 +632,7 @@
         if (v && row.marks && row.marks[i] && cw >= 10) el("circle", { cx: plot.left + (i - spec.from + 0.5) * cw, cy: top + cellH / 2, r: Math.min(4, cw / 4), fill: chrome.surface, stroke: ARROWS[spec.mode].race, "stroke-width": 2 }, g);
       }
     });
-    xLabels(g, { from: spec.from, to: spec.to, labels: spec.labels }, x, plot.bottom + 24, chrome, cutoffEnd);
+    xLabels(all, { from: spec.from, to: spec.to, labels: spec.labels }, x, plot.bottom + 24, chrome, cutoffEnd);
     var xc = function (i) {
       return x(i);
     };
@@ -501,6 +677,7 @@
 
   var api = {
     influencers: influencers,
+    commentary: commentary,
     lineChart: lineChart,
     markerIcon: markerIcon,
     heatmap: heatmap,
