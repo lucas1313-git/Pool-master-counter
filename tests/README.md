@@ -720,6 +720,17 @@ Not part of the app - helpers for testing and for running this machine's own cop
   "once the extra games are counted"; 📈 Performance, 🌙 Best 3 nights, no share sheet (saved),
   French. `node tests/probe_leaderboard_report.js [out dir]` (the PDF lands there). The PDF writer:
   tests/unit/pdf-images.test.js, in `npm test`.
+- **probe_merge.js** — merging another account's backup into the main one (2026-11-19: "test the
+  merging capabilities when I merge a new session from another account into the main account,
+  test if it is flawless and that the old data is preserved"), its own file server on 4325, two
+  browser profiles: the other account's 👥 shared backup (exportedBy "Phone": a night both have,
+  a new night with a new player and "bob" in lower case, a game in progress, a newer blank-ish
+  contact) merged into MAIN - every old game still there, the new ones once, "bob" folded into
+  Bob, the game in progress filed; contacts field by field (the newer nickname, MAIN's phone and
+  email kept - also Bob's, which the other device had made a blank contact of its own); both saved
+  lists; both notes of the shared night; "Old" still removed; MAIN's theme; everyone rated; the
+  same file again changes nothing; "keep separate" makes "Bob (date)". `node tests/probe_merge.js`
+  (PMC_SITE=<dir> for another build).
 - **probe_history.js** — the Leaderboard's 📈 History (2026-11-19: "a historical graph with each
   player represented by a line ... "influencers" ... up and down graphic arrows of diferent colors
   ... multiple timelines dynamically ... a library of graph"), its own file server on 4322: 4

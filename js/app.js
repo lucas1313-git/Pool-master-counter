@@ -19671,21 +19671,53 @@
   // elsewhere just because this device's copy is older. A record saved
   // before `updatedAt` existed counts as timestamp 0, so any genuinely
   // timestamped record - local or imported - always outranks it.
+  // Field by field (2026-11-19, the user, on merging another account's backup: "test if it is
+  // flawless and that the old data is preserved" - a whole record "newest wins" let the other
+  // device's blank contact, made there just because the player was on its roster, wipe this one's
+  // phone and email): each field as the newer side has it, unless it's blank there - then the
+  // other side's; on/off choices as the newer side has them; this device's own localId (and name
+  // casing - "bob" from there is this device's Bob) kept.
   function mergeContactsData(localContacts, importedContacts) {
     var merged = {};
-    Object.keys(importedContacts || {}).forEach(function (name) {
-      merged[name] = importedContacts[name];
-    });
+    var localKeyOf = {};
     Object.keys(localContacts || {}).forEach(function (name) {
-      var local = localContacts[name];
-      var imported = merged[name];
-      if (!imported) {
-        merged[name] = local;
+      merged[name] = localContacts[name];
+      localKeyOf[normalizeNameKey(name)] = name;
+    });
+    Object.keys(importedContacts || {}).forEach(function (name) {
+      var imported = importedContacts[name];
+      var key = localKeyOf[normalizeNameKey(name)];
+      if (!key) {
+        merged[name] = imported;
         return;
       }
-      merged[name] = (local.updatedAt || 0) >= (imported.updatedAt || 0) ? local : imported;
+      merged[key] = mergeContactRecords(merged[key], imported);
     });
     return merged;
+  }
+
+  function contactFieldBlank(v) {
+    return v === undefined || v === null || v === "" || v === 0;
+  }
+
+  function mergeContactRecords(local, imported) {
+    if (!local || typeof local !== "object") return imported;
+    if (!imported || typeof imported !== "object") return local;
+    var newer = (local.updatedAt || 0) >= (imported.updatedAt || 0) ? local : imported;
+    var older = newer === local ? imported : local;
+    var out = {};
+    Object.keys(newer)
+      .concat(Object.keys(older))
+      .forEach(function (k) {
+        if (k in out) return;
+        var a = newer[k];
+        var b = older[k];
+        if (typeof a === "boolean" || typeof b === "boolean") out[k] = k in newer ? a : b;
+        else out[k] = contactFieldBlank(a) && !contactFieldBlank(b) ? b : a;
+      });
+    if (local.localId) out.localId = local.localId;
+    out.updatedAt = Math.max(local.updatedAt || 0, imported.updatedAt || 0);
+    return out;
   }
 
   var REMOVED_PLAYERS = loadRemovedPlayersFromStorage();
@@ -23141,6 +23173,20 @@
   // Union for a { key: value } map with no meaningful "which side is
   // better" signal (day notes, name translations) - local wins a
   // collision.
+  // A night's notes from both sides: this device's first, then the other's when it says something
+  // this one doesn't (merged again, nothing doubles)
+  function mergeDayNotes(localNotes, importedNotes) {
+    var merged = mergeMapPreferLocal(localNotes, importedNotes);
+    Object.keys(importedNotes || {}).forEach(function (day) {
+      var mine = (localNotes || {})[day];
+      var theirs = importedNotes[day];
+      if (typeof mine !== "string" || typeof theirs !== "string" || !mine.trim() || !theirs.trim()) return;
+      if (mine.indexOf(theirs.trim()) !== -1) return;
+      merged[day] = theirs.indexOf(mine.trim()) !== -1 ? theirs : mine + "\n\n" + theirs;
+    });
+    return merged;
+  }
+
   function mergeMapPreferLocal(localMap, importedMap) {
     var merged = {};
     Object.keys(importedMap || {}).forEach(function (key) {
@@ -23649,7 +23695,7 @@
             var mergedPlayerAdded = mergePlayerAddedData(PLAYER_ADDED, importedPlayerAdded);
             var mergedRunRecords = mergeRunRecords(RUN_RECORDS, data.runRecords);
             var mergedPlayerBestRuns = mergePlayerBestRuns(PLAYER_BEST_RUNS, data.playerBestRuns);
-            var mergedDayNotes = mergeMapPreferLocal(DAY_NOTES, data.dayNotes);
+            var mergedDayNotes = mergeDayNotes(DAY_NOTES, data.dayNotes);
             var mergedRotations = mergeArrayByKey(SAVED_ROTATIONS, data.rotations, function (r) {
               return r.id || r.label;
             });
