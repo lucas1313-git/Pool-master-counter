@@ -3317,6 +3317,7 @@
   var historyCardsEl = document.getElementById("history-cards");
   var historyEmptyHint = document.getElementById("history-empty");
   var btnHistoryStop = document.getElementById("btn-history-stop");
+  var btnHistoryVoice = document.getElementById("btn-history-voice");
   var historyFollowSelect = document.getElementById("history-follow");
   var historySpeedSelect = document.getElementById("history-speed");
   var historyCommentaryEl = document.getElementById("history-commentary");
@@ -3324,6 +3325,7 @@
   var historySayEarlier = document.getElementById("history-say-earlier");
   var historySayEarlierSummary = document.getElementById("history-say-earlier-summary");
   var historySayLog = document.getElementById("history-say-log");
+  var btnHistorySayClose = document.getElementById("btn-history-say-close");
   var leaderboardViewPlayersRadio = document.getElementById("leaderboard-view-players");
   var leaderboardViewTeamsRadio = document.getElementById("leaderboard-view-teams");
   var leaderboardViewLeagueRadio = document.getElementById("leaderboard-view-league");
@@ -32246,12 +32248,27 @@
     historySay.now = { i: i, lines: lines };
     renderHistoryCommentary();
     renderHistoryCards();
+    historySpeak(lines);
     return lines;
   }
 
   function historyReplaySchedule(lines) {
-    // (time to read: longer the more there is to say, up to 3½ beats; a quiet night half of one)
     var base = historySpeed();
+    if (historyVoiceOn() && lines.length) {
+      // (out loud: the next night a breath after the voice stops - half a minute at most, should a
+      // voice never say it's done)
+      var since = Date.now();
+      historyReplay.timer = setTimeout(function wait() {
+        if (!historyReplay || historyReplay.paused) return;
+        if (historySpeaking() && Date.now() - since < 30000) {
+          historyReplay.timer = setTimeout(wait, 200);
+          return;
+        }
+        historyReplay.timer = setTimeout(historyReplayNext, base * 0.3);
+      }, 400);
+      return;
+    }
+    // (time to read: longer the more there is to say, up to 3½ beats; a quiet night half of one)
     var ms = lines.length ? base * Math.min(3.5, 0.8 + 0.35 * lines.length) : base * 0.45;
     historyReplay.timer = setTimeout(historyReplayNext, ms);
   }
@@ -32269,19 +32286,22 @@
       historyReplay = { i: historyRange().from, timer: null, paused: false };
       historyReplayButtons();
       historyReplaySchedule(historyReplayShow(historyReplay.i));
-      // (the commentator and the graphs under it in view - it stays at the top from there)
-      if (historyCommentaryEl.scrollIntoView) historyCommentaryEl.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     clearTimeout(historyReplay.timer);
     historyReplay.paused = !historyReplay.paused;
     historyReplayButtons();
-    if (!historyReplay.paused) historyReplaySchedule(historySay && historySay.now ? historySay.now.lines : []);
+    // (⏸ stops the voice; ▶ Resume says the night again from the start)
+    if (historyReplay.paused) return historyHush();
+    var current = historySay && historySay.now ? historySay.now.lines : [];
+    historySpeak(current);
+    historyReplaySchedule(current);
   }
 
   // the end (or ⏹): the graphs whole again, the commentary kept to read
   function finishHistoryReplay() {
     if (historyReplay) clearTimeout(historyReplay.timer);
+    if (historyReplay) historyHush();
     historyReplay = null;
     historyReplayButtons();
     if (historyPageView.classList.contains("hidden")) return;
@@ -32294,12 +32314,83 @@
     var was = historyReplay || historySay;
     historySay = null;
     if (historyReplay) clearTimeout(historyReplay.timer);
+    if (historyReplay) historyHush();
     historyReplay = null;
     historyReplayButtons();
     if (was && !historyPageView.classList.contains("hidden")) {
       renderHistoryCommentary();
       renderHistoryCards();
     }
+  }
+
+  // 🔊 the commentator out loud (2026-11-19, the user: "is it possible to use "voice" ... i mean
+  // voice talking to us"): the device's own voices (speechSynthesis - nothing to download, nothing
+  // added to the data or the backup), in the app's language - English in the voice picked for the
+  // keypad; each night's lines read in turn, and the replay waits for the voice to finish (then a
+  // breath, as long as the speed says) before the next night.
+  var HISTORY_SPEECH_LANGS = { english: "en-GB", french: "fr-FR", spanish: "es-ES", tagalog: "fil-PH", cantonese: "zh-HK" };
+  var HISTORY_SPEECH_RATES = { slow: 0.9, normal: 1, fast: 1.15, veryFast: 1.3 };
+
+  function historyVoiceOn() {
+    return historyView.voice !== false && !!window.speechSynthesis;
+  }
+
+  function historySpeaking() {
+    try {
+      return !!(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function historyHush() {
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    } catch (e) {}
+  }
+
+  // a line as it should sound: no emoji (voices read their names), "6–3" as "6 to 3", "#2" as
+  // "number 2", "n.º" as "número", "−24" as minus
+  function historySpeechText(text) {
+    return text
+      .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "")
+      .replace(/(\d)\s*–\s*(\d)/g, "$1 " + T("history.voiceTo") + " $2")
+      .replace(/#(\d+)/g, function (m, n) {
+        return T("history.voiceNumber", { n: n });
+      })
+      .replace(/n\.º\s?/g, "número ")
+      .replace(/−/g, "-")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function historySpeak(lines) {
+    if (!historyVoiceOn() || !lines.length) return;
+    var synth = window.speechSynthesis;
+    historyHush();
+    var lang = HISTORY_SPEECH_LANGS[activeLanguageCode] || "en-GB";
+    var voice = lang === "en-GB" ? resolveKeypadVoice(keypadSpeechVoicePreset) : pickKeypadVoice(lang);
+    var rate = HISTORY_SPEECH_RATES[historyView.speed] || 1;
+    lines.forEach(function (l) {
+      var text = historySpeechText(l.text);
+      if (!text) return;
+      try {
+        var u = new SpeechSynthesisUtterance(text);
+        u.lang = lang;
+        if (voice) u.voice = voice;
+        u.rate = rate;
+        synth.speak(u);
+      } catch (e) {
+        // (no voice on this device: the words stay on screen)
+      }
+    });
+  }
+
+  function renderHistoryVoiceButton() {
+    btnHistoryVoice.classList.toggle("hidden", !window.speechSynthesis);
+    var on = historyVoiceOn();
+    btnHistoryVoice.textContent = T(on ? "history.voiceOn" : "history.voiceOff");
+    btnHistoryVoice.setAttribute("aria-pressed", on ? "true" : "false");
   }
 
   // ---- the commentator's words. It speaks about the first 🏆 graph's leaderboard (MVP, all time
@@ -32431,7 +32522,10 @@
     var data = historyData();
     var show = !!(historySay && (historySay.now || historySay.log.length));
     historyCommentaryEl.classList.toggle("hidden", !show);
-    if (!show) return;
+    if (!show) {
+      historyPageView.style.paddingBottom = "";
+      return;
+    }
     var follow = historyFollow();
     var lineEl = function (l) {
       var p = document.createElement("p");
@@ -32456,7 +32550,8 @@
         historySayNow.appendChild(lineEl(l));
       });
     }
-    historySayEarlier.classList.toggle("hidden", !historySay.log.length);
+    // (always there with the bar, even at 0 - so it keeps one height)
+    historySayEarlier.classList.remove("hidden");
     historySayEarlierSummary.textContent = T("history.earlier", { count: historySay.log.length });
     historySayLog.textContent = "";
     historySay.log.forEach(function (n) {
@@ -32469,6 +32564,13 @@
       });
       historySayLog.appendChild(li);
     });
+    historyBarRoom();
+  }
+
+  // room under the last graph for the caption bar, so nothing stays hidden behind it
+  function historyBarRoom() {
+    var shown = !historyCommentaryEl.classList.contains("hidden");
+    historyPageView.style.paddingBottom = shown ? historyCommentaryEl.offsetHeight + 24 + "px" : "";
   }
 
   // 🎯 the player followed, night by night: their rank and everything the commentator says about
@@ -32477,7 +32579,7 @@
     var data = historyData();
     var c = historyCommentary();
     var sec = document.createElement("section");
-    sec.className = "history-card history-timeline";
+    sec.className = "history-card history-timeline" + (cutoff != null ? " is-replaying" : "");
     sec.setAttribute("data-type", "timeline");
     var title = document.createElement("h2");
     title.className = "history-card-title";
@@ -32537,6 +32639,7 @@
         historyFollowSelect.appendChild(opt);
       });
     historySpeedSelect.value = HISTORY_SPEEDS[historyView.speed] ? historyView.speed : "normal";
+    renderHistoryVoiceButton();
   }
 
   function addHistoryCard(type) {
@@ -32623,6 +32726,11 @@
     var r = historyRange();
     var cutoff = historyReplay ? historyReplay.i : null;
     var cutoffLabel = historyReplay ? data.labels[historyReplay.i] : null;
+    // (redrawn every night of a replay: the page must not move under the reader - its height held
+    // while the cards are rebuilt, the scroll put back - 2026-11-19, the user: "the window is
+    // scrolling up when the timeline is moving so we lost the the window position")
+    var scrollY = window.scrollY;
+    historyCardsEl.style.minHeight = historyCardsEl.offsetHeight + "px";
     historyCardsEl.textContent = "";
     var follow = historyFollow();
     if (follow) historyCardsEl.appendChild(historyTimelineCard(follow, r, cutoff));
@@ -32722,6 +32830,8 @@
       var width = host.clientWidth || sec.clientWidth - 24;
       drawHistoryCard(card, { host: host, legend: legend, note: note, table: tableHost, mode: mode, range: r, cutoff: cutoff, cutoffLabel: cutoffLabel, width: width });
     });
+    historyCardsEl.style.minHeight = "";
+    if (Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
   }
 
   function drawHistoryCard(card, v) {
@@ -32729,13 +32839,15 @@
     var C = PMCLib.historyCharts;
     var picked = historyPicked();
     var end = v.cutoff == null ? v.range.to : Math.min(v.range.to, v.cutoff);
+    // (who's on a graph, and how tall it is, from the whole range - a replay only draws less of it,
+    // so nothing grows or reflows night by night)
     var inRange = function (values) {
-      for (var i = v.range.from; i <= end; i++) if (values[i] != null) return true;
+      for (var i = v.range.from; i <= v.range.to; i++) if (values[i] != null) return true;
       return false;
     };
     var base = { mode: v.mode, width: v.width, labels: data.labels, from: v.range.from, to: v.range.to, cutoff: v.cutoff, cutoffLabel: v.cutoffLabel, focus: historyFollow() };
     var tableSpec = function (series, cell) {
-      C.table(v.table, { labels: data.longLabels, from: v.range.from, to: v.range.to, cutoff: v.cutoff, firstColumn: T("history.night"), series: series, cell: cell });
+      C.table(v.table, { labels: data.longLabels, from: v.range.from, to: v.range.to, cutoff: null, firstColumn: T("history.night"), series: series, cell: cell });
     };
     var icon = function (kind) {
       return C.markerIcon(C.SHAPES[kind], C.ARROWS[v.mode][kind], v.mode);
@@ -32764,7 +32876,7 @@
       }
       var yMax = 1;
       series.forEach(function (s) {
-        for (var i = v.range.from; i <= end; i++) if (s.values[i] > yMax) yMax = s.values[i];
+        for (var i = v.range.from; i <= v.range.to; i++) if (s.values[i] > yMax) yMax = s.values[i];
       });
       var events = board.events.filter(function (e) {
         return picked.indexOf(e.name) !== -1;
@@ -32775,7 +32887,7 @@
       });
       // (the legend in the order they finish the range)
       var lastRank = function (s) {
-        for (var i = end; i >= v.range.from; i--) if (s.values[i] != null) return s.values[i];
+        for (var i = v.range.to; i >= v.range.from; i--) if (s.values[i] != null) return s.values[i];
         return Infinity;
       };
       var coloured = series
@@ -45624,6 +45736,15 @@
   btnHistoryBack.addEventListener("click", closeHistoryPage);
   btnHistoryReplay.addEventListener("click", toggleHistoryReplay);
   btnHistoryStop.addEventListener("click", finishHistoryReplay);
+  btnHistorySayClose.addEventListener("click", stopHistoryReplay);
+  historySayEarlier.addEventListener("toggle", historyBarRoom);
+  btnHistoryVoice.addEventListener("click", function () {
+    historyView.voice = !historyVoiceOn();
+    saveHistoryView();
+    if (!historyView.voice) historyHush();
+    else if (historyReplay && !historyReplay.paused && historySay && historySay.now) historySpeak(historySay.now.lines);
+    renderHistoryVoiceButton();
+  });
   historyFollowSelect.addEventListener("change", function () {
     historyView.follow = historyFollowSelect.value || null;
     saveHistoryView();

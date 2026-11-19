@@ -730,5 +730,8 @@ Not part of the app - helpers for testing and for running this machine's own cop
   kept when a player's taken off; the table; a range preset and the bar dragged; ▶ replay at ⚡
   very fast (⏸ Pause, ▶ Resume, ⏹, the commentary kept); 🎙️ the commentator night by night (the
   early pace, a newcomer, "👑 … won 2 races", "Top-3 clash: Bob beats Ace 6–3"); 🎯 following
-  Bob (his whole races night, his line the thick one, his timeline); ✕; a reload; French. `node tests/probe_history.js [shots]` (PMC_SITE=<dir> to test another build). The
+  Bob (his whole races night, his line the thick one, his timeline); 🔊 the voice (a stand-in
+  speechSynthesis: every line said without emoji, "6 to 3", "number 1", the replay waiting for it;
+  🔇 nothing said); the page staying put during a replay, the commentary a fixed bar, ✕; ✕ a
+  graph; a reload; French. `node tests/probe_history.js [shots]` (PMC_SITE=<dir> to test another build). The
   influencers and ticks: tests/unit/history-charts.test.js, in `npm test`.

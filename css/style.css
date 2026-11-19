@@ -12968,12 +12968,17 @@ body.network-guest-mode #league-add-member-contact-fields {
   text-align: left;
 }
 
-/* 🎙️ the replay's commentator - stays in view above the graphs while they play */
+/* 🎙️ the replay's commentator - a caption bar along the bottom of the screen, like a broadcast's
+   lower third: always in view, and it never moves the page */
 .history-commentary {
-  position: sticky;
-  top: 8px;
-  z-index: 6;
-  margin: 0 0 16px;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 12px;
+  width: min(960px, calc(100% - 24px));
+  box-sizing: border-box;
+  z-index: 50;
+  margin: 0;
   padding: 12px 14px;
   border-radius: var(--radius);
   border: 2px solid var(--accent);
@@ -12981,6 +12986,12 @@ body.network-guest-mode #league-add-member-contact-fields {
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
   max-height: 46vh;
   overflow-y: auto;
+}
+.history-say-close {
+  float: right;
+  min-width: 40px;
+  min-height: 40px;
+  margin: -4px -4px 0 8px;
 }
 .history-say-date {
   font-weight: 800;
@@ -13054,4 +13065,35 @@ body.network-guest-mode #league-add-member-contact-fields {
 .history-timeline-night p {
   margin: 3px 0;
   font-size: 1.05rem;
+}
+
+/* a replay redraws the graphs every night: nothing above them may change height meanwhile - the
+   commentary's night a fixed box (more lines scroll inside it), the followed player's timeline a
+   fixed height; and no browser scroll anchoring second-guessing it */
+#history-say-now {
+  height: 9.5rem;
+  overflow-y: auto;
+}
+.history-timeline.is-replaying .history-timeline-list {
+  height: 360px;
+  max-height: none;
+}
+.history-cards {
+  overflow-anchor: none;
+}
+@media (max-width: 600px) {
+  .history-commentary {
+    padding: 8px 10px;
+    bottom: 8px;
+    width: calc(100% - 16px);
+  }
+  #history-say-now {
+    height: 7rem;
+  }
+  .history-say-line {
+    font-size: 1.05rem;
+  }
+  .history-say-date {
+    font-size: 0.95rem;
+  }
 }

@@ -24,6 +24,11 @@
 //   races won!", career best, the gap, his rating, his first race (no clash line, no "moves up" -
 //   said already); ⏸ holds the night, ▶ Resume; his line the thick one; his timeline (3 nights, the
 //   one on screen marked); ⏹ mid-way keeps the commentary; the speed kept;
+// - 🔊 the voice ("i mean voice talking to us"): every line said, no emoji, "6 to 3", "number 1",
+//   at the speed's rate; the replay waits for it (a 3-line night of 0.9 s lines stays up 2.7 s);
+//   🔇 off: nothing said;
+// - the page stays put during a replay, scrolled down to a graph ("the window is scrolling up when
+//   the timeline is moving"); the commentary a fixed bar along the bottom, ✕ closes it;
 // - ✕ removes a graph; it's all there after a reload; French; no page errors.
 // Its own file server on 4322.
 // usage: node tests/probe_history.js [screenshot dir]
@@ -85,6 +90,41 @@ function logs() {
   const page = await browser.newPage();
   page.on("pageerror", (e) => errors.push(e.message));
   await page.setViewport({ width: 1180, height: 820 });
+  // (a stand-in voice: what would be said, each line taking __speechMs)
+  await page.evaluateOnNewDocument(() => {
+    window.__said = [];
+    window.__speechMs = 0;
+    const synth = {
+      speaking: false,
+      pending: false,
+      q: [],
+      speak(u) {
+        window.__said.push({ text: u.text, lang: u.lang, rate: u.rate, at: Date.now() });
+        this.q.push(u);
+        this.run();
+      },
+      run() {
+        if (this.speaking || !this.q.length) return;
+        const u = this.q.shift();
+        this.speaking = true;
+        setTimeout(() => {
+          this.speaking = false;
+          if (u.onend) u.onend();
+          this.run();
+        }, window.__speechMs);
+      },
+      cancel() {
+        this.q = [];
+        this.speaking = false;
+      },
+      getVoices() {
+        return [];
+      },
+      addEventListener() {},
+      removeEventListener() {}
+    };
+    Object.defineProperty(window, "speechSynthesis", { value: synth, configurable: true });
+  });
   try {
     await page.goto(BASE, { waitUntil: "networkidle2" });
     await page.evaluate((logs) => {
@@ -219,6 +259,8 @@ function logs() {
     const twoWeeks = await page.evaluate(() => document.getElementById("history-range-label").textContent);
     await page.evaluate(() => [...document.querySelectorAll("#history-range-presets button")][0].click());
     await sleep(300);
+    await page.evaluate(() => document.getElementById("history-brush").scrollIntoView({ block: "center" }));
+    await sleep(200);
     const bar = await (await page.$("#history-brush")).boundingBox();
     await page.mouse.move(bar.x + 8, bar.y + bar.height / 2);
     await page.mouse.down();
@@ -293,6 +335,53 @@ function logs() {
     check("⏹ mid-way: \"" + stopped.btn + "\", the commentary still there; the speed kept (" + stopped.speed + ")", stopped.btn === "▶ Replay" && stopped.panel && stopped.speed === "veryFast", stopped);
     await page.select("#history-follow", "");
     await sleep(200);
+
+    // ---- 🔊 the voice: each line said, as it should sound; the replay waits for it ----
+    await page.evaluate(() => { window.__said = []; window.__speechMs = 900; });
+    const voice0 = await page.evaluate(() => document.getElementById("btn-history-voice").textContent);
+    const times = [];
+    await page.evaluate(() => document.getElementById("btn-history-replay").click());
+    let lastNow = null;
+    for (let k = 0; k < 200; k++) {
+      await sleep(100);
+      const st = await page.evaluate(() => ({ now: document.getElementById("history-say-now").innerText, btn: document.getElementById("btn-history-replay").textContent }));
+      if (st.now !== lastNow) {
+        times.push(Date.now());
+        lastNow = st.now;
+      }
+      if (k > 3 && st.btn === "▶ Replay") break;
+    }
+    const said = await page.evaluate(() => window.__said.map((x) => x.text + " [" + x.lang + " " + x.rate + "]"));
+    const racesNight = times[3] - times[2];
+    check("🔊 \"" + voice0 + "\": every line said, no emoji, \"6 to 3\", \"number 1\" - " + JSON.stringify(said.slice(0, 7)),
+      voice0 === "🔊 Voice on" && said.some((t) => /^Top-3 clash: Bob beats Ace 6 to 3\. \[en-GB 1\.(3|29\d*)\]$/.test(t)) && said.some((t) => /^Ace sets the early pace at number 1\./.test(t)) && said.every((t) => !/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(t)) && said.length >= 8, said);
+    check("...the replay waits for the voice: the races night (3 lines, 0.9 s each) stayed up " + racesNight + " ms", racesNight >= 2700, times);
+    // (voice off: nothing said)
+    await page.evaluate(() => { window.__said = []; window.__speechMs = 0; document.getElementById("btn-history-voice").click(); });
+    const voiceOff = await page.evaluate(() => document.getElementById("btn-history-voice").textContent);
+    rp = await replay();
+    const saidOff = await page.evaluate(() => window.__said.length);
+    check("🔇 \"" + voiceOff + "\": the replay runs (" + rp.seen.length + " nights), nothing said", voiceOff === "🔇 Voice off" && rp.seen.length === 4 && saidOff === 0, { saidOff });
+    await page.evaluate(() => document.getElementById("btn-history-voice").click());
+
+    // ---- the page stays put during a replay, wherever it was scrolled ----
+    await page.evaluate(() => document.querySelector('#history-cards .history-card[data-type="rating"]').scrollIntoView({ block: "start" }));
+    await sleep(300);
+    const y0 = await page.evaluate(() => window.scrollY);
+    await page.evaluate(() => document.getElementById("btn-history-replay").click());
+    const ys = [];
+    for (let k = 0; k < 80; k++) {
+      await sleep(100);
+      const st = await page.evaluate(() => ({ y: window.scrollY, btn: document.getElementById("btn-history-replay").textContent }));
+      ys.push(st.y);
+      if (k > 3 && st.btn === "▶ Replay") break;
+    }
+    const barPos = await page.evaluate(() => getComputedStyle(document.getElementById("history-commentary")).position);
+    check("the page stays put during a replay (scrolled to " + y0 + ": " + [...new Set(ys)].join(", ") + "); the commentary a " + barPos + " bar", y0 > 300 && ys.every((y) => Math.abs(y - y0) <= 1) && barPos === "fixed", { y0, ys });
+    await page.evaluate(() => document.getElementById("btn-history-say-close").click());
+    await sleep(200);
+    const closed = await page.evaluate(() => document.getElementById("history-commentary").classList.contains("hidden"));
+    check("✕ closes the commentary", closed);
 
     // ---- ✕, then a reload ----
     await page.evaluate(() => document.querySelector('#history-cards .history-card[data-type="winTrend"] .history-card-remove').click());
