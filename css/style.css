@@ -4280,6 +4280,13 @@ button.stat-value:active {
   justify-content: center;
   padding: 20px;
   z-index: 1000;
+  /* (taps go through to the board - the next rack is never lost to it; its card still takes them,
+     so the card stays in the middle band, clear of the cards' + buttons, and the board shows) */
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.38);
+}
+.onhill-overlay .onhill-card {
+  pointer-events: auto;
 }
 
 /* Bigger than the shared gamewin/milestone/force-reset baseline on
@@ -4291,8 +4298,8 @@ button.stat-value:active {
   background: linear-gradient(180deg, var(--felt) 0%, var(--bg-glow) 100%);
   border: 2px solid var(--danger);
   border-radius: var(--radius);
-  max-width: min(96vw, 900px);
-  max-height: 92vh;
+  max-width: min(96vw, 980px);
+  max-height: 46vh;
   /* svh ("small" viewport height) is the height guaranteed visible even
      with a mobile browser's address/toolbar chrome on screen - plain vh
      can be based on the chrome-collapsed viewport instead, so content
@@ -4300,10 +4307,10 @@ button.stat-value:active {
      until the user scrolls. Declared after the vh fallback so browsers
      without svh support just keep using that; ones that do support it
      override with the safer value. */
-  max-height: calc(92svh - 8px);
+  max-height: 46svh;
   width: 100%;
   overflow-y: auto;
-  padding: clamp(36px, 7vw, 64px) clamp(30px, 6vw, 56px);
+  padding: clamp(16px, 2.6vw, 30px) clamp(20px, 4vw, 44px);
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: onhill-shake 0.4s ease;
@@ -4325,19 +4332,19 @@ button.stat-value:active {
    card by the same factor until it actually fits (floored so text
    never goes illegibly small; scrolls the small remainder if it does). */
 .onhill-emoji {
-  font-size: calc(clamp(3.4rem, 10vw, 8rem) * var(--onhill-scale, 1));
-  margin-bottom: 10px;
+  font-size: calc(clamp(2rem, 5vw, 4rem) * var(--onhill-scale, 1));
+  margin-bottom: 4px;
 }
 
 .onhill-card h2 {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   color: var(--text);
-  font-size: calc(clamp(2rem, 7vw, 5rem) * var(--onhill-scale, 1));
+  font-size: calc(clamp(1.8rem, 5vw, 3.8rem) * var(--onhill-scale, 1));
 }
 
 .onhill-card p {
-  margin: 0 0 26px;
-  font-size: calc(clamp(1.3rem, 4.5vw, 3.2rem) * var(--onhill-scale, 1));
+  margin: 0 0 14px;
+  font-size: calc(clamp(1.15rem, 3.2vw, 2.4rem) * var(--onhill-scale, 1));
   font-weight: 600;
 }
 
@@ -4345,8 +4352,8 @@ button.stat-value:active {
   width: 100%;
   background: var(--danger);
   color: #fff;
-  font-size: calc(clamp(1.3rem, 3.2vw, 2.6rem) * var(--onhill-scale, 1));
-  padding: clamp(14px, 2.4vw, 28px);
+  font-size: calc(clamp(1.1rem, 2.4vw, 1.9rem) * var(--onhill-scale, 1));
+  padding: clamp(10px, 1.6vw, 18px);
 }
 
 /* ---------- Game-change popup ---------- */

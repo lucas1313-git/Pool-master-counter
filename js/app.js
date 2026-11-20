@@ -4478,6 +4478,8 @@
         return;
       }
     }
+    // (⛰️ on the hill up: a number or +/− key puts it away and still counts)
+    if (!onHillOverlay.classList.contains("hidden") && /^([0-9+\-.]|Enter|Backspace|Delete)$/.test(e.key)) closeOnHill();
     if (isAnyOverlayOpen()) return;
     if (appRoot.classList.contains("hidden")) return;
 
@@ -9864,6 +9866,7 @@
     if (raceSaid && previousUnit !== "points" && previousUnit !== "balls") speakRackWin(raceSaid, !!milestoneNames, onHillNames);
     // (and a clear popup for it - once the balls left are in)
     if (gameTypeChanged) queueGameChangePopup();
+    if (onHillNames && !milestoneNames) queueOnHillPopup(onHillNames, target);
     // A race won closes at once (archived, a new session - nothing more
     // can be scored into it); only its big moment waits for the finger to
     // lift (see celebrateTournamentWin). Same for a timed session's end.
@@ -10143,6 +10146,55 @@
       scale -= ONHILL_SCALE_STEP;
       onHillCard.style.setProperty("--onhill-scale", scale.toFixed(2));
     }
+  }
+
+  // ⛰️🔥 On the hill, the big popup again (2026-11-19, the user: "i want the popup "on the hill" to
+  // be back in the app" - gone since every win became one tap, 3225d933): right after the rack, once
+  // the finger that won it has lifted (afterTapGuard) - never under the next tap, and not waiting
+  // for the banner's balls left (a warning that comes late is no warning: the banner stays usable,
+  // taps and keys go through); gone after 5 s, with "Watch out!", or as soon as the board is played
+  // on (a tap outside its card goes through to the board, a key still counts - see the keypad). Not
+  // if that rack was undone, or another played, meanwhile. Celebrations Off: the banner's line only.
+  var ONHILL_SHOW_MS = 5000;
+  var pendingOnHill = null;
+  function queueOnHillPopup(names, target) {
+    if (celebrationsLevel() === "off") return;
+    pendingOnHill = { names: names, target: target, key: currentGameKey(), games: state.gamesPlayedCount, at: Date.now() };
+    setTimeout(flushOnHillPopup, 0);
+  }
+  function onHillStillDue(p) {
+    return p === pendingOnHill && p.key === currentGameKey() && p.games === state.gamesPlayedCount && Date.now() - p.at < 15 * 60000;
+  }
+  function flushOnHillPopup() {
+    var p = pendingOnHill;
+    if (!p) return;
+    if (!onHillStillDue(p)) {
+      pendingOnHill = null;
+      return;
+    }
+    if (isAnyOverlayOpen()) {
+      setTimeout(flushOnHillPopup, 600);
+      return;
+    }
+    afterTapGuard(function () {
+      if (!onHillStillDue(p)) return;
+      if (isAnyOverlayOpen()) {
+        setTimeout(flushOnHillPopup, 600);
+        return;
+      }
+      pendingOnHill = null;
+      announceOnHill(p.names, p.target);
+    });
+  }
+  function announceOnHill(names, target) {
+    onHillMessage.textContent = T("onhill.message", { names: names, target: target });
+    onHillOverlay.classList.remove("hidden");
+    fitOnHillCardToViewport();
+    if (onHillAutoCloseTimer) clearTimeout(onHillAutoCloseTimer);
+    onHillAutoCloseTimer = setTimeout(function () {
+      onHillAutoCloseTimer = null;
+      closeOnHill();
+    }, ONHILL_SHOW_MS);
   }
 
   function closeOnHill() {
@@ -44957,9 +45009,16 @@
   btnResetTodayStats.addEventListener("click", resetTodayStats);
 
   btnOnHillClose.addEventListener("click", closeOnHill);
-  onHillOverlay.addEventListener("click", function (e) {
-    if (e.target === onHillOverlay) closeOnHill();
-  });
+  // (its backdrop lets taps through - see .onhill-overlay - so the board stays playable; a tap
+  // anywhere but its card puts it away)
+  document.addEventListener(
+    "pointerdown",
+    function (e) {
+      if (onHillOverlay.classList.contains("hidden") || onHillCard.contains(e.target)) return;
+      closeOnHill();
+    },
+    true
+  );
 
   btnGameChangeClose.addEventListener("click", closeGameChange);
   document.getElementById("btn-milestone-balls-minus").addEventListener("click", function () {

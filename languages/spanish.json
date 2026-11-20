@@ -920,6 +920,7 @@
   "onboarding.step4Heading": "Una cosa más",
   "onhill.title": "¡En la cima!",
   "onhill.watchOut": "¡Cuidado!",
+  "onhill.message": "¡{{names}} está a una — una victoria más y se lleva la carrera a {{target}}! Más vale ponerse las pilas. 👀",
   "paywall.adCompleteToast": "✅ ¡Disfruta de tu desbloqueo gratis!",
   "paywall.adPlaying": "📺 Anuncio reproduciéndose…",
   "paywall.body": "Los informes a color son una función Pro. Desbloquéalos para siempre, o mira un anuncio rápido para desbloquearlos esta vez.",

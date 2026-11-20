@@ -722,6 +722,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   "once the extra games are counted"; 📈 Performance, 🌙 Best 3 nights, no share sheet (saved),
   French. `node tests/probe_leaderboard_report.js [out dir]` (the PDF lands there). The PDF writer:
   tests/unit/pdf-images.test.js, in `npm test`.
+- **probe_on_hill.js** — the ⛰️🔥 "On the hill" popup, back (2026-11-19: "i want the popup "on the
+  hill" to be back in the app"), its own file server on 4327: race to 3 - none at rack 1; at rack
+  2 the popup once the finger has lifted (not waiting for the banner's balls left), its message,
+  the banner line too, gone after 5 s; a real tap on the other player's + goes through it (the
+  popup gone, the rack in - the race won); the keypad's "1" "+" likewise; "Watch out!" closes it;
+  Celebrations Off: the banner line only. `node tests/probe_on_hill.js [shots]`.
 - **probe_merge.js** — merging another account's backup into the main one (2026-11-19: "test the
   merging capabilities when I merge a new session from another account into the main account,
   test if it is flawless and that the old data is preserved"), its own file server on 4325, two

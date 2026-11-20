@@ -1,7 +1,8 @@
 // One tap per rack: the win goes in at once and a banner says so - no popup to dismiss. On the
 // scoreboard (Quick Game, Race to 5, Kim v Jo):
 // - the race takes exactly 5 taps on Kim's + and nothing else: after each rack the banner
-//   ("Kim won rack 3 · 3–0"), never a dialog, no toast saying the same thing again; one race-won
+//   ("Kim won rack 3 · 3–0"), no dialog but ⛰️ on the hill at rack 4 (back by request 2026-11-19,
+//   taps go through it), no toast saying the same thing again; one race-won
 //   screen at the end, which closes itself after about 6 s and offers 🔁 Rematch / 👥 New players;
 // - nothing appears under the + tap point for 600 ms (looked at 50-550 ms after the tap) - the
 //   race-won screen too comes only after;
@@ -100,8 +101,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (i === 3 && OUT) await page.screenshot({ path: path.join(OUT, "banner_rack3.png") });
     if (i < 5) await sleep(500);
   }
-  check("Race to 5: racks 1-4 - the banner each time (\"Kim won rack 3 · 3–0\"), never a dialog",
-    racks.slice(0, 4).every((r, i) => r.banner && r.banner.indexOf("Kim won rack " + (i + 1) + " · " + (i + 1) + "–0") !== -1 && r.dialogs.length === 0), racks.map((r) => ({ b: r.banner && r.banner.slice(0, 60), d: r.dialogs })));
+  // (the one popup a rack brings: ⛰️ on the hill, rack 4 - back by request, 2026-11-19, taps go
+  // through it)
+  check("Race to 5: racks 1-4 - the banner each time (\"Kim won rack 3 · 3–0\"), no dialog but ⛰️ on the hill at rack 4",
+    racks.slice(0, 4).every((r, i) => r.banner && r.banner.indexOf("Kim won rack " + (i + 1) + " · " + (i + 1) + "–0") !== -1 && r.dialogs.join() === (i === 3 ? "onhill-overlay" : "")), racks.map((r) => ({ b: r.banner && r.banner.slice(0, 60), d: r.dialogs })));
   check("...no toast saying the same again, nothing put in the keyboard's way (no field focused)", racks.every((r) => !/won rack|Kim won/.test(r.toast) && r.focus !== "INPUT"), racks.map((r) => ({ t: r.toast, f: r.focus })));
   check("...nothing new under the + for 600 ms after each tap (the + itself every time it's looked at)", racks.every((r) => r.underPlus.every((u) => / for Kim$/.test(u))), racks.map((r) => r.underPlus));
   const after4 = racks[3].banner || "";

@@ -920,6 +920,7 @@
   "onboarding.step4Heading": "Encore une chose",
   "onhill.title": "Sur la colline !",
   "onhill.watchOut": "Attention !",
+  "onhill.message": "{{names}} est à une manche — une victoire de plus et c'est la course à {{target}} ! Il va falloir se réveiller. 👀",
   "paywall.adCompleteToast": "✅ Profitez de votre déblocage gratuit !",
   "paywall.adPlaying": "📺 Publicité en cours…",
   "paywall.body": "Les rapports en couleur sont une fonctionnalité Pro. Débloquez-les définitivement, ou regardez une pub rapide pour les débloquer cette fois-ci.",

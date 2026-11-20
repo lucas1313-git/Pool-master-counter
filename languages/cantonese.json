@@ -920,6 +920,7 @@
   "onboarding.step4Heading": "仲有一件事",
   "onhill.title": "埋門喇！",
   "onhill.watchOut": "小心！",
+  "onhill.message": "{{names}} 聽牌喇——再贏一局就贏咗搶 {{target}}！快啲醒定啲。👀",
   "paywall.adCompleteToast": "✅ 免費解鎖，盡情享用！",
   "paywall.adPlaying": "📺 廣告播放中…",
   "paywall.body": "彩色報告係 Pro 專屬功能。可以永久解鎖，或者睇個短廣告解鎖呢一次。",
