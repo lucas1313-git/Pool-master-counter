@@ -12,6 +12,11 @@
 //   winner - Most games won (Ann), by Ben: Ann champion, "⏹ Stopped early by Ben - most games won";
 //   the Day Report: "Interrupted results by Ben: Ann wins the Single Elimination tournament ...";
 // - another, No winner: the tournament closed (back to its setup), noted in the Day Report;
+// - Winner Stays, one race for everyone (2026-11-19: "when we play race to and stop the race to i
+//   need to see all the players on the who win dialog, not only the one at the table now"): Kim
+//   beats Jo, Ann, Ben, then Jo beats Kim - Kim waiting in line; ⏹ Stop the race lists all four
+//   (Kim 3 – Jo 1 – …), Most games won: Kim (3), In Fire 🔥: Jo; any of the four decides; Kim's
+//   race-won screen;
 // - no page errors.
 // usage: node tests/probe_stop_early.js [screenshot dir]
 const puppeteer = require("puppeteer-core");
@@ -178,6 +183,32 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
     const setupShown = await page.evaluate(() => !!document.querySelector("#tournament-setup-step-1") && !!document.querySelector("#tournament-setup-step-1").offsetParent);
     text = await report();
     check("another, No winner: the tournament closed (its setup again); the Day Report: \"Interrupted results by Kim: no winner (Single Elimination tournament, 4 players)\"", !t && setupShown && /Interrupted results by Kim: no winner \(Single Elimination tournament, 4 players\)/.test(text), { t: !!t, setupShown, text: text.slice(0, 1400) });
+
+    // ---- Winner Stays, one race for everyone: the leader waiting in line when it's stopped ----
+    await page.evaluate(() => {
+      localStorage.setItem("poolMasterCounter.state.v2", JSON.stringify({ players: ["Kim", "Jo", "Ann", "Ben"].map((n, i) => ({ id: "w" + i, name: n, playing: i < 2, balls: 0 })), queue: ["w2", "w3"], playerWins: {}, teamWins: {}, teamMvpWins: {}, gameHistory: [], gamesPlayedCount: 0, currentGame: { gameType: "8ball", target: 1, unit: "rack", mode: "individual", queueEnabled: true }, raceToWinsTarget: 5, rotation: { enabled: false, order: [], every: 1 } }));
+      localStorage.removeItem("poolMasterCounter.tournament.v1");
+    });
+    await page.goto(BASE, { waitUntil: "networkidle2" });
+    await sleep(900);
+    // Kim beats Jo, Ann, Ben (3), then Jo beats Kim - Kim to the back of the line
+    const atTable = () => page.evaluate(() => [...document.querySelectorAll("#scoreboard .btn-ball.plus")].map((b) => b.getAttribute("aria-label").replace(/^.* for /, "")));
+    const tables = [];
+    for (const n of ["Kim", "Kim", "Kim", "Jo"]) {
+      tables.push((await atTable()).join(" v "));
+      await win(n);
+    }
+    const nowAt = await atTable();
+    await menu("menu.stopRace");
+    s = await sheet();
+    if (OUT) await page.screenshot({ path: path.join(OUT, "stop_race_line.png") });
+    check("Winner Stays (" + tables.join(", ") + "; now " + nowAt.join(" v ") + "): ⏹ Stop the race lists everyone in the race, the line too - \"" + s.standing + "\", " + s.how.join(" / ") + "; " + s.by.join(", "),
+      s.shown && nowAt.indexOf("Kim") === -1 && /Kim 3 – Jo 1 – (Ann 0 – Ben 0|Ben 0 – Ann 0)/.test(s.standing) && s.how[1] === "*Most games won: Kim (3)" && s.how[2] === "In Fire 🔥: Jo (1 in a row)" && s.by.length === 5 && ["Kim", "Jo", "Ann", "Ben"].every((n) => s.by.indexOf(n) !== -1), s);
+    await pick("most", "*");
+    await sleep(1200);
+    const lineWon = await page.evaluate(() => ({ up: !document.getElementById("milestone-overlay").classList.contains("hidden"), head: document.getElementById("milestone-headline").textContent, details: document.getElementById("milestone-details").textContent }));
+    if (OUT) await page.screenshot({ path: path.join(OUT, "stop_race_line_won.png") });
+    check("...most games won, by all players: the race-won screen for Kim, waiting in line - \"" + lineWon.head + "\", \"" + lineWon.details.replace(/\s+/g, " ").slice(0, 80) + "\"", lineWon.up && /Kim/.test(lineWon.head) && /by all players - most games won/.test(lineWon.details), lineWon);
   } finally {
     check("no page errors", errors.length === 0, errors);
     await browser.close();

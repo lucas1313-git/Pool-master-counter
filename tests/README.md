@@ -601,7 +601,9 @@ Not part of the app - helpers for testing and for running this machine's own cop
 - **probe_stop_early.js** — ⏹ stop a race or a tournament early (2026-10-30), its own server on 4300:
   the race's dialog (No winner / Most games won / In Fire 🔥, who decides), In Fire by Kim (the
   race-won screen, "Interrupted results by Kim: ..." in the Day Report), no winner by all players;
-  a tournament stopped with most games won by Ben, and one with no winner (closed, noted).
+  a tournament stopped with most games won by Ben, and one with no winner (closed, noted); Winner
+  Stays, one race for everyone (2026-11-19): the leader waiting in line - the dialog lists all
+  four, most games won picks him, any of the four decides, his race-won screen.
   `node tests/probe_stop_early.js [shots]`. (☑ clips together: probe_game_marks /
   probe_game_marks_device.)
 - **probe_backup_where.js** — 💾 Back up now on a computer: where to (2026-10-30), its own servers on

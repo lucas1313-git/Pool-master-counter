@@ -1246,13 +1246,19 @@
   var stopOverlay = document.getElementById("stop-overlay");
 
   // the race's sides, with their wins and their run right now
+  // Everyone in the race: with Winner Stays, those waiting in line too - not only the two at the
+  // table (2026-11-19, the user: "when we play race to and stop the race to i need to see all the
+  // players on the who win dialog, not only the one at the table now") - at the table first, then
+  // the line in its order
   function stopRaceSides() {
     var teams = state.currentGame.mode === "teams";
+    var teamIds = teamWinnerStaysOn() ? teamsInPlay() : TEAM_IDS.filter(function (t) { return teamMembersLive(t).length; });
+    var players = winnerStaysOn() ? activePlayers().concat(effectiveQueue()) : activePlayers();
     var sides = teams
-      ? TEAM_IDS.filter(function (t) { return teamMembersLive(t).length; }).map(function (t) {
-        return { key: t, isTeam: true, names: teamMembersLive(t).map(function (p) { return p.name; }), wins: state.teamWins[t] || 0 };
+      ? teamIds.map(function (t) {
+        return { key: t, isTeam: true, names: teamMembersShown(t).map(function (p) { return p.name; }), wins: state.teamWins[t] || 0 };
       })
-      : activePlayers().map(function (p) { return { key: p.id, isTeam: false, names: [p.name], wins: state.playerWins[p.id] || 0 }; });
+      : players.map(function (p) { return { key: p.id, isTeam: false, names: [p.name], wins: state.playerWins[p.id] || 0 }; });
     sides.forEach(function (s) {
       var run = 0;
       for (var i = 0; i < state.gameHistory.length; i++) {
@@ -1328,7 +1334,7 @@
     document.getElementById("stop-title").textContent = T(kind === "tournament" ? "stop.titleTournament" : "stop.titleRace");
     document.getElementById("stop-standing").textContent = kind === "tournament"
       ? sides.slice().sort(function (a, b) { return b.wins - a.wins; }).map(function (s) { return s.names[0] + " " + s.wins; }).join(" · ")
-      : T("stop.standingRace", { score: sides.map(function (s) { return s.names.join(" & ") + " " + s.wins; }).join(" – "), target: state.raceToWinsTarget });
+      : T("stop.standingRace", { score: (sides.length > 2 ? sides.slice().sort(function (a, b) { return b.wins - a.wins; }) : sides).map(function (s) { return s.names.join(" & ") + " " + s.wins; }).join(" – "), target: state.raceToWinsTarget });
     // who wins - each way with who it picks
     var how = document.getElementById("stop-how");
     how.innerHTML = "";
