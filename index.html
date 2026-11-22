@@ -17,7 +17,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="css/style.css?v=20261119j">
+<link rel="stylesheet" href="css/style.css?v=20261122a">
 <script>
   // Applied synchronously, before the stylesheet paints, so a saved theme
   // never flashes the default look first.
@@ -2174,7 +2174,7 @@
         <li data-i18n-html="help.main.currentGame"><strong>Current Session</strong> — Tournament Setup: Load Setup applies a saved configuration in one tap; Tournament Type is either Race to Wins (set how many wins ends it) or Timed Tournament (set a duration instead); Games Rotation is either Rotate game types automatically or Single Game; Use Fargo rating to balance the race shortens the underdog's target based on the rating gap (❓ for the exact math). Current Game: the game type, the target number, and the unit (rack/balls/points — adjustable independently of the game type's usual default, e.g. One Pocket to "1 rack" instead of "8 balls"), plus the Shot Counter. Reset Current Game (clearing the live score without crediting a win) lives in the All Resets section below; Undo Last Win is the − button on a player's card once their game reaches its target.</li>
         <li data-i18n-html="help.main.players"><strong>Players</strong> — Add a player by name (auto-capitalized, checked live for a duplicate nickname — the Add button stays disabled until the name is unique). The optional "Starting rating" field lets you seed a brand-new player's rating from a number they've earned elsewhere (another league, another tournament) — it only takes effect for a name that's never been rated on this device before; it's ignored for anyone already tracked. Tap a player's Standby/Playing badge to move them in or out of the current game. The ✕ removes someone from today's roster only — career stats and rating stay on the device; no confirmation if no games have been played yet this session, since there's nothing to lose. Load Player List swaps in players from a saved list (adds anyone missing, never resets what's already there); Export/Import Player Lists use a separate, hand-editable JSON format just for lists.</li>
         <li data-i18n-html="help.main.standings"><strong>Standings</strong> — Live race-to-N progress for teams and individuals this session.</li>
-        <li data-i18n-html="help.main.scoreboard"><strong>Scoreboard</strong> — Sits right above the player cards, visible whether Focus Mode is on or off. "Do not record games statistics and players data" stops every save while it's checked — nothing goes into state, career stats, or ratings until you uncheck it; wins still count live on screen for the rest of this browser tab, but none of it survives a reload. Tap + / − on a player's card to track balls/points/racks toward the target. Reaching the target banks a win and starts the next game. Focus Mode hides every other panel down to just the scoreboard — while in it, a small "Players" chevron above the board still lets you flip who's Playing vs Standby without leaving focus; every number on screen also scales up (up to 3x) to stay readable from across the room, shrinking back down on its own once enough players are on screen that the cards get narrower. Whenever Games Rotations is on with 2+ game types, a "Rotation Position" line appears right under the "Now Playing" banner with ◀/▶ buttons - each tap moves the rotation's own games-toward-the-next-switch counter by exactly one game (the same counter a real win advances), so it only actually changes the active game type once enough taps cross a switch-every boundary. No score, win, or ball count is touched - it's purely for correcting the rotation's position by hand if it ever drifts.</li>
+        <li data-i18n-html="help.main.scoreboard"><strong>Scoreboard</strong> — The board sits above the player cards, with Focus Mode on or off. The app always opens on it (Focus Mode). The top bar has ☰ Menu, a line saying what's being played, ↩ Undo and 🎱 Game. ☰ Menu holds 🌙 End night (tonight's summary and one Share), players, tournament, league, stats, the Day Report, backups and resets, camera, recording, voice, Challonge, help, theme and language. 🎱 Game sets the game, target, race, rotation, Winner Stays, teams, timer, shot clock and practice; Apply sets them all at once. With nobody playing yet, the board offers ▶️ New game. Tap the big + on a card to score; a points game also has a small round − to take a point back. ↩ Undo takes back the last score. Reaching the target banks a win and starts the next game. ⇄ on a card swaps that player for someone on the bench. ☰ Menu › Players › Arrange the seats shows the cards' drag handles. ☰ Menu › More › Everything (the full page) brings the full page back. Numbers grow up to 3x so they read across the room, and shrink back as more players narrow the cards. Two-player games (8-Ball, 9-Ball, 10-Ball, One Pocket, Snooker) turn on Winner Stays by themselves with three or more Playing. Straight Pool and 15 Ball Rotation take everyone Playing: the first to the target wins. A rack then counts only for the two at the table. Winner Stays shows the winner's streak and who's next. With a race it's one race for everyone: the loser of each rack goes to the back of the line, the wins add up, and the first to the race wins it. It can cap wins in a row. In a rack game, tapping the big number on a player's card wins them the rack (their number key still picks them). Teams split into as many teams as there are pairs, A, B, C… in turn (a player's 🏷️ team name doesn't pair anyone): one card and one + per team. Each pair is a team of its own: change partners and the card shows that pair's own score, kept for when they play together again. With three teams or more at a two-player game, Winner Stays works for teams: two teams at the table, the losing team waits its turn and the next team comes in. Credit can pick who potted the winning ball. Someone new sits down mid-race? The app offers 🏁 a second race with them. Race 1 waits with its score. Race 2 is scored while they're at the table, race 1 while they aren't. The first one won ends as usual. Then everyone plays the other one with Winner Stays: the winner stays, the next in line comes in, its score kept. Practice (not saved), in 🎱 Game or Current Session, stops all saving while it's on. It asks first, and "PRACTICE · NOT SAVED" stays on the board. Wins show on screen until a reload, but nothing reaches career stats or ratings. ☰ Menu › Sounds picks All, Wins only (the default) or Off, and the volume. With Rotation on and 2 or more game types, a Rotation Position line with ◀/▶ appears under the Now Playing banner. Each tap moves the rotation one game toward its next change, like a win does. Scores, wins and ball counts don't change: it only fixes a rotation that drifted.</li>
         <li data-i18n-html="help.main.recentGames"><strong>Recent Games</strong> — Every game played today, most recent first. A day runs from 5 a.m. to 5 a.m., so a night that goes past midnight stays one night, even across a race being won and the next one starting fresh; last night’s games that haven’t been saved yet stay here too. Each winner's rating change from that exact game shows beside their badge; the game that completes a race-to-N gets a gold highlight and its own banner line ("🏆 Alice won the Race to 5 session!").</li>
         <li data-i18n-html="help.main.todaysNotes"><strong>Publish Daily Report</strong> — A free-text box for anything worth remembering about today's live play; it saves automatically as you type. Copy/Email/Text Report builds a plain-text day report — who played, win/loss and rating movement for each, total games, game types played, a game-by-game breakdown (grouped by matchup — "Luc won 3 games of 8-Ball against Suresh" rather than one line per game) split into earlier-session/current-session, and your notes — ready to paste, email, or send as a text message. Under the 📅 calendar, 🏁 Races on this day lists that day's races. ↺ Reset takes a race that wasn't recorded right out of every record (Recover Data has it back). 🔗 Join with the next puts a race shown in pieces back together.</li>
         <li data-i18n-html="help.main.night3d"><strong>🧊 The night in 3D</strong> — ☰ Menu › Day Report › The night in 3D. Pick a day with games. 🗺️ Map is a 3D diagram of the night, to turn and move like a map. The white line is the table, with a ball for every match. Around each match ball there is a ball for every player. The solid ones play that match; the faint ones do not. Players join into sides, and sides into the match; gold is the winning side. A player's line fades out where they stop playing, and back in where they return. Drag to turn it, use two fingers to move it, pinch to zoom. Tap a player to follow them, or a match ball for its details. Each player's chip shows their rating at the end of that day, and how the day changed it. Zoom in, or follow a player, to see what each match did to it. 🌀 Spiral and ➖ Straight change its shape. 🧵 The whole night is one flat picture: every player a ribbon, every match a block. 🖼️ Save as picture shares either one. Both are rebuilt from the saved games.</li>
@@ -3357,35 +3357,35 @@ Once those scheduled rounds wrap up, whoever has bagged the most match victories
 
 <div id="day-report-print-view" class="hidden"></div>
 
-<script src="js/pairing.js?v=20261119j"></script>
-<script src="js/big-store.js?v=20261119j"></script>
-<script src="js/mp4-clip.js?v=20261119j"></script>
-<script src="js/recording-consent.js?v=20261119j"></script>
-<script src="js/local-recorder.js?v=20261119j"></script>
-<script src="js/lib/pool-day.js?v=20261119j"></script>
-<script src="js/lib/race-math.js?v=20261119j"></script>
-<script src="js/lib/leaderboard-methods.js?v=20261119j"></script>
-<script src="js/lib/pdf-images.js?v=20261119j"></script>
-<script src="js/lib/history-charts.js?v=20261119j"></script>
-<script src="js/lib/handicaps.js?v=20261119j"></script>
-<script src="js/lib/brackets.js?v=20261119j"></script>
-<script src="js/lib/league.js?v=20261119j"></script>
-<script src="js/lib/events.js?v=20261119j"></script>
-<script src="js/lib/chips.js?v=20261119j"></script>
-<script src="js/lib/highlights.js?v=20261119j"></script>
-<script src="js/lib/score-bug.js?v=20261119j"></script>
-<script src="js/lib/payouts.js?v=20261119j"></script>
-<script src="js/lib/night-timeline.js?v=20261119j"></script>
-<script src="js/lib/day-races.js?v=20261119j"></script>
-<script src="js/night-map.js?v=20261119j"></script>
-<script src="js/night-braid.js?v=20261119j"></script>
-<script src="js/app.js?v=20261119j"></script>
-<script src="js/camera-client.js?v=20261119j"></script>
-<script src="js/voice.js?v=20261119j"></script>
+<script src="js/pairing.js?v=20261122a"></script>
+<script src="js/big-store.js?v=20261122a"></script>
+<script src="js/mp4-clip.js?v=20261122a"></script>
+<script src="js/recording-consent.js?v=20261122a"></script>
+<script src="js/local-recorder.js?v=20261122a"></script>
+<script src="js/lib/pool-day.js?v=20261122a"></script>
+<script src="js/lib/race-math.js?v=20261122a"></script>
+<script src="js/lib/leaderboard-methods.js?v=20261122a"></script>
+<script src="js/lib/pdf-images.js?v=20261122a"></script>
+<script src="js/lib/history-charts.js?v=20261122a"></script>
+<script src="js/lib/handicaps.js?v=20261122a"></script>
+<script src="js/lib/brackets.js?v=20261122a"></script>
+<script src="js/lib/league.js?v=20261122a"></script>
+<script src="js/lib/events.js?v=20261122a"></script>
+<script src="js/lib/chips.js?v=20261122a"></script>
+<script src="js/lib/highlights.js?v=20261122a"></script>
+<script src="js/lib/score-bug.js?v=20261122a"></script>
+<script src="js/lib/payouts.js?v=20261122a"></script>
+<script src="js/lib/night-timeline.js?v=20261122a"></script>
+<script src="js/lib/day-races.js?v=20261122a"></script>
+<script src="js/night-map.js?v=20261122a"></script>
+<script src="js/night-braid.js?v=20261122a"></script>
+<script src="js/app.js?v=20261122a"></script>
+<script src="js/camera-client.js?v=20261122a"></script>
+<script src="js/voice.js?v=20261122a"></script>
 <script>
   // The app opens with no network (sw.js, P21) - on http(s) only, not in the iOS app
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261119j").catch(function () {}); });
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js?v=20261122a").catch(function () {}); });
   }
 </script>
 </body>
