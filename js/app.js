@@ -7732,10 +7732,11 @@
   // seated and Winner Stays off, every rack would put everyone else down
   // as losers (and lower their ratings) - so Winner Stays goes on by
   // itself, two at the table and the rest in line, and the banner says so.
-  // (15 Ball Rotation and Custom can be played by more.) Winner Stays already
+  // (Straight Pool, 15 Ball Rotation and Custom can be played by more: each
+  // to the target on their own count, the first there wins.) Winner Stays already
   // on with more than two seated - Teams to Individual with it on: nobody in
   // line, so nobody ever came in - is two at the table too, whatever the game.
-  var TWO_PLAYER_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "10ball", "straight", "onepocket", "snooker"];
+  var TWO_PLAYER_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "10ball", "onepocket", "snooker"];
   function needsTwoAtTheTable() {
     return !quickCounterMode && state.currentGame.mode === "individual" &&
       !state.secondRace && !secondRaceAsking && // (🏁 two races: who sits down is the players' call)
@@ -42908,6 +42909,7 @@
     queueModeCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
   });
   queueModeCheckbox.addEventListener("change", function () {
+    var backToTheTable = null;
     state.currentGame.queueEnabled = queueModeCheckbox.checked;
     state.currentGame.queueStreak = null;
     // (a race already set stays: with Winner Stays it's the whole line's -
@@ -42929,9 +42931,21 @@
         nextUp.balls = 0;
       }
       saveQueue(queue);
+    } else if (!quickCounterMode && TWO_PLAYER_GAME_TYPES.indexOf(state.currentGame.gameType) === -1) {
+      // Off, in a game that takes everyone (Straight Pool, 15 Ball Rotation,
+      // Custom): the line comes back to the table, each from 0 - as the teams
+      // do. (A two-at-a-time game with three seated turns it on again.)
+      var back = effectiveQueue();
+      back.forEach(function (p) {
+        p.playing = true;
+        p.balls = 0;
+      });
+      saveQueue([]);
+      if (back.length) backToTheTable = back.map(function (p) { return p.name; });
     }
     saveState();
     renderAll();
+    if (backToTheTable) showBannerNotice(T("winnerStays.offEveryone", { names: backToTheTable.join(", ") }));
   });
 
   rotatingTeamsCheckbox.addEventListener("change", function () {

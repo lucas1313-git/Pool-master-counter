@@ -16,6 +16,9 @@
 //   Kim picked: Kim credited;
 // - Teams (race to 7, Winner Stays on) to Individual in 🎱 Game: two at the table, the others in line,
 //   the race to 7 everyone's; a rack sends the loser to the back;
+// - Straight Pool with four Playing: all four at the table, each on their own count, no Winner Stays
+//   by itself; the first to the target wins against the three others (ratings moved for all four);
+//   Winner Stays ticked by hand still seats two - unticked, everyone comes back to the table;
 // - a rack game: tapping a player's number wins them the rack; a points game: it picks the
 //   player, no point;
 // - ▶️ New game (Bob v Chris, both on the board, race to 7) with Winner Stays on: it stays on, Luc next; a rack: the loser
@@ -226,6 +229,39 @@ function board(opts) {
   s = await st();
   const points = { balls: s.players.map((p) => p.balls || 0), selected: await page.evaluate(() => [...document.querySelectorAll("#scoreboard .player-panel.is-keypad-selected .player-name")].map((n) => n.textContent.replace(/\d.*$/, "").trim())) };
   check("...Straight Pool: tapping Jo's number picks Jo, no point", points.balls.every((b) => b === 0) && points.selected.join() === "Jo", points);
+
+  // ---- Straight Pool with four Playing (2026-11-22: "I need to be able to play multiple players when I play
+  // straight pool"): everyone at the table, each on their own count - Winner Stays stays off; the first to the
+  // target wins against the three others; Winner Stays by hand still seats two ----
+  await open(board({ game: { gameType: "straight", target: 3, unit: "points" } }));
+  s = await st();
+  const allUp = { queue: !!s.currentGame.queueEnabled, seated: await seated(), banner: await banner(), line: await line() };
+  check("Straight Pool with four Playing: all four at the table, Winner Stays not turned on, no \"two at a time\"", allUp.queue === false && allUp.seated.join() === "Kim,Jo,Ann,Bob" && !/two at a time/.test(allUp.banner) && !/Next up/.test(allUp.line), allUp);
+  if (OUT) await page.screenshot({ path: path.join(OUT, "who_straight_four.png") });
+  const sr0 = await ratings();
+  await plusFor("Jo");
+  await plusFor("Ann");
+  await plusFor("Ann");
+  s = await st();
+  const sMid = { balls: s.players.map((p) => p.balls || 0), games: s.gameHistory.length };
+  await plusFor("Ann");
+  await sleep(600);
+  await page.keyboard.press("Escape").catch(() => {});
+  await sleep(300);
+  s = await st();
+  const sr1 = await ratings(), sg = s.gameHistory[0] || {};
+  const sWon = { mid: sMid, winner: sg.winnerNames, losers: (sg.opponentNames || []).slice().sort(), scores: sg.scores, seated: await seated(), queue: !!s.currentGame.queueEnabled, up: sr1.Ann > (sr0.Ann || 400), down: ["Kim", "Jo", "Bob"].map((n) => sr1[n] < (sr0[n] || 400)) };
+  check("...each on their own count (Jo 1, Ann 2, nobody else); Ann first to 3: Ann wins against Kim, Jo and Bob - her rating up, theirs down, all four still at the table", sMid.balls.join() === "0,1,2,0" && sMid.games === 0 && JSON.stringify(sWon.winner) === '["Ann"]' && sWon.losers.join() === "Bob,Jo,Kim" && sWon.up && sWon.down.every(Boolean) && sWon.seated.join() === "Kim,Jo,Ann,Bob" && sWon.queue === false, sWon);
+  await page.evaluate(() => document.getElementById("board-winner-stays-checkbox").click());
+  await sleep(700);
+  s = await st();
+  const byHand = { queue: !!s.currentGame.queueEnabled, seated: await seated(), line: await line() };
+  check("...🎱 Winner Stays ticked by hand: two at the table, the others in line - still there for who wants it", byHand.queue === true && byHand.seated.length === 2 && /Next up/.test(byHand.line), byHand);
+  await page.evaluate(() => document.getElementById("board-winner-stays-checkbox").click());
+  await sleep(700);
+  s = await st();
+  const offAgain = { queue: !!s.currentGame.queueEnabled, seated: (await seated()).slice().sort(), banner: await banner() };
+  check("...and unticked: everyone back at the table, the banner says who", offAgain.queue === false && offAgain.seated.join() === "Ann,Bob,Jo,Kim" && /everyone is back at the table/.test(offAgain.banner), offAgain);
 
   // ---- ▶️ New game with Winner Stays on: it stays on (2026-11-15: "the loser is still staying, we
   // don't have the player rotation working anymore" - New game had turned it off) ----
