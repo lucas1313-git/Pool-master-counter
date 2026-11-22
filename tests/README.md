@@ -645,6 +645,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   real-clip-2026-10-29-shot.mp4`. First run: the player found in 113 of 119 looks, one id all along
   (kept 106 of 106). `node tests/probe_real_detector.js http://localhost:4235/ "<that clip>" [shots]`
   against a test server; skip it where the clip isn't there.
+- **probe_update_bad_network.js** — 🆕 an update over a bad connection keeps the app's saved copy
+  (2026-11-22, "not loading in my tablet"): a new version's worker registered while the server
+  answers 500 to everything doesn't take over and the old cache stays whole; the page reloaded
+  with no network at all opens all the same; the server back, the new worker takes over
+  with its cache whole and the old one goes. Its own file server on 4311:
+  `node tests/probe_update_bad_network.js`.
 - **probe_night_3d.js** — 🧊 The night in 3D (☰ Menu › Day Report): no games - the panel says so;
   then a night played here (three players at 8-Ball, Winner Stays bringing the next one in): the
   day it picks, the night rebuilt from the saved games (the tally, who came in and who sat down

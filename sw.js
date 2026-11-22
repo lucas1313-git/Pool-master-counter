@@ -10,6 +10,11 @@
 //   3 s or offline (kept without their cache-busting ?v=<time>);
 // - the camera's models: cached on first use, kept across versions;
 // - the server's own endpoints (/api/, /voice, /ws) are never touched.
+// A new worker takes over only once its own cache holds the whole app (the
+// page and every ?v= file of it); until then the worker before it, and its
+// cache, stay. (2026-11-22: an update that came over bad Wi-Fi activated
+// with an empty cache and deleted the old one - nothing left to open the app
+// from, "not loading in my tablet".)
 // The open page asks which page is kept now (its tag); a newer one means an
 // update came in the background, and the page takes it (2026-10-30: it took
 // a second reload before).
@@ -39,7 +44,11 @@ function cachePage(cache, response) {
     var files = shellFilesOf(html);
     return Promise.all(files.map(function (url) {
       return cache.match(url).then(function (hit) {
-        return hit || fetch(url).then(function (res) { if (res.ok) return cache.put(url, res); });
+        // (a file that didn't come: the page isn't kept - see the install)
+        return hit || fetch(url).then(function (res) {
+          if (!res.ok) throw new Error(res.status + " " + url);
+          return cache.put(url, res);
+        });
       });
     })).then(function () {
       return cache.put(scopePath("index.html"), response);
@@ -51,7 +60,7 @@ self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(SHELL).then(function (cache) {
       return fetch(scopePath("index.html"), { cache: "reload" }).then(function (res) {
-        if (!res.ok) return null;
+        if (!res.ok) throw new Error("the page: " + res.status);
         return Promise.all([
           cachePage(cache, res),
           Promise.all(["manifest.json", "icons/icon-192.png", "icons/icon-512.png"].map(function (p) {
@@ -59,14 +68,20 @@ self.addEventListener("install", function (event) {
           }))
         ]);
       });
-    }).catch(function () {}).then(function () { return self.skipWaiting(); })
+    // (not everything came: the install fails, this worker is dropped and the one
+    // before it carries on with its cache - the next visit tries again)
+    }).then(function () { return self.skipWaiting(); })
   );
 });
 
 self.addEventListener("activate", function (event) {
   event.waitUntil(
-    caches.keys().then(function (keys) {
-      return Promise.all(keys.filter(function (k) { return k.indexOf("pmc-shell-") === 0 && k !== SHELL; }).map(function (k) { return caches.delete(k); }));
+    // the caches of the versions before go only once this one's holds the page
+    caches.open(SHELL).then(function (cache) { return cache.match(scopePath("index.html")); }).then(function (page) {
+      if (!page) return null;
+      return caches.keys().then(function (keys) {
+        return Promise.all(keys.filter(function (k) { return k.indexOf("pmc-shell-") === 0 && k !== SHELL; }).map(function (k) { return caches.delete(k); }));
+      });
     }).then(function () { return self.clients.claim(); })
   );
 });
@@ -78,6 +93,9 @@ function fromCacheFirst(cacheName, request, key) {
       return fetch(request).then(function (res) {
         if (res.ok) cache.put(key || request, res.clone());
         return res;
+      }).catch(function (err) {
+        // (no network: a copy an earlier version kept, if there is one)
+        return caches.match(key || request).then(function (old) { if (old) return old; throw err; });
       });
     });
   });
@@ -93,7 +111,8 @@ function fromNetworkFirst(cacheName, request, key) {
     return cache.match(key).then(function (hit) {
       if (!hit) return network;
       var timer = new Promise(function (resolve) { setTimeout(function () { resolve(hit); }, NETWORK_WAIT_MS); });
-      return Promise.race([network.catch(function () { return hit; }), timer]);
+      // (no answer, or an error page for one: the kept copy)
+      return Promise.race([network.then(function (res) { return res.ok ? res : hit; }, function () { return hit; }), timer]);
     });
   });
 }
@@ -105,7 +124,8 @@ function pageFromCache(request, event) {
     var key = scopePath("index.html");
     return cache.match(key).then(function (hit) {
       var update = fetch(request, { cache: "no-store" }).then(function (res) {
-        if (res.ok && res.type === "basic") return cachePage(cache, res.clone()).then(function () { return res; });
+        // (kept only whole - the page still goes to who asked for it)
+        if (res.ok && res.type === "basic") return cachePage(cache, res.clone()).then(function () { return res; }, function () { return res; });
         return res;
       });
       if (hit) {
@@ -113,7 +133,10 @@ function pageFromCache(request, event) {
         if (event) event.waitUntil(pageRefresh);
         return hit;
       }
-      return update;
+      // (nothing kept here and no network: the page an earlier version kept, if there is one)
+      return update.catch(function (err) {
+        return caches.match(key).then(function (old) { if (old) return old; throw err; });
+      });
     });
   });
 }
