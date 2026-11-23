@@ -728,6 +728,12 @@ Not part of the app - helpers for testing and for running this machine's own cop
   "once the extra games are counted"; 📈 Performance, 🌙 Best 3 nights, no share sheet (saved),
   French. `node tests/probe_leaderboard_report.js [out dir]` (the PDF lands there). The PDF writer:
   tests/unit/pdf-images.test.js, in `npm test`.
+- **probe_new_games.js** — two new games (2026-11-23: "reversed 8 ball a rack game, 38 points 9
+  ball a point game default 38"), its own file server on 4330: both in the 🎱 Game sheet, Current
+  Game, Games Rotation and tournament lists; Reversed 8-Ball - 1 rack, the board's title, a rack
+  won and saved as 8ballreversed, the 8-Ball family's balls left (7 = a skunk); 38 Points 9-Ball -
+  38 points filled in, + and −, the 38th point wins (saved to 38 points); a rotation of the two.
+  `node tests/probe_new_games.js [shots]`. The voice names: tests/test_voice_parser.js.
 - **probe_on_hill.js** — the ⛰️🔥 "On the hill" popup, back (2026-11-19: "i want the popup "on the
   hill" to be back in the app"), its own file server on 4327: race to 3 - none at rack 1; at rack
   2 the popup once the finger has lifted (not waiting for the banner's balls left), its message,

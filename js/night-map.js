@@ -122,7 +122,7 @@
   // the space: a step along the table per match, the ring of seats, the sides' nodes between
   var DX = 150, INNER = 84, SIDE = 38, GHOST = 0.13; // (GHOST: how faint a player is in a match they don't play)
   // the game's ball: [number or "", colour, striped]
-  var BALLS = { "8ball": [8, "#16161a", 0], "8ballrotation": [8, "#16161a", 0], "8ballpunishment": [8, "#16161a", 0], "9ball": [9, "#f2c21c", 1], "10ball": [10, "#2a62c9", 1], "15ballrotation": [15, "#7a2230", 1], "straight": [14, "#1f8a4c", 1], "onepocket": [1, "#f2c21c", 0], "snooker": ["", "#c62828", 0] };
+  var BALLS = { "8ball": [8, "#16161a", 0], "8ballrotation": [8, "#16161a", 0], "8ballpunishment": [8, "#16161a", 0], "8ballreversed": [8, "#16161a", 0], "9ball": [9, "#f2c21c", 1], "9ball38": [9, "#f2c21c", 1], "10ball": [10, "#2a62c9", 1], "15ballrotation": [15, "#7a2230", 1], "straight": [14, "#1f8a4c", 1], "onepocket": [1, "#f2c21c", 0], "snooker": ["", "#c62828", 0] };
 
   var words = null;
   function fill(s, vars) { return String(s).replace(/\{\{(\w+)\}\}/g, function (m, k) { return vars && vars[k] !== undefined ? vars[k] : m; }); }

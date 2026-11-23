@@ -30,7 +30,11 @@
     { id: "8ball", label: "8-Ball", defaultTarget: 1, unit: "rack" },
     { id: "8ballrotation", label: "8 Ball Rotation", defaultTarget: 1, unit: "rack" },
     { id: "8ballpunishment", label: "8 Ball Punishment", defaultTarget: 1, unit: "rack" },
+    // (2026-11-23, the user: "add 2 new games to the game selections: reversed 8 ball a rack game,
+    // 38 points 9 ball a point game default 38" - Reversed 8-Ball scored as the 8-ball family)
+    { id: "8ballreversed", label: "Reversed 8-Ball", defaultTarget: 1, unit: "rack" },
     { id: "9ball", label: "9-Ball", defaultTarget: 1, unit: "rack" },
+    { id: "9ball38", label: "38 Points 9-Ball", defaultTarget: 38, unit: "points" },
     { id: "10ball", label: "10-Ball", defaultTarget: 1, unit: "rack" },
     { id: "15ballrotation", label: "15 Ball Rotation", defaultTarget: 61, unit: "points" },
     { id: "straight", label: "Straight Pool", defaultTarget: 100, unit: "points" },
@@ -55,7 +59,7 @@
   // left on the table" count - 7 left means all of the loser's 7
   // object balls are still up, i.e. a skunk. 9-Ball isn't included -
   // no skunk concept there (confirmed by the user).
-  var SKUNK_RACK_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment"];
+  var SKUNK_RACK_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "8ballreversed"];
 
   // Rotation games where the balls are shot in shared numerical order
   // rather than each player having their own object-ball group (the
@@ -74,7 +78,7 @@
   // rotation labels (rotationEntryLabel, used by both the rotation
   // status note and the Rotation Position line) for these specific
   // types, per explicit request.
-  var ROTATION_LABEL_NO_TARGET_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "onepocket"];
+  var ROTATION_LABEL_NO_TARGET_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "8ballreversed", "9ball", "onepocket"];
 
   // ---------------------------------------------------------------------
   // State
@@ -528,7 +532,7 @@
           if (!parsed.raceAsked || typeof parsed.raceAsked !== "object") parsed.raceAsked = {};
           if (!parsed.comboWins || typeof parsed.comboWins !== "object") parsed.comboWins = {};
           if (!parsed.teamSlotCombo || typeof parsed.teamSlotCombo !== "object") parsed.teamSlotCombo = {};
-          var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment"];
+          var EIGHTBALL_FAMILY = ["8ball", "8ballrotation", "8ballpunishment", "8ballreversed"];
           if (parsed.currentGame.target === 8 && EIGHTBALL_FAMILY.indexOf(parsed.currentGame.gameType) !== -1) {
             parsed.currentGame.target = 1;
           } else if (parsed.currentGame.target === 9 && parsed.currentGame.gameType === "9ball") {
@@ -7736,7 +7740,7 @@
   // to the target on their own count, the first there wins.) Winner Stays already
   // on with more than two seated - Teams to Individual with it on: nobody in
   // line, so nobody ever came in - is two at the table too, whatever the game.
-  var TWO_PLAYER_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "9ball", "10ball", "onepocket", "snooker"];
+  var TWO_PLAYER_GAME_TYPES = ["8ball", "8ballrotation", "8ballpunishment", "8ballreversed", "9ball", "10ball", "onepocket", "snooker"];
   function needsTwoAtTheTable() {
     return !quickCounterMode && state.currentGame.mode === "individual" &&
       !state.secondRace && !secondRaceAsking && // (🏁 two races: who sits down is the players' call)
@@ -11577,7 +11581,7 @@
   // the end-of-rack tags a game offers
   function rackTagsFor(gameType) {
     var tags = ["breakAndRun"];
-    if (gameType === "8ball" || gameType === "8ballrotation" || gameType === "8ballpunishment") tags.push("eightOnBreak", "scratchOnEight");
+    if (gameType === "8ball" || gameType === "8ballrotation" || gameType === "8ballpunishment" || gameType === "8ballreversed") tags.push("eightOnBreak", "scratchOnEight");
     if (gameType === "9ball") tags.push("goldenBreak");
     if (gameType === "10ball") tags.push("tenOnBreak");
     return tags;
@@ -30215,8 +30219,10 @@
     "8ball": 7,
     "8ballrotation": 7,
     "8ballpunishment": 7,
+    "8ballreversed": 7,
     straight: 7,
     "15ballrotation": 7,
+    "9ball38": 7,
     custom: 7
   };
 

@@ -599,8 +599,9 @@
   // The game's ball, in pool-ball colours (a stripe: white with a band).
   var EIGHT = { num: "8", base: "#16161a" }, WHITE = "#f6f1e7";
   var BALLS = {
-    "8ball": EIGHT, "8ballrotation": EIGHT, "8ballpunishment": EIGHT,
+    "8ball": EIGHT, "8ballrotation": EIGHT, "8ballpunishment": EIGHT, "8ballreversed": EIGHT,
     "9ball": { num: "9", base: WHITE, stripe: "#f2c21c" },
+    "9ball38": { num: "9", base: WHITE, stripe: "#f2c21c" },
     "10ball": { num: "10", base: WHITE, stripe: "#2f6fdb" },
     "15ballrotation": { num: "15", base: WHITE, stripe: "#8c2337" },
     "straight": { num: "14", base: WHITE, stripe: "#1f8f52" },

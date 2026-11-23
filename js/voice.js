@@ -261,6 +261,8 @@
   var BASE_GAME_ALIASES = {
     "8ballrotation": ["8 ball rotation"],
     "8ballpunishment": ["8 ball punishment"],
+    "8ballreversed": ["reversed 8 ball", "reverse 8 ball", "8 ball reversed", "8 ball reverse"],
+    "9ball38": ["38 points 9 ball", "38 point 9 ball", "9 ball 38 points", "9 ball 38 point"],
     "15ballrotation": ["15 ball rotation", "15 ball"],
     "8ball": ["8 ball", "eightball", "8 bowl"],
     "9ball": ["9 ball", "nineball", "9 bowl"],

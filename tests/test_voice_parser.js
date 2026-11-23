@@ -39,6 +39,12 @@ check("The game is 10-ball", { type: "game", game: "10ball" });
 check("straight pool to 100 points", { type: "game", game: "straight", n: 100, kind: "target", unit: "points" });
 check("15 ball rotation", { type: "game", game: "15ballrotation" });
 check("8 ball rotation", { type: "game", game: "8ballrotation" });
+// (2026-11-23: Reversed 8-Ball, 38 Points 9-Ball - the longer name wins over "8 ball" / "9 ball")
+check("reversed 8 ball", { type: "game", game: "8ballreversed" });
+check("play reverse eight ball", { type: "game", game: "8ballreversed" });
+check("38 points 9-ball", { type: "game", game: "9ball38" });
+check("thirty eight points nine ball", { type: "game", game: "9ball38" });
+check("9 ball", { type: "game", game: "9ball" });
 check("Race to 7", { type: "race", n: 7 });
 check("race to seven", { type: "race", n: 7 });
 check("race 2 7", { type: "race", n: 7 });
