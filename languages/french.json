@@ -2118,6 +2118,7 @@
   "gameSheet.chMaxStreak": "au plus {{n}} victoires de suite",
   "gameSheet.chMaxStreakOff": "pas de limite de victoires de suite",
   "teams.credit": "Crédit :",
+  "teams.swapAria": "Remplacer {{name}} par quelqu'un qui attend",
   "teams.plusAria": "Ajouter un point à {{team}}",
   "teams.minusAria": "Retirer un point à {{team}}",
   "teams.header": "{{nameA}} {{a}} – {{b}} {{nameB}}",

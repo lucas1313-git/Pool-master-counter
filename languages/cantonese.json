@@ -2118,6 +2118,7 @@
   "gameSheet.chMaxStreak": "最多連贏 {{n}} 局",
   "gameSheet.chMaxStreakOff": "連贏冇限制",
   "teams.credit": "記功：",
+  "teams.swapAria": "換走{{name}}，等緊嘅人上",
   "teams.plusAria": "{{team}} 加一分",
   "teams.minusAria": "{{team}} 扣一分",
   "teams.header": "{{nameA}} {{a}} – {{b}} {{nameB}}",

@@ -6732,6 +6732,28 @@
     who.className = "team-card-members";
     who.textContent = teamSlotLabel(teamId);
     panel.appendChild(who);
+    // ⇄ a player of this team out, from the board (2026-11-24, the user: "when we play team
+    // rotation i need to be able to switch the teams players from the score board directly ... if
+    // there is only one player standby, the stand player will take the spot of the seleced loser"):
+    // one waiting - in at once; more - the bench sheet, to pick who
+    if (!quickCounterMode && networkMode !== "guest") {
+      var swapRow = document.createElement("div");
+      swapRow.className = "team-swap-row";
+      members.forEach(function (p) {
+        var swapBtn = document.createElement("button");
+        swapBtn.type = "button";
+        swapBtn.className = "team-swap-btn";
+        swapBtn.dataset.playerId = p.id;
+        swapBtn.textContent = "⇄ " + shortDisplayNameForPlayer(p);
+        swapBtn.setAttribute("aria-label", T("teams.swapAria", { name: p.name }));
+        swapBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          teamSwapOut(p.id);
+        });
+        swapRow.appendChild(swapBtn);
+      });
+      panel.appendChild(swapRow);
+    }
 
     if (opponentEmpty) {
       var warning = document.createElement("div");
@@ -8372,14 +8394,36 @@
     return line.concat(waiting.filter(function (p) { return line.indexOf(p) === -1; }));
   }
 
-  function openBenchSheet(playerId) {
+  // Who can take a team player's place: the bench - but not the players of a team waiting its turn
+  // (team Winner Stays: they come back as their team)
+  function teamBenchPlayers() {
+    var waiting = teamWinnerStaysOn() ? effectiveTeamQueue() : [];
+    var inLine = {};
+    waiting.forEach(function (tid) {
+      teamMembersShown(tid).forEach(function (p) {
+        inLine[p.id] = true;
+      });
+    });
+    return benchPlayers().filter(function (p) {
+      return !inLine[p.id];
+    });
+  }
+
+  // ⇄ on a team card: the one waiting takes the spot at once; several - pick who
+  function teamSwapOut(playerId) {
+    var bench = teamBenchPlayers();
+    if (bench.length === 1) return swapSeat(playerId, bench[0].id);
+    openBenchSheet(playerId, bench);
+  }
+
+  function openBenchSheet(playerId, benchList) {
     var seated = getPlayer(playerId);
     if (!seated) return;
     benchSeatId = playerId;
     document.getElementById("bench-sheet-title").textContent = T("bench.title", { name: shortDisplayNameForPlayer(seated) });
     var list = document.getElementById("bench-list");
     list.innerHTML = "";
-    var bench = benchPlayers();
+    var bench = benchList || benchPlayers();
     if (!bench.length) {
       var none = document.createElement("li");
       none.className = "empty-hint";

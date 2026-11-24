@@ -2118,6 +2118,7 @@
   "gameSheet.chMaxStreak": "hanggang {{n}} sunod-sunod na panalo",
   "gameSheet.chMaxStreakOff": "walang limitasyon sa sunod-sunod na panalo",
   "teams.credit": "Credit:",
+  "teams.swapAria": "Palitan si {{name}} ng naghihintay",
   "teams.plusAria": "Magdagdag ng puntos sa {{team}}",
   "teams.minusAria": "Magbawas ng puntos sa {{team}}",
   "teams.header": "{{nameA}} {{a}} – {{b}} {{nameB}}",

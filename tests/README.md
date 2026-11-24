@@ -728,6 +728,11 @@ Not part of the app - helpers for testing and for running this machine's own cop
   "once the extra games are counted"; 📈 Performance, 🌙 Best 3 nights, no share sheet (saved),
   French. `node tests/probe_leaderboard_report.js [out dir]` (the PDF lands there). The PDF writer:
   tests/unit/pdf-images.test.js, in `npm test`.
+- **probe_team_swap.js** — ⇄ a team's player switched from the board (2026-11-24: "if there is
+  only one player standby, the stand player will take the spot of the seleced loser"), its own
+  file server on 4331: a ⇄ per player on each team card; one standing by - in at once, on that
+  team, the banner; two - the bench sheet, the one picked joins that team; team Winner Stays - the
+  waiting team's players aren't counted as standing by. `node tests/probe_team_swap.js [shots]`.
 - **probe_new_games.js** — two new games (2026-11-23: "reversed 8 ball a rack game, 38 points 9
   ball a point game default 38"), its own file server on 4330: both in the 🎱 Game sheet, Current
   Game, Games Rotation and tournament lists; Reversed 8-Ball - 1 rack, the board's title, a rack

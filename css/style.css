@@ -12125,6 +12125,27 @@ body.network-guest-mode .now-playing-stop-race {
   font-size: clamp(14px, 4.5cqw, 20px);
   cursor: pointer;
 }
+/* ⇄ a team's player out - one per player, under the team's name */
+.team-swap-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin: 4px 0 2px;
+}
+.team-swap-btn {
+  min-height: 44px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--card-text);
+  font: inherit;
+  font-weight: 700;
+  font-size: clamp(14px, 4.2cqw, 19px);
+  cursor: pointer;
+}
 .team-credit-chip.is-keypad-selected {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 30%, transparent);
