@@ -966,9 +966,9 @@
     // Its choices, kept on this device (2026-11-26, the user: "i need to be able to have it or not as
     // well as i want to decide if I have the caption also the length of the fadein fade out"): the
     // score cards on or off, the captions on or off, the card's fade (in, and off onto the next
-    // clip - 0: none) and how long it stays (a race won: 2 s more); the winners' Q-Scores on the
-    // card, going up, or not ("I would like to see with a similar animation the q-score of the
-    // winners going up").
+    // clip - 0: none) and how long it stays (a race won: 2 s more); the Q-Scores on the card - the
+    // winners' going up, the losers' down - or not ("I would like to see with a similar animation
+    // the q-score of the winners going up").
     var oneBusy = false, RACE_WON_MORE = 2, ONE_KEY = "pmc-one-video";
     var oneOpts = { cards: true, captions: true, qscores: true, fade: 0.4, cardSecs: 3 };
     try { Object.assign(oneOpts, JSON.parse(localStorage.getItem(ONE_KEY) || "{}")); } catch (e) {}
@@ -1012,20 +1012,22 @@
       return window.PMCLib.winningShots.between(src, c.winAt - 2000, c.winAt + 2000).sort(function (x, y) { return Math.abs(x.at - c.winAt) - Math.abs(y.at - c.winAt); })[0] || null;
     }
     // its score card (js/lib/score-bug.js cardParts) - the race won: the race-won screen's words;
-    // the winners' Q-Scores (first names - whole where two share one), when asked for
+    // each side's Q-Scores under it, when asked for (first names - whole where two share one)
     function cardFor(w) {
       var who = function (sd) { return sd.names.join(" & "); };
       var v = w.sides[0].value, first = function (n) { return String(n).trim().split(/\s+/)[0]; };
-      var qs = oneOpts.qscores ? w.ratings || [] : [];
-      return {
-        q: qs.map(function (r) {
-          var short = first(r.name), shared = qs.some(function (o) { return o !== r && first(o.name) === short; });
+      var qsOf = function (sd) { return oneOpts.qscores ? sd.ratings || [] : []; }, all = [].concat.apply([], w.sides.map(qsOf));
+      var qOf = function (sd) {
+        return qsOf(sd).map(function (r) {
+          var short = first(r.name), shared = all.some(function (o) { return o !== r && first(o.name) === short; });
           return { name: shared ? r.name : short, from: r.from, value: r.to };
-        }),
+        });
+      };
+      return {
         qLabel: tr("rec.cardQ", "Rating"),
         head: tr("rec.cardWon", "{{names}} won!", { names: who(w.sides[0]) }),
         title: [w.game, w.wonRace ? tr("milestone.raceToWins", "Race to {{target}} wins", { target: w.raceTo }) : raceToText(w.raceTo)].filter(Boolean).join(" · "),
-        sides: w.sides.map(function (sd) { return { name: who(sd), value: sd.value }; }),
+        sides: w.sides.map(function (sd) { return { name: who(sd), value: sd.value, q: qOf(sd) }; }),
         // (a race: the winner's games before this one - a points game's points before aren't kept)
         from: !w.points && typeof v === "number" && v >= 1 ? v - 1 : null,
         foot: clockOf(w.at),

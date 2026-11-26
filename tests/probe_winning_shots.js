@@ -34,9 +34,11 @@
 //   have the caption also the length of the fadein fade out"): score cards ☑, captions ☑, fade 0.4
 //   s, on screen 3 s at first; captions off, fade 1, on screen 2: no caption pictures, cards of 2,
 //   2 and 4 s, fade 1 - kept on this device; score cards off: their fade and time greyed, no card;
-// - the winners' Q-Scores on each card (2026-11-26: "I would like to see with a similar animation
-//   the q-score of the winners going up" - the app's rating): "Luc" "Rating", a strip each - the old number over the
-//   new and the change ("412" / "420" "+8"); ☐ Ratings: none;
+// - the Q-Scores on each card (2026-11-26: "I would like to see with a similar animation the
+//   q-score of the winners going up", "on the left I want to see the q-score of the winner(s) and in
+//   the right the q-score of the losers" - the app's rating): under each panel "Luc" "Rating", a
+//   strip each - the old number over the new and the change ("412" / "420" "+8", "458" / "450"
+//   "−8"); ☐ Ratings: none;
 // - the recording with no game: "No game was won...";
 // - record.html loads it too; no page errors.
 // usage: node tests/probe_winning_shots.js [screenshot dir]
@@ -211,10 +213,10 @@ const GREEN = "rgb(79, 209, 139)";
     const drawn = await page.evaluate(() => window.__drawn);
     const time = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     // (each card: "<winner> won!" on top, without the winner's number - it rolls in, old over new;
-    // the winner's Q-Score under it - its strip: the old number, the new and the change)
-    const wantDrawn = ["Luc  3 – 2  Bob", "8-Ball · Race to 4 · " + time(wins[0]), "Luc won!", "8-Ball · Race to 4", "Luc", "Bob", "2", "Luc", "Rating", time(wins[0]), "412", "420", "+8", "2", "3",
-      "Bob  3 – 3  Luc", "8-Ball · Race to 4 · " + time(wins[1]), "Bob won!", "8-Ball · Race to 4", "Bob", "Luc", "3", "Bob", "Rating", time(wins[1]), "450", "456", "+6", "2", "3",
-      "Luc  4 – 3  Bob", "8-Ball · Race to 4 · " + time(wins[2]), "🎉🏆🎉", "Congratulations!", "Luc won the tournament with 4 wins! (race-to 4)", "8-Ball · Race to 4 wins", "Luc", "Bob", "3", "Luc", "Rating", time(wins[2]), "414", "422", "+8", "3", "4",
+    // each side's Q-Score under its panel - its strip: the old number, the new and the change)
+    const wantDrawn = ["Luc  3 – 2  Bob", "8-Ball · Race to 4 · " + time(wins[0]), "Luc won!", "8-Ball · Race to 4", "Luc", "Bob", "2", "Luc", "Rating", "Bob", "Rating", time(wins[0]), "412", "420", "+8", "458", "450", "−8", "2", "3",
+      "Bob  3 – 3  Luc", "8-Ball · Race to 4 · " + time(wins[1]), "Bob won!", "8-Ball · Race to 4", "Bob", "Luc", "3", "Bob", "Rating", "Luc", "Rating", time(wins[1]), "450", "456", "+6", "420", "414", "−6", "2", "3",
+      "Luc  4 – 3  Bob", "8-Ball · Race to 4 · " + time(wins[2]), "🎉🏆🎉", "Congratulations!", "Luc won the tournament with 4 wins! (race-to 4)", "8-Ball · Race to 4 wins", "Luc", "Bob", "3", "Luc", "Rating", "Bob", "Rating", time(wins[2]), "414", "422", "+8", "456", "448", "−8", "3", "4",
       "Luc  3 – 3  Bob", "8-Ball · Race to 4 · " + time(s0 + 150000)];
     check("the captions: who plays who, the race score, the game, the race to, the time; each winning shot's score card - the score after it, the race won: the race-won screen's words - " + JSON.stringify(drawn), JSON.stringify(drawn) === JSON.stringify(wantDrawn), { drawn, wantDrawn });
     const reelBodyFirst = reelBody;
@@ -223,7 +225,7 @@ const GREEN = "rgb(79, 209, 139)";
     const rolls = reelBody ? reelBody.clips.map((c) => c.roll && /^data:image\/png;base64,/.test(c.roll.strip) && /^data:image\/png;base64,/.test(c.roll.flash) && [c.roll.x, c.roll.y, c.roll.w, c.roll.h].every((v) => v > 0)) : null;
     check("...each with its roll (the winner's old number into the new, its glow): " + JSON.stringify(rolls), JSON.stringify(rolls) === JSON.stringify([true, true, true, undefined]), rolls);
     const qrolls = reelBody ? reelBody.clips.map((c) => (c.qroll || []).filter((q) => /^data:image\/png;base64,/.test(q.strip) && [q.x, q.y, q.w, q.h].every((v) => v > 0)).length) : null;
-    check("...and the winner's Q-Score rolling: " + JSON.stringify(qrolls), JSON.stringify(qrolls) === JSON.stringify([1, 1, 1, 0]), qrolls);
+    check("...and the Q-Scores rolling, the winner's and the loser's: " + JSON.stringify(qrolls), JSON.stringify(qrolls) === JSON.stringify([2, 2, 2, 0]), qrolls);
     if (OUT && reelLen) {
       execFileSync(FF, ["-v", "error", "-y", "-ss", "40", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_frame.png")]);
       // the cards in the video: the first's middle (30-33 s), the race won's (96-101 s)

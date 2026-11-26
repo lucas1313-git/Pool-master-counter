@@ -685,7 +685,7 @@ function attachRecorderRoutes(app) {
 
 // body: { clips: [{ from, to, bug: "data:image/png;base64,...", card (the same - a score card
 // after it), cardSecs, roll (its old score rolling into the new - server/reel.js), qroll (the
-// winners' Q-Scores, the same way: [{ strip, x, y, w, h }]) }], aspect,
+// players' Q-Scores, the same way: [{ strip, x, y, w, h }]) }], aspect,
 // sound, name, fade (a card's, in and off - s) }
 function buildHighlightReel(body, cb) {
   var pngOf = function (v) {
@@ -702,7 +702,7 @@ function buildHighlightReel(body, cb) {
   var clips = body.clips.slice(0, 200).map(function (c) {
     var card = pngOf(c && c.card);
     return { from: Number(c && c.from), to: Number(c && c.to), bug: pngOf(c && c.bug), card: card, cardSecs: card ? Math.max(1, Math.min(12, Number(c.cardSecs) || 3)) : 0, roll: card ? rollOf(c.roll) : null,
-      qroll: card && Array.isArray(c.qroll) ? c.qroll.slice(0, 6).map(rollOf).filter(Boolean) : [] };
+      qroll: card && Array.isArray(c.qroll) ? c.qroll.slice(0, 12).map(rollOf).filter(Boolean) : [] };
   }).filter(function (c) { return c.from > 0 && c.to > c.from && c.to - c.from <= 120000; });
   reel.buildReel({ ffmpeg: ffmpeg, runFfmpeg: runFfmpeg, piecesFor: piecesFor, root: root }, {
     clips: clips,

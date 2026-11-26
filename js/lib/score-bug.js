@@ -89,25 +89,34 @@
   // side, the winner's edged in gold, its number gold - on the board's red felt with its gold
   // edge, "Luc won!" on top ("in top of the score card I would like to see [player name/ team]
   // won!"); the race won: the race-won screen's look above it (🎉🏆🎉, Congratulations!, who won).
-  // Under the panels, the winners' Q-Scores going up ("I would like to see with a similar
-  // animation the q-score of the winners going up"): a chip each - the name, "Rating", the number
-  // and what the game did to it.
-  // card: { head ("Luc won!"), title ("8-Ball · Race to 7"), sides [{ name, value }] (the winner's
+  // Under each panel, its players' Q-Scores ("I would like to see with a similar animation the
+  // q-score of the winners going up", "on the left I want to see the q-score of the winner(s) and
+  // in the right the q-score of the losers"): a chip each, one under the other - the name,
+  // "Rating", the number (the winner's gold) and what the game did to it.
+  // card: { head ("Luc won!"), title ("8-Ball · Race to 7"), sides [{ name, value, q [{ name,
+  // from, value }] (its players' Q-Scores before and after - they roll too) }] (the winner's
   // first), from (the winner's number before the win - it rolls from that to its value: see
-  // cardParts), q [{ name, from, value }] (the winners' Q-Scores before and after - they roll too)
-  // and qLabel ("Rating"), foot ("9:41 PM"), won: { congrats, headline } or null }; w wide
-  function hasQ(card) { return !!(card.q && card.q.length); }
+  // cardParts), qLabel ("Rating"), foot ("9:41 PM"), won: { congrats, headline } or null }; w wide
+  // (the Q-Scores in order - side by side, as the panels: [{ item, side, row }]; how many rows)
+  function qItems(card) {
+    var list = [];
+    card.sides.forEach(function (sd, i) { (sd.q || []).forEach(function (item, row) { list.push({ item: item, side: i, row: row }); }); });
+    return list;
+  }
+  function qRows(card) { return card.sides.reduce(function (most, sd) { return Math.max(most, (sd.q || []).length); }, 0); }
   function cardHeight(card, w) {
-    return Math.round(w * ((card.won ? 0.74 : card.head ? 0.58 : 0.5) + (hasQ(card) ? 0.1 : 0)));
+    var rows = qRows(card);
+    return Math.round(w * ((card.won ? 0.74 : card.head ? 0.58 : 0.5) + (rows ? 0.03 + rows * 0.07 + (rows - 1) * 0.015 : 0)));
   }
   // what rolls: the winner's number (a number before, another after), a Q-Score that changed
   function scoreRolls(card) { return typeof card.from === "number" && card.from !== card.sides[0].value; }
   function qRolls(item) { return typeof item.from === "number" && item.from !== item.value; }
   function signed(v) { return (v < 0 ? "−" : "+") + Math.abs(v); }
-  // a Q-Score at (x, baseline y): its number - and, after it, the change (with: the number after)
-  function drawQ(ctx, v, change, x, y, px) {
+  // a Q-Score at (x, baseline y): its number (a winner's gold) - and, after it, the change (with:
+  // the number after)
+  function drawQ(ctx, v, change, x, y, px, win) {
     ctx.font = "800 " + px + "px " + FONT;
-    ctx.fillStyle = "#ffd23f";
+    ctx.fillStyle = win ? "#ffd23f" : "#f6efe9";
     ctx.fillText(String(v), x, y);
     if (change === null) return;
     var nx = x + ctx.measureText(String(v)).width + px * 0.25;
@@ -157,8 +166,9 @@
     // the panels
     var n = Math.max(1, card.sides.length), gap = Math.round(w * (n === 2 ? 0.05 : 0.03));
     var pw = (inner - gap * (n - 1)) / n, ph = Math.round(w * 0.25), py = at + w * 0.075, out = { h: h };
+    var colX = function (i) { return x + pad + i * (pw + gap); };
     card.sides.forEach(function (sd, i) {
-      var px = x + pad + i * (pw + gap), win = i === 0, r = Math.round(w * 0.022);
+      var px = colX(i), win = i === 0, r = Math.round(w * 0.022);
       roundRect(ctx, px, py, pw, ph, r);
       ctx.fillStyle = win ? "rgba(232, 185, 35, 0.16)" : "rgba(0, 0, 0, 0.3)";
       ctx.fill();
@@ -175,15 +185,14 @@
       ctx.fillStyle = win ? "#ffd23f" : "#f6efe9";
       centred(ctx, valueText(sd.value), px + pw / 2, py + ph * 0.86, Math.round(ph * 0.54), "800", pw - ph * 0.16);
     });
-    // the Q-Scores: a chip a winner, in a row in the middle
-    var below = py + ph;
-    if (hasQ(card)) {
-      var qn = card.q.length, qgap = Math.round(w * 0.03), qh = Math.round(w * 0.07), qy = Math.round(below + w * 0.03);
-      var cw = Math.min((inner - qgap * (qn - 1)) / qn, inner * 0.62), qx = x + pad + (inner - (cw * qn + qgap * (qn - 1))) / 2;
+    // the Q-Scores: a chip a player, under their side's panel, one under the other
+    var below = py + ph, rows = qRows(card);
+    if (rows) {
+      var qh = Math.round(w * 0.07), qgap = Math.round(w * 0.015), top = Math.round(below + w * 0.03), cw = pw;
       var npx = Math.round(qh * 0.55), qp = Math.round(qh * 0.28), base = Math.round(qh * 0.7);
       out.q = [];
-      card.q.forEach(function (item, i) {
-        var chx = qx + i * (cw + qgap);
+      qItems(card).forEach(function (it) {
+        var item = it.item, chx = colX(it.side), qy = top + it.row * (qh + qgap);
         roundRect(ctx, chx, qy, cw, qh, Math.round(qh * 0.3));
         ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
         ctx.fill();
@@ -205,9 +214,9 @@
           ctx.fillText(label, chx + qp + nameW + qh * 0.2, qy + base);
         }
         out.q.push({ x: bx, y: Math.round(qy), w: bw, h: qh, base: base, px: npx });
-        if (!(bare && qRolls(item))) drawQ(ctx, item.value, qRolls(item) ? item.value - item.from : null, bx, qy + base, npx);
+        if (!(bare && qRolls(item))) drawQ(ctx, item.value, qRolls(item) ? item.value - item.from : null, bx, qy + base, npx, it.side === 0);
       });
-      below = qy + qh;
+      below = top + rows * qh + (rows - 1) * qgap;
     }
     if (card.foot) {
       ctx.fillStyle = "#c9a2a2";
@@ -238,19 +247,20 @@
   // card show"): the card without the winner's number; the strip its number rolls up (the old
   // one above the new - server/reel.js shows a box of it, moving down), where (x, y, w, h - in
   // the card), and the gold glow its panel flashes as the new one lands (fx, fy). No number
-  // before (card.from null - a points game): no roll. The winners' Q-Scores the same way, each a
-  // strip of its own (the old number over the new and the change) - qroll.
+  // before (card.from null - a points game): no roll. The Q-Scores the same way (the winners'
+  // going up, the losers' down), each a strip of its own (the old number over the new and the
+  // change) - qroll.
   // -> { card (PNG data URL), roll: { strip, flash (PNG data URLs), x, y, w, h, fx, fy } or null,
   //   qroll: [{ strip, x, y, w, h }] }
   function cardParts(card, w) {
     var c = canvasOf(w, cardHeight(card, w)), at = drawCard(c.getContext("2d"), 0, 0, w, card, true);
-    var qroll = (card.q || []).map(function (item, i) {
-      var b = at.q && at.q[i];
+    var qroll = qItems(card).map(function (it, i) {
+      var b = at.q && at.q[i], item = it.item;
       if (!b || !qRolls(item)) return null;
       var st = canvasOf(b.w, b.h * 2), sx = st.getContext("2d");
       sx.textBaseline = "alphabetic";
-      drawQ(sx, item.from, null, 0, b.base, b.px);
-      drawQ(sx, item.value, item.value - item.from, 0, b.h + b.base, b.px);
+      drawQ(sx, item.from, null, 0, b.base, b.px, it.side === 0);
+      drawQ(sx, item.value, item.value - item.from, 0, b.h + b.base, b.px, it.side === 0);
       return { strip: st.toDataURL("image/png"), x: b.x, y: b.y, w: b.w, h: b.h };
     }).filter(Boolean);
     if (!scoreRolls(card) || !at.box) return { card: c.toDataURL("image/png"), roll: null, qroll: qroll };

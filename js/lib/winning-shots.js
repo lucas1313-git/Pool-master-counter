@@ -104,7 +104,8 @@
   // [{ at, winners [names], losers [[names] a side], game, gameType, score ("7-3"), sides
   //   [{ names, value }] (the winner's first - the score's numbers), points (true: a points game's
   //   points), raceTo (a race: its length), wonRace (true: it won the race), name, ratings (src
-  //   with ratings: the winners' Q-Scores [{ name, from, to }] - see ratingsAt) }]
+  //   with ratings: the winners' Q-Scores [{ name, from, to }] - see ratingsAt; each side's too, in
+  //   sides[].ratings) }]
   //   src = { gameHistory, playerStats, tournamentResults, ratings } - as js/lib/night-timeline.js
   //   takes it (and the scoreboard's ratings)
   function between(src, start, end) {
@@ -146,17 +147,24 @@
         // (the race won with it - not stopped early)
         w.wonRace = !!w.raceTo && (!!rack.wonRace || w.sides[0].value >= w.raceTo);
         w.name = shotName(w);
-        if (src && src.ratings) w.ratings = ratingsAt(src.ratings, w.winners, rack.ts || new Date(x.ms).toISOString());
+        // (the Q-Scores: the winners', and each side's - the losers' going down)
+        if (src && src.ratings) {
+          var ts = rack.ts || new Date(x.ms).toISOString();
+          w.ratings = ratingsAt(src.ratings, w.winners, ts);
+          w.sides.forEach(function (sd, i) { sd.ratings = i === 0 ? w.ratings : ratingsAt(src.ratings, sd.names, ts); });
+        }
         out.push(w);
       });
     });
     return out.sort(function (a, b) { return a.at - b.at; });
   }
 
-  // Each winner's Q-Score (rating) just before the game and just after it (2026-11-26, the user:
-  // "I would like to see with a similar animation the q-score of the winners going up"): from
+  // Each player's Q-Score (rating) just before the game and just after it (2026-11-26, the user:
+  // "I would like to see with a similar animation the q-score of the winners going up" - then
+  // "on the left I want to see the q-score of the winner(s) and in the right the q-score of the
+  // losers"): from
   // their rating history (ratings - the scoreboard's: { name: { history [{ ts, rating, delta }] } }),
-  // the point the game made (at its time, ts) -> [{ name, from, to }] - a winner without one left
+  // the point the game made (at its time, ts) -> [{ name, from, to }] - a player without one left
   // out (an unrated game, a history trimmed)
   function ratingsAt(ratings, names, ts) {
     var byKey = {}, t = Date.parse(ts);

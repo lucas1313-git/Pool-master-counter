@@ -7,7 +7,7 @@
 // draws): the video goes on under it for its seconds (the last picture held if the recording
 // stops), darkened, the card fading in over the middle - with a roll (clip.roll: the winner's
 // number as a strip PNG, the old one over the new, and a glow), the old score rolling up into the
-// new and its panel flashing gold as it lands, then the winners' Q-Scores rolling up the same way
+// new and its panel flashing gold as it lands, then the players' Q-Scores rolling the same way
 // (clip.qroll); then straight to the next clip, the card
 // and the dark fading off it as it starts (2026-11-26, the user: "make sure that the transition
 // from the score card goes straight to the next clip") - after the last clip, all to black. Its

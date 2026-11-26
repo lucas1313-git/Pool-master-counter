@@ -133,8 +133,9 @@ test("a team game kept with the teams' own count (raceTeams): the board's, as it
   assert.deepEqual(wins.map((w) => w.score), ["4-3"]);
 });
 
-// (2026-11-26, the user: "I would like to see with a similar animation the q-score of the winners going up")
-test("the winners' Q-Scores just before the game and after it, from their rating history (src.ratings)", () => {
+// (2026-11-26, the user: "I would like to see with a similar animation the q-score of the winners going up",
+// "on the left I want to see the q-score of the winner(s) and in the right the q-score of the losers")
+test("the winners' Q-Scores just before the game and after it, from their rating history (src.ratings) - each side's too", () => {
   const n = night();
   const from = n.now();
   const t1 = n.rack({ w: ["Luc", "Chris"], l: ["Bob", "Kim"], team: 1 });
@@ -143,10 +144,15 @@ test("the winners' Q-Scores just before the game and after it, from their rating
   n.src.ratings = {
     "luc ": { name: "Luc", history: [{ ts: iso(t1 - 3600000), rating: 400, delta: 0 }, { ts: iso(t1), rating: 411.4, delta: 7.2, fromGame: true }, { ts: iso(t2), rating: 405, delta: -6.4, fromGame: true }] },
     Chris: { name: "Chris", history: [{ ts: iso(t1 + 400), rating: 388, fromGame: true }] }, // (no delta, nothing before: left out)
-    Bob: { name: "Bob", history: [{ ts: iso(t2 - 60000), rating: 450, delta: 3 }, { ts: iso(t2 + 300), rating: 456, fromGame: true }] } // (within the second, no delta: the one before)
+    Bob: { name: "Bob", history: [{ ts: iso(t2 - 60000), rating: 450, delta: 3 }, { ts: iso(t2 + 300), rating: 456, fromGame: true }] }, // (within the second, no delta: the one before)
+    Kim: { name: "Kim", history: [{ ts: iso(t1), rating: 380, delta: -7, fromGame: true }] }
   };
   const wins = W.between(n.src, from, t2);
   assert.deepEqual(wins.map((w) => w.ratings), [[{ name: "Luc", from: 404, to: 411 }], [{ name: "Bob", from: 450, to: 456 }]]);
+  assert.deepEqual(wins.map((w) => w.sides.map((sd) => sd.ratings)), [
+    [[{ name: "Luc", from: 404, to: 411 }], [{ name: "Kim", from: 387, to: 380 }]],
+    [[{ name: "Bob", from: 450, to: 456 }], [{ name: "Luc", from: 411, to: 405 }]]
+  ]);
   delete n.src.ratings;
   assert.equal(W.between(n.src, from, t2)[0].ratings, undefined);
 });
