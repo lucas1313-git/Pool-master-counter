@@ -2750,7 +2750,7 @@
   "keypad.speakPlayingRace": "Si {{name}} ang naglalaro, {{score}}",
   "rec.winRenamed": "🏆 {{n}} panalong tira ang pinangalanang muli, kasama ang score ng race at ang oras.",
   "rec.oneVideo": "🎞 Isang video",
-  "rec.oneVideoTitle": "Ang mga naka-check na clip, pinagsama sa isang video, ayon sa pagkakasunod, bawat isa may caption: sino ang naglalaro laban sa sino, ang score ng race (sa larong may puntos: ang puntos), ang oras",
+  "rec.oneVideoTitle": "Ang mga naka-check na clip, pinagsama sa isang video, ayon sa pagkakasunod, bawat isa may caption: sino ang naglalaro laban sa sino, ang score ng race (sa larong may puntos: ang puntos), ang oras; pagkatapos ng bawat panalong tira, ang score card (panalo sa race: ang screen ng panalo)",
   "rec.capRaceTo": "Race to {{n}}",
   "rec.capTable": "Ang mesa",
   "rec.oneMaking": "🎞 Ginagawa ang isang video ng {{n}} clip ({{len}}), bawat isa may caption - ilang minuto...",

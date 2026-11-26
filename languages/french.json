@@ -2750,7 +2750,7 @@
   "keypad.speakPlayingRace": "{{name}} joue, {{score}}",
   "rec.winRenamed": "🏆 {{n}} coups gagnants renommés, avec le score de la course et l'heure.",
   "rec.oneVideo": "🎞 Une seule vidéo",
-  "rec.oneVideoTitle": "Les clips cochés réunis en une seule vidéo, dans l'ordre où ils se sont passés, chacun avec sa légende : qui joue contre qui, le score de la course (un jeu aux points : les points), l'heure",
+  "rec.oneVideoTitle": "Les clips cochés réunis en une seule vidéo, dans l'ordre où ils se sont passés, chacun avec sa légende : qui joue contre qui, le score de la course (un jeu aux points : les points), l'heure ; après chaque coup gagnant, la carte des scores (une course gagnée : l'écran de victoire)",
   "rec.capRaceTo": "Course à {{n}}",
   "rec.capTable": "La table",
   "rec.oneMaking": "🎞 Création d'une vidéo de {{n}} clips ({{len}}), chacun avec sa légende - quelques minutes...",

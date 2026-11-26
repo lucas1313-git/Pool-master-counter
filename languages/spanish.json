@@ -2750,7 +2750,7 @@
   "keypad.speakPlayingRace": "Juega {{name}}, {{score}}",
   "rec.winRenamed": "🏆 {{n}} tiros ganadores renombrados, con el marcador de la carrera y la hora.",
   "rec.oneVideo": "🎞 Un solo video",
-  "rec.oneVideoTitle": "Los clips marcados unidos en un solo video, en el orden en que pasaron, cada uno con su leyenda: quién juega contra quién, el marcador de la carrera (un juego a puntos: los puntos), la hora",
+  "rec.oneVideoTitle": "Los clips marcados unidos en un solo video, en el orden en que pasaron, cada uno con su leyenda: quién juega contra quién, el marcador de la carrera (un juego a puntos: los puntos), la hora; después de cada tiro ganador, la tarjeta del marcador (una carrera ganada: la pantalla de la victoria)",
   "rec.capRaceTo": "Carrera a {{n}}",
   "rec.capTable": "La mesa",
   "rec.oneMaking": "🎞 Haciendo un video de {{n}} clips ({{len}}), cada uno con su leyenda - unos minutos...",

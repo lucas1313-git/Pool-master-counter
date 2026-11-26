@@ -5,7 +5,12 @@
 // - 9:16, sound off: 1080 x 1920, no sound, as long as the three clips; the score bug burned in
 //   (a red PNG here: the bottom left of a frame is red - and isn't in the same reel without it);
 // - 16:9, sound on: 1920 x 1080 with sound;
-// - a clip no recording covers is skipped, the rest still made.
+// - a clip no recording covers is skipped, the rest still made;
+// - a score card after a clip (🎞 One video's winning shots, 2026-11-26 - a yellow PNG here): 3 s
+//   more of the recording under it, darker, the card in the middle; then straight to the next
+//   clip, no black between ("make sure that the transition from the score card goes straight to
+//   the next clip"), the card fading off it; a card past the end of the recording: the last
+//   picture held under it; a card after the last clip: to black, the sound fading out.
 // usage: node tests/test_highlight_reel.js
 const fs = require("fs");
 const os = require("os");
@@ -37,10 +42,16 @@ const bug = "data:image/png;base64," + fs.readFileSync(bugFile).toString("base64
 const probe = (f) => JSON.parse(cp.execFileSync(FP, ["-v", "error", "-show_entries", "stream=codec_type,width,height:format=duration", "-of", "json", f]).toString());
 // the average colour of a w x h box at (x, y) of the frame at t seconds
 const colourAt = (f, t, x, y, w, h) => {
-  const raw = cp.execFileSync(FF, ["-hide_banner", "-loglevel", "error", "-ss", String(t), "-i", f, "-frames:v", "1", "-vf", "crop=" + w + ":" + h + ":" + x + ":" + y, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]);
+  const raw = cp.execFileSync(FF, ["-hide_banner", "-loglevel", "error", "-ss", String(t), "-i", f, "-frames:v", "1", "-vf", "crop=" + w + ":" + h + ":" + x + ":" + y, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: 64 * 1024 * 1024 });
   const sum = [0, 0, 0];
   for (let i = 0; i < raw.length; i += 3) { sum[0] += raw[i]; sum[1] += raw[i + 1]; sum[2] += raw[i + 2]; }
   return sum.map((v) => Math.round(v / (raw.length / 3)));
+};
+// the mean loudness (dB) from t, d seconds long
+const loudness = (f, t, d) => {
+  const r = cp.spawnSync(FF, ["-hide_banner", "-ss", String(t), "-t", String(d), "-i", f, "-af", "volumedetect", "-f", "null", "-"]);
+  const m = /mean_volume: (-?[\d.]+) dB/.exec(String(r.stderr));
+  return m ? Number(m[1]) : -91;
 };
 const build = (body) => new Promise((ok) => recorder._buildHighlightReel(body, (err, r) => ok({ err, r })));
 
@@ -68,6 +79,41 @@ const build = (body) => new Promise((ok) => recorder._buildHighlightReel(body, (
     check("16:9, sound on: " + (v2 ? v2.width + " x " + v2.height : "-") + " with sound", !err && v2 && v2.width === 1920 && v2.height === 1080 && info2.streams.some((s) => s.codec_type === "audio"), { err: err && err.message, info2 });
     ({ err, r } = await build({ clips: clips.concat([{ from: t0 + 100000, to: t0 + 104000, bug }]), aspect: "16:9", sound: false, name: "With a gap" }));
     check("a clip no recording covers: skipped, the other three made (" + (r && r.clips) + ")", !err && r.clips === 3 && r.skipped.length === 1, { err: err && err.message, r });
+
+    // the score card: after the 2nd clip (10-13 s), 3 s; after one ending with the recording (26-30 s), 2 s
+    const cardFile = path.join(HOME, "card.png");
+    ff(["-f", "lavfi", "-i", "color=c=yellow:s=800x400", "-frames:v", "1", cardFile]);
+    const card = "data:image/png;base64," + fs.readFileSync(cardFile).toString("base64");
+    const carded = clips.map((c, i) => (i === 1 ? Object.assign({ card, cardSecs: 3 }, c) : c)).concat([{ from: t0 + 26000, to: t0 + 30000, bug, card, cardSecs: 2 }]);
+    ({ err, r } = await build({ clips: carded, aspect: "16:9", sound: true, name: "With cards" }));
+    const out3 = r && path.join(root, "Highlights", r.file);
+    const info3 = out3 && fs.existsSync(out3) ? probe(out3) : null;
+    const dur3 = info3 ? Number(info3.format.duration) : 0;
+    check("score cards: " + dur3.toFixed(1) + " s (3 + 3+3 + 4 + 4+2), " + (r && r.seconds) + " s said", !err && Math.abs(dur3 - 19) < 0.6 && Math.abs(r.seconds - 19) < 0.2 && r.clips === 4, { err: err && err.message, r, dur3 });
+    if (info3) {
+      const yellow = (c) => c[0] > 200 && c[1] > 200 && c[2] < 80;
+      const lum = (c) => c[0] + c[1] + c[2];
+      // the 2nd clip: 3-6 s, its card 6-9 s
+      const before = colourAt(out3, 5.5, 900, 500, 120, 80), onCard = colourAt(out3, 7.5, 900, 500, 120, 80);
+      check("...the card in the middle once the clip is over (" + onCard.join(",") + "), not before (" + before.join(",") + ")", yellow(onCard) && !yellow(before), { before, onCard });
+      const cornerClip = colourAt(out3, 5.5, 100, 480, 200, 120), cornerCard = colourAt(out3, 7.5, 100, 480, 200, 120);
+      check("...the video still there around it, darker (" + cornerCard.join(",") + " vs " + cornerClip.join(",") + ")", lum(cornerCard) > 15 && lum(cornerCard) < lum(cornerClip) * 0.6, { cornerClip, cornerCard });
+      const bugOff = colourAt(out3, 7.5, 120, 920, 60, 40), red = (c) => c[0] > 180 && c[1] < 70 && c[2] < 70;
+      check("...the caption gone under the card (" + bugOff.join(",") + ")", !red(bugOff), bugOff);
+      // the cut at 9 s: the card on to the end, then the next clip at once under it, fading off
+      const cardEnd = colourAt(out3, 8.97, 900, 500, 120, 80), aroundEnd = colourAt(out3, 8.97, 100, 480, 200, 120);
+      const cardGoing = colourAt(out3, 9.04, 900, 500, 120, 80), aroundNext = colourAt(out3, 9.04, 100, 480, 200, 120);
+      const cardGone = colourAt(out3, 9.6, 900, 500, 120, 80), aroundOn = colourAt(out3, 9.6, 100, 480, 200, 120);
+      check("...then straight to the next clip, no black: the card till the cut (" + cardEnd.join(",") + "), the next clip under it at once (around it " + aroundEnd.join(",") + " -> " + aroundNext.join(",") + "), the card off it (" + cardGoing.join(",") + " -> " + cardGone.join(",") + ", around it " + aroundOn.join(",") + ")",
+        yellow(cardEnd) && lum(aroundEnd) > 40 && lum(aroundNext) > 40 && yellow(cardGoing) && !yellow(cardGone) && lum(cardGone) > 150 && lum(aroundOn) > lum(aroundNext) * 1.6, { cardEnd, aroundEnd, cardGoing, aroundNext, cardGone, aroundOn });
+      const loud = loudness(out3, 4, 1), under = loudness(out3, 7, 1), nextLoud = loudness(out3, 9.3, 0.5);
+      check("...the sound going on under the card (" + under + " dB vs " + loud + " dB), the next clip's right after (" + nextLoud + " dB)", Math.abs(under - loud) < 2 && Math.abs(nextLoud - loud) < 2, { loud, under, nextLoud });
+      // the last: 13-17 s, its card 17-19 s - the recording ended at 17 s
+      const held = colourAt(out3, 18, 900, 500, 120, 80);
+      check("...a card past the end of the recording: still there (" + held.join(",") + ")", yellow(held), held);
+      const black = colourAt(out3, 18.97, 0, 0, 1920, 1080), quiet = loudness(out3, 18.86, 0.1);
+      check("...the card after the last clip: the video ends to black (" + black.join(",") + "), the sound fading out (" + quiet + " dB)", lum(black) < 40 && quiet < loud - 12, { black, quiet });
+    }
   } finally {
     fs.rmSync(HOME, { recursive: true, force: true });
   }

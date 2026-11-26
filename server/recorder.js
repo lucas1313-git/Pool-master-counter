@@ -52,8 +52,8 @@ var os = require("os");
 var childProcess = require("child_process");
 
 var MAX_JSON = 256 * 1024;
-// (a reel's request carries a small PNG score bug a clip)
-var MAX_REEL_JSON = 16 * 1024 * 1024;
+// (a reel's request carries a small PNG score bug a clip - a winning shot's, its score card too)
+var MAX_REEL_JSON = 64 * 1024 * 1024;
 var reel = require("./reel");
 
 function root() { return path.join(os.homedir(), "Movies", "Pool Master Counter"); }
@@ -683,12 +683,17 @@ function attachRecorderRoutes(app) {
   });
 }
 
-// body: { clips: [{ from, to, bug: "data:image/png;base64,..." }], aspect, sound, name }
+// body: { clips: [{ from, to, bug: "data:image/png;base64,...", card (the same - a score card
+// after it), cardSecs }], aspect, sound, name }
 function buildHighlightReel(body, cb) {
+  var pngOf = function (v) {
+    var m = /^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/.exec(String(v || ""));
+    return m ? Buffer.from(m[1], "base64") : null;
+  };
   // (up to 200: 🎞 One video of a night's checked cues - js/cue-viewer.js)
   var clips = body.clips.slice(0, 200).map(function (c) {
-    var m = /^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/.exec(String((c && c.bug) || ""));
-    return { from: Number(c && c.from), to: Number(c && c.to), bug: m ? Buffer.from(m[1], "base64") : null };
+    var card = pngOf(c && c.card);
+    return { from: Number(c && c.from), to: Number(c && c.to), bug: pngOf(c && c.bug), card: card, cardSecs: card ? Math.max(1.5, Math.min(8, Number(c.cardSecs) || 3)) : 0 };
   }).filter(function (c) { return c.from > 0 && c.to > c.from && c.to - c.from <= 120000; });
   reel.buildReel({ ffmpeg: ffmpeg, runFfmpeg: runFfmpeg, piecesFor: piecesFor, root: root }, {
     clips: clips,

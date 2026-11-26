@@ -205,7 +205,7 @@
       '<div class="cv-group"><label><input type="checkbox" class="cv-pick-all"> All</label><span class="dim cv-picked">none checked</span>' +
       '<button class="cv-group-del" data-g="delete" disabled>🗑 Delete</button><button data-g="export" disabled title="Cut each one out and download it">⬇ Export</button>' +
       '<button data-g="keep" disabled title="Cut out and kept for good - not cleaned up, not deleted with its recording">📌 Save (keep forever)</button><button data-g="share" disabled title="This computer\'s share menu">📤 Share</button>' +
-      '<button data-g="one" disabled title="' + esc(tr("rec.oneVideoTitle", "The checked clips joined into one video, in the order they happened, each with its caption: who plays who, the race score (a points game: the points), the time")) + '">' + esc(tr("rec.oneVideo", "🎞 One video")) + "</button></div>" +
+      '<button data-g="one" disabled title="' + esc(tr("rec.oneVideoTitle", "The checked clips joined into one video, in the order they happened, each with its caption: who plays who, the race score (a points game: the points), the time; after each winning shot, the score card (a race won: the race-won screen)")) + '">' + esc(tr("rec.oneVideo", "🎞 One video")) + "</button></div>" +
       '<div class="cv-filter" hidden></div>' +
       '<table><tbody class="cv-rows"></tbody></table>' +
       (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b><div class="cv-sess dim">Loading...</div></div>' +
@@ -937,22 +937,45 @@
     // caption, saying who is playing with who and the race to score. if it is a point game the
     // point score"). server/reel.js cuts and joins them (16:9, with the sound), kept in
     // Highlights and downloaded; the captions are drawn here (js/lib/score-bug.js).
-    var oneBusy = false;
+    // After each winning shot, its score card (2026-11-26, the user: "in between every win, after
+    // the most recent one, a quick fade in fade out of the score card, as a transition. this way we
+    // can see the progress ... when there is a race-to win, the transition could even be the
+    // winning window"): the video goes on under it a moment, darker, the card fading in, then
+    // straight to the next clip, the card fading off it ("make sure that the transition from the
+    // score card goes straight to the next clip") - 3 s; the race won: the race-won screen, 5 s.
+    var oneBusy = false, CARD_SECS = 3, RACE_WON_SECS = 5;
     function sidesText(sides) {
       var who = function (sd) { return sd.names.join(" & "); };
       if (sides.length === 2) return who(sides[0]) + "  " + sides[0].value + " – " + sides[1].value + "  " + who(sides[1]);
       return sides.map(function (sd) { return who(sd) + " " + sd.value; }).join(" · ");
     }
+    function clockOf(at) { return new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+    function raceToText(n) { return n > 1 ? tr("rec.capRaceTo", "Race to {{n}}", { n: n }) : ""; }
+    // a winning shot's game, from the scoreboard's games (src) - or null
+    function winOf(c, src) {
+      if (c.kind !== "win" || !c.winAt) return null;
+      return window.PMCLib.winningShots.between(src, c.winAt - 2000, c.winAt + 2000).sort(function (x, y) { return Math.abs(x.at - c.winAt) - Math.abs(y.at - c.winAt); })[0] || null;
+    }
+    // its score card (js/lib/score-bug.js cardPng) - the race won: the race-won screen's words
+    function cardFor(w) {
+      var who = function (sd) { return sd.names.join(" & "); };
+      return {
+        title: [w.game, w.wonRace ? tr("milestone.raceToWins", "Race to {{target}} wins", { target: w.raceTo }) : raceToText(w.raceTo)].filter(Boolean).join(" · "),
+        sides: w.sides.map(function (sd) { return { name: who(sd), value: sd.value }; }),
+        foot: clockOf(w.at),
+        won: w.wonRace ? {
+          congrats: tr("milestone.congrats", "Congratulations!"),
+          headline: tr("milestone.headline", "{{names}} won the tournament with {{count}} wins! (race-to {{target}})", { names: who(w.sides[0]), count: w.sides[0].value, target: w.raceTo })
+        } : null
+      };
+    }
     // a cue's caption { top, bottom }, from the scoreboard's games (src)
     function captionFor(c, src) {
       var W = window.PMCLib.winningShots, at = c.kind === "win" && c.winAt ? c.winAt : c.startedAt;
-      var time = new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      var raceTo = function (n) { return n > 1 ? tr("rec.capRaceTo", "Race to {{n}}", { n: n }) : ""; };
+      var time = clockOf(at), raceTo = raceToText;
       // 🏆 a winning shot: the score once it was won
-      if (c.kind === "win" && c.winAt) {
-        var w = W.between(src, c.winAt - 2000, c.winAt + 2000).sort(function (x, y) { return Math.abs(x.at - c.winAt) - Math.abs(y.at - c.winAt); })[0];
-        if (w) return { top: sidesText(w.sides), bottom: [w.game, raceTo(w.raceTo), time].filter(Boolean).join(" · ") };
-      }
+      var w = winOf(c, src);
+      if (w) return { top: sidesText(w.sides), bottom: [w.game, raceTo(w.raceTo), time].filter(Boolean).join(" · ") };
       // a cue: who's on it, and the race as it stood then
       var who = c.player ? [c.player].concat(c.opponent ? [c.opponent] : []) : String(c.matchup || "").split(/-vs-| v /).filter(Boolean);
       var race = W.scoreAt(src, at), points = !race || race.unit === "points" || race.unit === "balls";
@@ -977,9 +1000,13 @@
       status(tr("rec.oneMaking", "🎞 Making one video of {{n}} clips ({{len}}), each with its caption - a few minutes...", { n: list.length, len: len(secs * 1000) }));
       var first = W.stamp(list[0].startedAt), last = W.stamp(list[list.length - 1].startedAt);
       var name = (list.every(function (c) { return c.kind === "win"; }) ? "Winning shots " : "Cues ") + first.slice(0, 10) + " " + first.slice(11, 16) + "-" + last.slice(11, 16);
-      var w = B.width("16:9", 1920);
+      var w = B.width("16:9", 1920), cw = B.cardWidth("16:9", 1920);
       scoreboardGames().then(function (src) {
-        var body = { clips: list.map(function (c) { return { from: c.startedAt, to: c.endedAt, bug: B.png(captionFor(c, src), w) }; }), aspect: "16:9", sound: true, name: name };
+        var body = { clips: list.map(function (c) {
+          var clip = { from: c.startedAt, to: c.endedAt, bug: B.png(captionFor(c, src), w) }, won = winOf(c, src);
+          if (won) { clip.card = B.cardPng(cardFor(won), cw); clip.cardSecs = won.wonRace ? RACE_WON_SECS : CARD_SECS; }
+          return clip;
+        }), aspect: "16:9", sound: true, name: name };
         return api("/api/rec/reel", body);
       }).then(function (r) {
         oneBusy = false;

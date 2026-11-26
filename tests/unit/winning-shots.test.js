@@ -12,7 +12,7 @@ function night(startHour) {
   const rack = (o) => {
     clock += (o.gap || 10) * 60000;
     live.unshift({ ts: new Date(clock).toISOString(), gameType: o.gt || "8ball", gameLabel: o.gl || "8-Ball", target: o.target || 1, unit: o.unit || "rack", winnerNames: o.w, opponentNames: o.l,
-      isTeam: !!o.team, wonRace: !!o.wonRace, raceTarget: o.race || 1, scores: o.scores || null, raceTally: o.tally || null });
+      isTeam: !!o.team, wonRace: !!o.wonRace, raceInterrupted: !!o.stopped, raceTarget: o.race || 1, scores: o.scores || null, raceTally: o.tally || null });
     return clock;
   };
   return { src: { gameHistory: live, playerStats: {} }, rack, now: () => clock };
@@ -67,6 +67,19 @@ test("Winner Stays, a race to 7 for the whole line: the race score kept with eac
   assert.deepEqual(wins[3].sides, [{ names: ["Bob"], value: 6 }, { names: ["Luc"], value: 3 }]);
   assert.equal(wins[3].raceTo, 7);
   assert.equal(wins[3].points, false);
+  assert.deepEqual(wins.map((w) => w.wonRace), [false, false, false, true]);
+});
+
+// (2026-11-26, the user: "when there is a race-to win, the transition could even be the winning
+// window" - 🎞 One video's card after it)
+test("the race won with a win: kept with it, or its score at the race's length; stopped early isn't; a single game isn't", () => {
+  const n = night();
+  const from = n.now();
+  n.rack({ w: ["Kim"], l: ["Jo"], race: 2, tally: { Kim: 1, Jo: 0 } });
+  n.rack({ w: ["Kim"], l: ["Jo"], race: 2, tally: { Kim: 2, Jo: 0 } });
+  n.rack({ w: ["Jo"], l: ["Kim"], race: 5, tally: { Kim: 1, Jo: 2 }, stopped: true });
+  const last = n.rack({ w: ["Jo"], l: ["Kim"] });
+  assert.deepEqual(W.between(n.src, from, last).map((w) => w.wonRace), [false, true, false, false]);
 });
 
 test("partners: the team's race score when its players' agree; a points game in a race: its points", () => {

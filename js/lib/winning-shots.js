@@ -70,7 +70,7 @@
   // The games won from start to end (ms), in order:
   // [{ at, winners [names], losers [[names] a side], game, gameType, score ("7-3"), sides
   //   [{ names, value }] (the winner's first - the score's numbers), points (true: a points game's
-  //   points), raceTo (a race: its length), name }]
+  //   points), raceTo (a race: its length), wonRace (true: it won the race), name }]
   //   src = { gameHistory, playerStats, tournamentResults } - as js/lib/night-timeline.js takes it
   function between(src, start, end) {
     var days = {}, out = [];
@@ -98,6 +98,8 @@
             points: score.points,
             raceTo: !score.points && rack.raceTarget > 1 ? rack.raceTarget : null
           };
+          // (the race won with it - not stopped early)
+          w.wonRace = !!w.raceTo && (!!rack.wonRace || w.sides[0].value >= w.raceTo);
           w.name = shotName(w);
           out.push(w);
         });

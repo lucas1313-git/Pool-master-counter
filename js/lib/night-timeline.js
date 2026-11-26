@@ -230,7 +230,7 @@
         racks: m.racks.map(function (rk) {
           // (raceTally: each seated player's wins in the race just after it, by name - the race score)
           return { endedAt: localIso(rk.endMs), durationMs: rk.startMs === null ? null : rk.endMs - rk.startMs, winner: m.keys.indexOf(rk.keys[0]), points: rk.points, ballsLeft: rk.ballsLeft, skunk: rk.skunk,
-            unit: rk.unit, raceTarget: rk.raceTarget, raceTally: rk.raceTally, endsRace: rk.endsRace };
+            unit: rk.unit, raceTarget: rk.raceTarget, raceTally: rk.raceTally, endsRace: rk.endsRace, wonRace: rk.endsRace && !rk.interrupted };
         })
       };
     });

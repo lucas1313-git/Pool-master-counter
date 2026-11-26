@@ -2750,7 +2750,7 @@
   "keypad.speakPlayingRace": "{{name}} playing, {{score}}",
   "rec.winRenamed": "🏆 {{n}} winning shots named again, with the race score and the time.",
   "rec.oneVideo": "🎞 One video",
-  "rec.oneVideoTitle": "The checked clips joined into one video, in the order they happened, each with its caption: who plays who, the race score (a points game: the points), the time",
+  "rec.oneVideoTitle": "The checked clips joined into one video, in the order they happened, each with its caption: who plays who, the race score (a points game: the points), the time; after each winning shot, the score card (a race won: the race-won screen)",
   "rec.capRaceTo": "Race to {{n}}",
   "rec.capTable": "The table",
   "rec.oneMaking": "🎞 Making one video of {{n}} clips ({{len}}), each with its caption - a few minutes...",

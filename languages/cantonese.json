@@ -2750,7 +2750,7 @@
   "keypad.speakPlayingRace": "{{name}} 上場，{{score}}",
   "rec.winRenamed": "🏆 {{n}} 個致勝一桿已經重新命名，加埋搶局比數同時間。",
   "rec.oneVideo": "🎞 合成一條片",
-  "rec.oneVideoTitle": "將剔咗嘅片段按發生次序合成一條片，每段都有字幕：邊個對邊個、搶局比數（計分遊戲：分數）、時間",
+  "rec.oneVideoTitle": "將剔咗嘅片段按發生次序合成一條片，每段都有字幕：邊個對邊個、搶局比數（計分遊戲：分數）、時間；每個致勝球之後，顯示比分卡（贏咗搶局：勝利畫面）",
   "rec.capRaceTo": "搶 {{n}}",
   "rec.capTable": "枱",
   "rec.oneMaking": "🎞 合成緊一條 {{n}} 段片段嘅片（{{len}}），每段都有字幕 - 要幾分鐘...",
