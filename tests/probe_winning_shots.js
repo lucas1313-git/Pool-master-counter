@@ -140,7 +140,7 @@ const GREEN = "rgb(79, 209, 139)";
     check("the recording has \"" + (button && button.text) + "\" (green)", button && button.text === "🏆 Winning shots" && /winning shot \[player\] vs \[player\]-\[game\]-\[score\]/.test(button.title) && button.color === GREEN, button);
 
     const said = await press(id);
-    check("🏆 pressed: \"" + said + "\"", /^🏆 1 winning shots named again, with the race score and the time\. 🏆 3 winning shots, 30 s each - green in the list, and in .*Clips\.$/.test(said), said);
+    check("🏆 pressed: \"" + said + "\"", /^🏆 1 winning shots named again, with the race score and the time\. 🏆 3 winning shots - green in the list, and in .*Clips\.$/.test(said), said);
     const cues = (await (await fetch(BASE + "api/rec/cues")).json()).cues.filter((c) => c.kind === "win").sort((a, b) => a.winAt - b.winAt);
     const wins = [g1, g2, g3].map((g) => Date.parse(g.ts));
     const want = ["winning shot Luc vs Bob-8-Ball-3-2-", "winning shot Bob vs Luc-8-Ball-3-3-", "winning shot Luc vs Bob-8-Ball-4-3-"].map((n, i) => n + stamp(wins[i]));
@@ -277,6 +277,50 @@ const GREEN = "rgb(79, 209, 139)";
     await sleep(800);
     o = await opts();
     check("...still so after a reload: " + JSON.stringify({ cards: o.cards, captions: o.captions, q: o.q, fade: o.fade, secs: o.secs }), !o.cards && !o.captions && !o.q && o.fade === "1" && o.secs === "2" && o.greyed, o);
+
+    // 🏆 the start and stop (2026-11-26, the user: "i want to be able to control how long before I
+    // click on the winner score the winning cue will stop ... from the start that is [x] seconds
+    // before till [x] seconds before the click")
+    const winOpts = () => page.evaluate(() => {
+      const r = document.querySelector(".cv-win-opts"), v = (c) => r.querySelector(c);
+      return { from: v(".cv-win-from").value, to: v(".cv-win-to").value, when: v(".cv-win-when").value, ball: v(".cv-win-shot").checked, hand: v(".cv-win-hand").checked, text: r.textContent.replace(/\s+/g, " ").trim(), kept: localStorage.getItem("pmc-win-clip") };
+    });
+    const setWin = (o) => page.evaluate((o) => {
+      const r = document.querySelector(".cv-win-opts");
+      if ("from" in o) r.querySelector(".cv-win-from").value = o.from;
+      if ("to" in o) r.querySelector(".cv-win-to").value = o.to;
+      if ("when" in o) r.querySelector(".cv-win-when").value = o.when;
+      if ("ball" in o) r.querySelector(o.ball ? ".cv-win-shot" : ".cv-win-hand").checked = true;
+      r.querySelector(".cv-win-from").dispatchEvent(new Event("change", { bubbles: true }));
+    }, o);
+    const winCues = async () => (await (await fetch(BASE + "api/rec/cues")).json()).cues.filter((c) => c.kind === "win").sort((a, b) => a.winAt - b.winAt);
+    const clipLen = (c) => { const f = c.clip && path.join(ROOT, "Clips", c.clip); return f && fs.existsSync(f) ? +execFileSync(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]).toString().trim() : null; };
+    let w = await winOpts();
+    check("🏆 its start and stop, above the recordings: \"" + w.text + "\" - 25 s before; stop: the last shot ◉ (by hand: 5 s after)", w.from === "25" && w.to === "5" && w.when === "after" && w.ball && !w.hand && w.text.replace(/\s/g, "") === "🏆Winningshots:StartsbeforeStop:📷2safterthelastshot(thecamera's)✋byhand:sbeforeafterthewinisentered", w);
+    // the first moved by hand (its start 5 s later) - kept; start 30 s before, stop 5 s before
+    await patch(cues[0], { startedAt: wins[0] - 20000, duration: 25000 });
+    await setWin({ from: "30", to: "5", when: "before" });
+    w = await winOpts();
+    const recut = await press(id);
+    let spanned = await winCues();
+    const at = (c) => [c.startedAt - s0, c.endedAt - s0];
+    check("start 30 s before, stop 5 s before (kept " + w.kept + "), 🏆 again: \"" + recut + "\" - " + JSON.stringify(spanned.map(at)) + ": the one moved by hand kept, Bob's 25 s ending 2 s after its ball (82 s in)",
+      JSON.stringify(JSON.parse(w.kept || "{}")) === JSON.stringify({ from: 30, to: 5, after: false, ball: true }) && /^🏆 2 winning shots cut again, with the new start and stop\. 🏆 3 winning shots - green in the list, and in .+Clips\.$/.test(recut) &&
+      JSON.stringify(spanned.map(at)) === JSON.stringify([[wins[0] - 20000 - s0, wins[0] + 5000 - s0], [59000, 84000], [wins[2] - 30000 - s0, wins[2] - 5000 - s0]]) && spanned[2].autoStart === spanned[2].startedAt && spanned[2].autoEnd === spanned[2].endedAt, { recut, spanned });
+    let lens = spanned.map(clipLen);
+    check("...their clips cut again: " + lens.map((x) => x && x.toFixed(1)).join(", ") + " s", lens[1] !== null && Math.abs(lens[1] - 25) <= 1.5 && lens[2] !== null && Math.abs(lens[2] - 25) <= 1.5 && spanned.every((c) => c.clip === c.name + ".mp4"), { lens, spanned });
+    await setWin({ ball: false });
+    const recut2 = await press(id);
+    spanned = await winCues();
+    lens = spanned.map(clipLen);
+    check("✋ by hand, not the last shot: \"" + recut2 + "\" - Bob's from 30 s before its win to 5 s before (" + JSON.stringify(at(spanned[1])) + ", " + (lens[1] && lens[1].toFixed(1)) + " s)",
+      /^🏆 1 winning shots cut again, with the new start and stop\. /.test(recut2) && JSON.stringify(at(spanned[1])) === JSON.stringify([wins[1] - 30000 - s0, wins[1] - 5000 - s0]) && !spanned[1].ballInAt && lens[1] !== null && Math.abs(lens[1] - 25) <= 1.5, { recut2, spanned, lens });
+    await page.reload({ waitUntil: "networkidle0" });
+    await sleep(800);
+    w = await winOpts();
+    check("...still so after a reload: " + JSON.stringify({ from: w.from, to: w.to, when: w.when, ball: w.ball }), w.from === "30" && w.to === "5" && w.when === "before" && !w.ball && w.hand, w);
+    const recut3 = await press(id);
+    check("🏆 again, nothing changed: \"" + recut3 + "\"", /^🏆 This recording's 3 winning shots are already in the list/.test(recut3), recut3);
 
     const none = await press(emptyId);
     check("the recording with no game: \"" + none + "\"", none === "🏆 No game was won on this computer's scoreboard while this recording ran.", none);

@@ -607,7 +607,8 @@ function attachRecorderRoutes(app) {
   // (keep: 📌 kept for good - its clip cut, never cleaned up, not deleted with its recording)
   // (kind: "win" - 🏆 a game's winning shot, winAt the moment the win was entered - js/cue-viewer.js)
   // (ballInAt: when the ball that won it went in, as the camera saw it - the clip ends 2 s after)
-  var CUE_FIELDS = ["name", "kind", "keep", "winAt", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter", "ballInAt"];
+  // (autoStart / autoEnd: 🏆 its start and end as made - moved by hand since, if they're not its own)
+  var CUE_FIELDS = ["name", "kind", "keep", "winAt", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter", "ballInAt", "autoStart", "autoEnd"];
   function pickCue(b, into) {
     CUE_FIELDS.forEach(function (k) {
       if (b[k] === undefined) return;
@@ -631,6 +632,8 @@ function attachRecorderRoutes(app) {
       if (!cue || !b) return sendJson(res, 404, { error: "no such cue" });
       var was = cue.name;
       pickCue(b, cue);
+      // (clip: null - its clip to be cut again: 🏆 a winning shot's start or stop changed)
+      if (b.clip === null) delete cue.clip;
       // (clipFollows: its clip in Clips/ renamed with it - 🏆 a winning shot named again, with
       // its race score and time - unless a clip has that name already)
       if (b.clipFollows === true && cue.clip && cue.name !== was) {

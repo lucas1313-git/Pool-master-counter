@@ -3,9 +3,9 @@
 // end of all games in the video ... a 30 seconds extract of these and call it winning shot [player]
 // vs [player]-[game type]-[score]"): every game the scoreboard saw won while the recording ran -
 // when the win was entered (the game's ts, a moment after the ball that won it), who won, who lost,
-// the game and the score then (the race's), the time - and its clip: 30 s ending 2 s after the
-// ball that won it went in, when the camera page watched the table (see ballIn), else 25 s before
-// the win was entered to 5 s after.
+// the game and the score then (the race's), the time - and its clip: from 25 s before the win was
+// entered to 5 s after - or the start and stop chosen (see clipSpan) - ending 2 s after the ball
+// that won it went in instead, when the camera page watched the table (see ballIn).
 // Pure: no page, no storage - js/cue-viewer.js calls it through PMCLib.winningShots (with
 // js/lib/night-timeline.js loaded before it), the unit tests load it in Node.
 (function (root) {
@@ -210,7 +210,7 @@
   // camera missed mustn't be taken for the last game's): its last ball into a pocket before then;
   // none seen, everything on the table still again (its end) - if that was before the win was entered.
   // -> { at, how: "pocket" | "still" } or null (no shot to go by: the camera page wasn't watching)
-  var LOOK_BACK_MS = 3 * 60000, BALL_TAIL_MS = 2000, CLIP_MS = BEFORE_MS + AFTER_MS;
+  var LOOK_BACK_MS = 3 * 60000, BALL_TAIL_MS = 2000;
   function ballIn(at, shots, notBefore) {
     var last = null, startOf = function (e) { return e.aimAt || e.beganAt || 0; }, since = Math.max(at - LOOK_BACK_MS, notBefore || 0);
     (shots || []).forEach(function (e) {
@@ -225,15 +225,20 @@
     return null;
   }
 
-  // its clip, inside the recording (from, to): 30 s ending 2 s after the ball went in (shots: the
-  // camera's, notBefore: the game before's win - see ballIn) - else, as before, 25 s before the win
-  // was entered to 5 s after
+  // its clip, inside the recording (from, to): 25 s before the win was entered to 5 s after - or
+  // the rule's start and stop (2026-11-26, the user: "i want to be able to control how long before
+  // I click on the winner score the winning cue will stop ... from the start that is [x] seconds
+  // before till [x] seconds before the click": { startMs, stopMs - before the win was entered, a
+  // minus number: after it }) - and, the ball that won it gone in (shots: the camera's, notBefore:
+  // the game before's win - see ballIn; rule.ballIn false: not looked for), as long a clip ending
+  // 2 s after it
   // -> { startedAt, endedAt, ballInAt, how } (ballInAt / how: only when the ball's moment was found)
-  function clipSpan(at, from, to, shots, notBefore) {
-    var b = ballIn(at, shots, notBefore);
-    if (!b) return { startedAt: Math.max(from, at - BEFORE_MS), endedAt: Math.min(to, at + AFTER_MS) };
+  function clipSpan(at, from, to, shots, notBefore, rule) {
+    var r = rule || {}, startMs = typeof r.startMs === "number" ? r.startMs : BEFORE_MS, stopMs = typeof r.stopMs === "number" ? r.stopMs : -AFTER_MS;
+    var b = r.ballIn === false ? null : ballIn(at, shots, notBefore);
+    if (!b) return { startedAt: Math.max(from, at - startMs), endedAt: Math.min(to, at - stopMs) };
     var end = Math.min(to, b.at + BALL_TAIL_MS);
-    return { startedAt: Math.max(from, end - CLIP_MS), endedAt: end, ballInAt: b.at, how: b.how };
+    return { startedAt: Math.max(from, end - (startMs - stopMs)), endedAt: end, ballInAt: b.at, how: b.how };
   }
 
   var api = { between: between, clipSpan: clipSpan, ballIn: ballIn, shotName: shotName, scoreAt: scoreAt, stamp: stamp, ratingsAt: ratingsAt, BEFORE_MS: BEFORE_MS, AFTER_MS: AFTER_MS, BALL_TAIL_MS: BALL_TAIL_MS };

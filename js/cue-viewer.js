@@ -117,12 +117,15 @@
     ".cv .cv-group button { min-height: 36px; }",
     ".cv .cv-group button.cv-group-del.sure { background: #b3261e; border-color: #b3261e; color: #fff; font-weight: 800; }",
     ".cv .cv-group button.ready { background: var(--accent, #e8b923); color: #1a0d0d; font-weight: 800; }",
-    // 🎞 One video's choices
-    ".cv .cv-one-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 6px; padding: 0 8px; }",
-    ".cv .cv-one-opts label { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; }",
-    ".cv .cv-one-opts input[type=checkbox] { width: 18px; height: 18px; margin: 0; }",
-    ".cv .cv-one-opts input[type=number] { width: 4.5em; }",
+    // 🎞 One video's choices (and 🏆 the winning shots' start and stop, above the recordings)
+    ".cv .cv-one-opts, .cv .cv-win-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 6px; padding: 0 8px; }",
+    ".cv .cv-one-opts label, .cv .cv-win-opts label { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; }",
+    ".cv .cv-one-opts input[type=checkbox], .cv .cv-win-opts input[type=checkbox] { width: 18px; height: 18px; margin: 0; }",
+    ".cv .cv-one-opts input[type=number], .cv .cv-win-opts input[type=number] { width: 4.5em; }",
     ".cv .cv-one-opts label.off { opacity: 0.45; }",
+    ".cv .cv-win-opts { margin: 4px 0 8px; padding: 0; }",
+    ".cv .cv-win-opts > span:first-child { color: #4fd18b; }",
+    ".cv .cv-win-opts input[type=radio] { width: 18px; height: 18px; margin: 0; }",
     ".cv td.pk { width: 1%; }",
     ".cv td.pk input { width: 20px; height: 20px; margin: 0; }",
     ".cv .kept { color: var(--accent, #e8b923); }",
@@ -166,8 +169,11 @@
     "}"
   ].join("\n");
 
+  // (each viewer's own radio buttons - two on one page don't share them)
+  var mounts = 0;
   function mount(root, opts) {
     opts = opts || {};
+    var mountN = ++mounts;
     if (!document.getElementById("cv-style")) {
       var st = document.createElement("style");
       st.id = "cv-style"; st.textContent = CSS;
@@ -215,12 +221,21 @@
       '<div class="cv-one-opts"><span class="dim">' + esc(tr("rec.oneVideo", "🎞 One video")) + ':</span>' +
       '<label title="' + esc(tr("rec.oneCardsTitle", "After each winning shot, the score after it (a race won: the race-won screen)")) + '"><input type="checkbox" class="cv-one-cards"> ' + esc(tr("rec.oneCards", "Score cards")) + '</label>' +
       '<label title="' + esc(tr("rec.oneCaptionsTitle", "At the bottom left of each clip: who plays who, the race score (a points game: the points), the time")) + '"><input type="checkbox" class="cv-one-captions"> ' + esc(tr("rec.oneCaptions", "Captions")) + '</label>' +
-      '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneQTitle", "On the score card: each winner's rating, going up to the new one")) + '"><input type="checkbox" class="cv-one-q"> ' + esc(tr("rec.oneQ", "Ratings")) + '</label>' +
+      '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneQTitle", "On the score card: the winners' ratings going up to the new ones, the losers' going down")) + '"><input type="checkbox" class="cv-one-q"> ' + esc(tr("rec.oneQ", "Ratings")) + '</label>' +
       '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneFadeTitle", "How long the score card takes to fade in, and to fade off onto the next clip, in seconds (0: no fade)")) + '">' + esc(tr("rec.oneFade", "Fade")) + ' <input type="number" class="cv-one-fade" min="0" max="2" step="0.1" inputmode="decimal"> ' + esc(tr("rec.secondsUnit", "s")) + '</label>' +
       '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneCardSecsTitle", "How long the score card stays, in seconds (a race won: 2 s more)")) + '">' + esc(tr("rec.oneCardSecs", "On screen")) + ' <input type="number" class="cv-one-secs" min="1" max="10" step="0.5" inputmode="decimal"> ' + esc(tr("rec.secondsUnit", "s")) + '</label></div>' +
       '<div class="cv-filter" hidden></div>' +
       '<table><tbody class="cv-rows"></tbody></table>' +
-      (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b><div class="cv-sess dim">Loading...</div></div>' +
+      (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b>' +
+        // 🏆 the winning shots' start and stop (see winOpts)
+        '<div class="cv-win-opts" title="' + esc(tr("rec.winOptsTitle", "From the moment the win is entered on the scoreboard - entered at 4:05:00, start 25 s before, stop 5 s before: the clip is 4:04:35 to 4:04:55. 🏆 Winning shots again: the clips made with other numbers are cut again (not one you moved by hand).")) + '">' +
+        '<span>' + esc(tr("rec.winButton", "🏆 Winning shots")) + ':</span>' +
+        '<label>' + esc(tr("rec.winStart", "Start")) + ' <input type="number" class="cv-win-from" min="2" max="600" step="1"> ' + esc(tr("rec.winSecsBefore", "s before")) + '</label>' +
+        '<span>' + esc(tr("rec.winStop", "Stop")) + ':</span>' +
+        '<label title="' + esc(tr("rec.winBallTitle", "When the camera page watched the table while it recorded: each clip ends 2 s after the ball that won the game went in, as long a clip as the numbers make - without it, by hand")) + '"><input type="radio" class="cv-win-shot" name="cv-win-end-' + mountN + '"> ' + esc(tr("rec.winBall", "📷 2 s after the last shot (the camera's)")) + '</label>' +
+        '<label><input type="radio" class="cv-win-hand" name="cv-win-end-' + mountN + '"> ' + esc(tr("rec.winByHand", "✋ by hand:")) + ' <input type="number" class="cv-win-to" min="0" max="120" step="1"> ' + esc(tr("rec.secondsUnit", "s")) +
+        ' <select class="cv-win-when"><option value="before">' + esc(tr("rec.winBefore", "before")) + '</option><option value="after">' + esc(tr("rec.winAfter", "after")) + '</option></select> ' + esc(tr("rec.winEntered", "the win is entered")) + '</label></div>' +
+        '<div class="cv-sess dim">Loading...</div></div>' +
         // 📁 each day's cues, as a folder of clips in the recordings folder
         '<div class="cv-sessions cv-folders-box"><b>📁 Daily cue folders</b> <span class="dim cv-folders-where"></span><div class="cv-folders dim">Loading...</div></div>' : "");
 
@@ -743,9 +758,42 @@
       var base = String(c.name || "").replace(/ \(\d+\)$/, ""), score = String(c.position || "");
       return c.source === "winning shot" && base.indexOf("winning shot ") === 0 && !!score && base.slice(-(score.length + 1)) === "-" + score;
     }
-    // 🏆 every game won during recording `id`: a cue each (30 s ending 2 s after the ball that won
-    // it went in, as the camera saw it - else 25 s before the win was entered to 5 s after), cut
-    // into the Clips folder - the ones already made kept, not made twice
+    // 🏆 The winning shots' start and stop, kept on this device (2026-11-26, the user: "i want to be
+    // able to control how long before I click on the winner score the winning cue will stop, say I
+    // click at 4:05:00 and I set 5 seconds, it should make a clip from the start that is [x] seconds
+    // before till [x] seconds before the click"): the start, s before the win was entered on the
+    // scoreboard; the stop, s before it or after it (25 s before to 5 s after, as before) - or, ball
+    // ("i need to be able to set either the last shot of set it by hand"): the last shot's ball
+    // going in, when the camera saw it (2 s after - as long a clip; not seen: by hand).
+    var WIN_KEY = "pmc-win-clip", winOpts = { from: 25, to: 5, after: true, ball: true };
+    try { Object.assign(winOpts, JSON.parse(localStorage.getItem(WIN_KEY) || "{}")); } catch (e) {}
+    function tidyWinOpts() {
+      winOpts.from = clampNum(winOpts.from, 2, 600, 25);
+      winOpts.after = winOpts.after !== false;
+      winOpts.to = clampNum(winOpts.to, 0, winOpts.after ? 120 : winOpts.from - 1, 5);
+      winOpts.ball = winOpts.ball !== false;
+    }
+    function winRule() { tidyWinOpts(); return { startMs: winOpts.from * 1000, stopMs: (winOpts.after ? -winOpts.to : winOpts.to) * 1000, ballIn: winOpts.ball }; }
+    if (opts.sessions) {
+      var renderWinOpts = function () {
+        tidyWinOpts();
+        q(".cv-win-from").value = winOpts.from;
+        q(".cv-win-to").value = winOpts.to;
+        q(".cv-win-when").value = winOpts.after ? "after" : "before";
+        q(".cv-win-shot").checked = winOpts.ball;
+        q(".cv-win-hand").checked = !winOpts.ball;
+      };
+      q(".cv-win-opts").addEventListener("change", function () {
+        winOpts = { from: q(".cv-win-from").value, to: q(".cv-win-to").value, after: q(".cv-win-when").value === "after", ball: q(".cv-win-shot").checked };
+        renderWinOpts();
+        try { localStorage.setItem(WIN_KEY, JSON.stringify(winOpts)); } catch (e) {}
+      });
+      renderWinOpts();
+    }
+    // 🏆 every game won during recording `id`: a cue each (from the start to the stop chosen - see
+    // winOpts - or as long a clip ending 2 s after the ball that won it went in, as the camera saw
+    // it), cut into the Clips folder - the ones already made kept, not made twice; made with other
+    // numbers (and not moved by hand since): cut again with these
     var winsBusy = false;
     function winningShots(id) {
       var s = sessions.filter(function (x) { return x.id === id; })[0], W = window.PMCLib && window.PMCLib.winningShots;
@@ -763,7 +811,9 @@
       };
       // (the camera's shots while it recorded: each clip ends 2 s after the ball that won it went in)
       var shotsOf = api("/api/rec/" + encodeURIComponent(s.id) + "/shots").then(function (r) { return r.shots || []; }).catch(function () { return []; });
-      Promise.all([scoreboardGames(), shotsOf]).then(function (got) {
+      // (the cues as saved - one moved by hand on the other page too)
+      var cuesNow = api("/api/rec/cues").then(function (r) { cues = (r.cues || []).sort(function (a, b) { return (b.startedAt || 0) - (a.startedAt || 0); }); });
+      Promise.all([scoreboardGames(), shotsOf, cuesNow]).then(function (got) {
         var src = got[0], shots = got[1];
         // (a win in a ⏸ pause, or before the first file: not in the video)
         var wins = W.between(src, sp.start, sp.end).filter(function (w) { var at = locate(w.at, s.id); return at && at.session.id === s.id; });
@@ -783,7 +833,26 @@
           return !!c.position && c.position !== w.score && base === W.shotName(Object.assign({}, w, { score: c.position }));
         };
         var stale = wins.filter(function (w) { var c = theCue(w); return c && (oldWinName(c) || scoreFixed(c, w)) && c.name !== w.name; }), renamed = 0;
-        var said = function (text) { return renamed ? tr("rec.winRenamed", "🏆 {{n}} winning shots named again, with the race score and the time.", { n: renamed }) + " " + text : text; };
+        // its clip's start and end: the numbers chosen (rule - null: the ones before 2026-11-26's
+        // choices, 25 s before to 5 s after); its shot after the game before was won - not a shot
+        // of that one's, the camera having missed this one's
+        var rule = winRule(), spanOf = function (w, r) {
+          var before = wins.filter(function (x) { return x.at < w.at; }).pop();
+          return W.clipSpan(w.at, sp.start, sp.end, shots, before ? before.at : null, r);
+        };
+        // ones made with other numbers (autoStart / autoEnd: as made; none: made before they were
+        // kept, with the ones then), not moved by hand since: cut again with these
+        var near = function (a, b) { return Math.abs(a - b) < 1000; };
+        var respan = wins.filter(function (w) {
+          var c = theCue(w);
+          if (!c) return false;
+          var made = typeof c.autoStart === "number" && typeof c.autoEnd === "number" ? { startedAt: c.autoStart, endedAt: c.autoEnd } : spanOf(w, null), want = spanOf(w, rule);
+          return near(c.startedAt, made.startedAt) && near(c.endedAt, made.endedAt) && (Math.abs(c.startedAt - want.startedAt) >= 500 || Math.abs(c.endedAt - want.endedAt) >= 500);
+        }), respanned = 0;
+        var said = function (text) {
+          if (respanned) text = tr("rec.winRespanned", "🏆 {{n}} winning shots cut again, with the new start and stop.", { n: respanned }) + " " + text;
+          return renamed ? tr("rec.winRenamed", "🏆 {{n}} winning shots named again, with the race score and the time.", { n: renamed }) + " " + text : text;
+        };
         return stale.reduce(function (chain, w) {
           return chain.then(function () {
             var c = theCue(w), name = w.name, n = 2;
@@ -795,21 +864,28 @@
               renamed++;
             });
           });
-        }, Promise.resolve()).then(function () { return fresh.reduce(function (chain, w) {
+        }, Promise.resolve()).then(function () { return respan.reduce(function (chain, w) {
+          return chain.then(function () {
+            var c = theCue(w), span = spanOf(w, rule);
+            return api("/api/rec/cues/" + encodeURIComponent(c.id), { startedAt: span.startedAt, endedAt: span.endedAt, duration: span.endedAt - span.startedAt, ballInAt: span.ballInAt || null, autoStart: span.startedAt, autoEnd: span.endedAt, clip: null }, "PATCH").then(function (saved) {
+              cues[cues.indexOf(c)] = saved;
+              respanned++;
+            });
+          });
+        }, Promise.resolve()); }).then(function () { return fresh.reduce(function (chain, w) {
           return chain.then(function () {
             var name = w.name, n = 2;
             while (taken[name]) name = w.name + " (" + n++ + ")";
             taken[name] = true;
-            // (its shot after the game before was won - not a shot of that one's, the camera having missed this one's)
-            var before = wins.filter(function (x) { return x.at < w.at; }).pop();
-            var span = W.clipSpan(w.at, sp.start, sp.end, shots, before ? before.at : null), who = [w.winners].concat(w.losers).map(function (names) { return names.join(" & "); });
+            var span = spanOf(w, rule), who = [w.winners].concat(w.losers).map(function (names) { return names.join(" & "); });
             var c = { kind: "win", winAt: w.at, name: name, customName: true, startedAt: span.startedAt, markedAt: w.at, endedAt: span.endedAt, duration: span.endedAt - span.startedAt,
-              player: w.winners.join("+"), opponent: w.losers.map(function (names) { return names.join("+"); }).join("+"), matchup: who.join(" v "), gameType: w.gameType, gameLabel: w.game, position: w.score, source: "winning shot", session: s.id, ballInAt: span.ballInAt || null };
+              player: w.winners.join("+"), opponent: w.losers.map(function (names) { return names.join("+"); }).join("+"), matchup: who.join(" v "), gameType: w.gameType, gameLabel: w.game, position: w.score, source: "winning shot", session: s.id, ballInAt: span.ballInAt || null,
+              autoStart: span.startedAt, autoEnd: span.endedAt };
             return api("/api/rec/cues", c).then(function (savedCue) { cues.unshift(savedCue); made.push(savedCue); });
           });
         }, Promise.resolve()); }).then(function () {
           var todo = mine().filter(function (c) { return !c.clip; }), total = mine().length;
-          if (!todo.length) return done(said(made.length ? tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: folder + "/Clips" }) : tr("rec.winAllWhere", "🏆 This recording's {{n}} winning shots are already in the list (in green), and in {{folder}}.", { n: total, folder: folder + "/Clips" })), true);
+          if (!todo.length) return done(said(made.length ? tr("rec.winDone", "🏆 {{n}} winning shots - green in the list, and in {{folder}}.", { n: total, folder: folder + "/Clips" }) : tr("rec.winAllWhere", "🏆 This recording's {{n}} winning shots are already in the list (in green), and in {{folder}}.", { n: total, folder: folder + "/Clips" })), true);
           if (!ffmpeg) return done(said(tr("rec.winNoFfmpeg", "🏆 {{n}} winning shots added to the list (in green) - cutting the clips needs ffmpeg on the computer.", { n: total })), true);
           var i = 0, where = folder + "/Clips";
           return todo.reduce(function (chain, c) {
@@ -818,7 +894,7 @@
               return api("/api/rec/cues/" + encodeURIComponent(c.id) + "/clip", {}, "POST").then(function (r) { c.clip = r.file; if (r.folder) where = r.folder; renderRows(); });
             });
           }, Promise.resolve()).then(function () {
-            return done(said(tr("rec.winDone", "🏆 {{n}} winning shots, 30 s each - green in the list, and in {{folder}}.", { n: total, folder: where })), true);
+            return done(said(tr("rec.winDone", "🏆 {{n}} winning shots - green in the list, and in {{folder}}.", { n: total, folder: where })), true);
           });
         });
       }).catch(function (err) { done(tr("rec.winFailed", "🏆 Couldn't make the winning shots: {{error}}", { error: err.message })); });
@@ -1173,7 +1249,7 @@
           return '<div class="c' + (c.kind === "win" ? " w" : "") + '" title="' + esc(c.name || nameFor(c)) + '" style="left:' + p(c.startedAt) + "%;width:" + Math.max(0.3, p(c.endedAt || sp.end) - p(c.startedAt)) + '%"></div>';
         }).join("");
         return '<div class="cv-session"><div class="cv-session-head"><b>' + esc(s.id) + "</b> " + (sp.live ? '<span style="color:#ff4d4d">● recording</span> ' : sp.paused ? '<span style="color:var(--accent, #e8b923)">' + esc(tr("rec.pauseGap", "⏸ paused")) + "</span> " : "") + '<span class="dim">' + esc(len(total)) + " · " + n + " file" + (n === 1 ? "" : "s") + "</span>" +
-          '<button class="cv-wins" data-id="' + esc(s.id) + '"' + (winsBusy ? " disabled" : "") + ' title="' + esc(tr("rec.winButtonTitle", "A 30-second clip of the winning shot of every game won during this recording: winning shot [player] vs [player]-[game]-[score]")) + '">' + esc(tr("rec.winButton", "🏆 Winning shots")) + "</button>" +
+          '<button class="cv-wins" data-id="' + esc(s.id) + '"' + (winsBusy ? " disabled" : "") + ' title="' + esc(tr("rec.winButtonTitle", "A clip of the winning shot of every game won during this recording (its start and stop: the 🏆 numbers above the recordings): winning shot [player] vs [player]-[game]-[score]")) + '">' + esc(tr("rec.winButton", "🏆 Winning shots")) + "</button>" +
           '<button class="cv-del" data-del="session" data-id="' + esc(s.id) + '"' + (sp.live || sp.paused ? ' disabled title="Stop the recording first"' : ' title="Move this recording to the Trash, with its cues (exported clips are kept)"') + ">🗑 Delete</button></div>" +
           '<div class="cv-tl" data-s="' + sp.start + '" data-e="' + sp.end + '">' + marks + '<div class="h" hidden></div></div></div>';
       }).join("");

@@ -220,3 +220,21 @@ test("its clip with the camera's shots: 30 s ending 2 s after the ball went in",
   // ...won at 120 s: the shot at 150 s is this one's
   assert.equal(W.clipSpan(win, 0, 400000, shots, 120000).ballInAt, 161000);
 });
+
+// 2026-11-26, the user: "i want to be able to control how long before I click on the winner score
+// the winning cue will stop, say I click at 4:05:00 and I set 5 seconds ... from the start that is
+// [x] seconds before till [x] seconds before the click"
+test("its clip with the start and stop chosen: before (or after) the win was entered", () => {
+  // entered at 100 s: start 30 s before, stop 5 s before -> 70 s to 95 s
+  assert.deepEqual(W.clipSpan(100000, 0, 200000, null, null, { startMs: 30000, stopMs: 5000 }), { startedAt: 70000, endedAt: 95000 });
+  // stop 0: the moment it was entered; a minus number: after it (-5000: as before)
+  assert.deepEqual(W.clipSpan(100000, 0, 200000, null, null, { startMs: 20000, stopMs: 0 }), { startedAt: 80000, endedAt: 100000 });
+  assert.deepEqual(W.clipSpan(100000, 0, 200000, null, null, { startMs: 25000, stopMs: -5000 }), W.clipSpan(100000, 0, 200000));
+  // inside the recording
+  assert.deepEqual(W.clipSpan(100000, 80000, 200000, null, null, { startMs: 30000, stopMs: 5000 }), { startedAt: 80000, endedAt: 95000 });
+  // the camera saw the ball go in (161 s, the win entered at 200 s): as long a clip (25 s), ending 2 s after it
+  const shots = [{ beganAt: 149000, aimAt: 150000, endedAt: 166000, shot: true, pockets: [158000, 161000] }];
+  assert.deepEqual(W.clipSpan(200000, 0, 400000, shots, null, { startMs: 30000, stopMs: 5000 }), { startedAt: 138000, endedAt: 163000, ballInAt: 161000, how: "pocket" });
+  // ...not looked for (ballIn: false): the numbers
+  assert.deepEqual(W.clipSpan(200000, 0, 400000, shots, null, { startMs: 30000, stopMs: 5000, ballIn: false }), { startedAt: 170000, endedAt: 195000 });
+});
