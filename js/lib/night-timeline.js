@@ -142,7 +142,7 @@
         mode: isTeam ? "teams" : sides.length > 2 ? "freeForAll" : "individual", rotatingTeams: !!g.rotatingTeams, sidesMerged: merged,
         gameType: g.gameType || null, game: g.gameLabel || g.gameType || "", target: g.target || null, unit: g.unit || null,
         raceTarget: g.raceTarget > 1 ? g.raceTarget : null, endsRace: !!(g.wonRace || g.raceInterrupted), interrupted: !!g.raceInterrupted,
-        raceTally: g.raceTally || null, names: sideNames, sides: sides, keys: sides.map(sideKey),
+        raceTally: g.raceTally || null, raceTeams: g.raceTeams || null, raceId: g.raceId || null, ts: ts, names: sideNames, sides: sides, keys: sides.map(sideKey),
         points: hasPoints ? sideNames.map(function (names) { return names.reduce(function (t, n) { return t + (typeof g.scores[n] === "number" ? g.scores[n] : 0); }, 0); }) : null,
         ballsLeft: typeof g.ballsLeftOnTable === "number" ? g.ballsLeftOnTable : null, skunk: !!g.skunk,
         tournamentId: tournamentOf(g, r.winners.concat(r.losers))
@@ -228,9 +228,10 @@
         tournament: !!first.tournamentId, sidesMerged: first.sidesMerged,
         changes: changes,
         racks: m.racks.map(function (rk) {
-          // (raceTally: each seated player's wins in the race just after it, by name - the race score)
+          // (raceTally: each seated player's wins in the race just after it, by name - the race score;
+          // raceTeams: a team game's, each team's [{ names, wins }]; raceId: the race it's in; ts: its time, to the ms)
           return { endedAt: localIso(rk.endMs), durationMs: rk.startMs === null ? null : rk.endMs - rk.startMs, winner: m.keys.indexOf(rk.keys[0]), points: rk.points, ballsLeft: rk.ballsLeft, skunk: rk.skunk,
-            unit: rk.unit, raceTarget: rk.raceTarget, raceTally: rk.raceTally, endsRace: rk.endsRace, wonRace: rk.endsRace && !rk.interrupted };
+            unit: rk.unit, raceTarget: rk.raceTarget, raceTally: rk.raceTally, raceTeams: rk.raceTeams, raceId: rk.raceId, ts: rk.ts, endsRace: rk.endsRace, wonRace: rk.endsRace && !rk.interrupted };
         })
       };
     });

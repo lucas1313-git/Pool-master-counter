@@ -17,7 +17,9 @@
 // - the old score rolling into the new ("I would like to see the score board change from old
 //   score to new score with a visual effect when the score card show" - a strip, red over green
 //   here, and a white glow): red once the card's in, half and half rolling, green once landed,
-//   the glow flashing as it lands, green still as the card fades off the next clip.
+//   the glow flashing as it lands, green still as the card fades off the next clip; the winners' Q-Scores
+//   ("with a similar animation the q-score of the winners going up" - blue over magenta) rolling
+//   once the score has landed, first when no score rolls.
 // usage: node tests/test_highlight_reel.js
 const fs = require("fs");
 const os = require("os");
@@ -153,6 +155,24 @@ const build = (body) => new Promise((ok) => recorder._buildHighlightReel(body, (
       const glow = (t) => rl && colourAt(rl, t, 1270, 370, 40, 40);
       const glowBefore = glow(6.9), glowAt = glow(7.42), glowAfter = glow(8.4);
       check("...its panel flashing as it lands (" + (glowBefore && glowBefore.join(",")) + " -> " + (glowAt && glowAt.join(",")) + " -> " + (glowAfter && glowAfter.join(",")) + ")", yellow(glowBefore) && isWhite(glowAt) && yellow(glowAfter), { glowBefore, glowAt, glowAfter });
+
+      // the Q-Scores going up (blue over magenta here - 120 x 60 at 300, 300 in the card -> 860-980,
+      // 640-700): once the score has landed (7.3 s), 7.45-8.05 s; no score rolling: with it, 6.7-7.3 s
+      const qFile = path.join(HOME, "q.png");
+      ff(["-f", "lavfi", "-i", "color=c=blue:s=120x60", "-f", "lavfi", "-i", "color=c=magenta:s=120x60", "-filter_complex", "vstack", "-frames:v", "1", qFile]);
+      const qroll = [{ strip: b64(qFile), x: 300, y: 300, w: 120, h: 60 }];
+      const isBlue = (c) => c && c[2] > 180 && c[0] < 70 && c[1] < 70, isMagenta = (c) => c && c[0] > 180 && c[2] > 180 && c[1] < 70;
+      ({ err, r } = await build({ clips: carded.map((c) => (c.card ? Object.assign({ roll, qroll }, c) : c)), aspect: "16:9", sound: true, name: "Q-Scores" }));
+      const qv = r && path.join(root, "Highlights", r.file);
+      const qbox = (f, t, y0, hh) => f && colourAt(f, t, 870, y0, 100, hh);
+      const qOld = qbox(qv, 7.2, 645, 50), qTop = qbox(qv, 7.75, 643, 22), qLow = qbox(qv, 7.75, 675, 22), qNew = qbox(qv, 8.3, 645, 50), qCarried = qbox(qv, 9.04, 645, 50);
+      check("the Q-Scores going up after the score: old while the score rolls (" + (qOld && qOld.join(",")) + "), half and half (" + (qTop && qTop.join(",")) + " over " + (qLow && qLow.join(",")) + "), new (" + (qNew && qNew.join(",")) + "), still new as it fades off the next clip (" + (qCarried && qCarried.join(",")) + ")",
+        !err && isBlue(qOld) && isBlue(qTop) && isMagenta(qLow) && isMagenta(qNew) && qCarried && qCarried[0] > 120 && qCarried[2] > 120 && qCarried[1] < 90, { err: err && err.message, qOld, qTop, qLow, qNew, qCarried });
+      ({ err, r } = await build({ clips: carded.map((c) => (c.card ? Object.assign({ qroll }, c) : c)), aspect: "16:9", sound: true, name: "Q-Scores alone" }));
+      const qa = r && path.join(root, "Highlights", r.file);
+      const qaOld = qbox(qa, 6.55, 645, 50), qaTop = qbox(qa, 7.0, 643, 22), qaLow = qbox(qa, 7.0, 675, 22), qaNew = qbox(qa, 7.6, 645, 50);
+      check("...no score rolling (a points game): the Q-Scores roll first (" + [qaOld, qaTop, qaLow, qaNew].map((c) => c && c.join(",")).join(" / ") + ")",
+        !err && isBlue(qaOld) && isBlue(qaTop) && isMagenta(qaLow) && isMagenta(qaNew), { err: err && err.message, qaOld, qaTop, qaLow, qaNew });
     }
   } finally {
     fs.rmSync(HOME, { recursive: true, force: true });

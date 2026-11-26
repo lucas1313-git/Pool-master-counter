@@ -12,7 +12,8 @@ function night(startHour) {
   const rack = (o) => {
     clock += (o.gap || 10) * 60000;
     live.unshift({ ts: new Date(clock).toISOString(), gameType: o.gt || "8ball", gameLabel: o.gl || "8-Ball", target: o.target || 1, unit: o.unit || "rack", winnerNames: o.w, opponentNames: o.l,
-      isTeam: !!o.team, wonRace: !!o.wonRace, raceInterrupted: !!o.stopped, raceTarget: o.race || 1, scores: o.scores || null, raceTally: o.tally || null });
+      isTeam: !!o.team, wonRace: !!o.wonRace, raceInterrupted: !!o.stopped, raceTarget: o.race || 1, scores: o.scores || null, raceTally: o.tally || null,
+      raceId: o.raceId, raceTeams: o.teams || null, rotatingTeams: !!o.rotating });
     return clock;
   };
   return { src: { gameHistory: live, playerStats: {} }, rack, now: () => clock };
@@ -92,6 +93,62 @@ test("partners: the team's race score when its players' agree; a points game in 
   assert.deepEqual(wins.map((w) => w.score), ["3-2", "1-1", "50-31"]);
   assert.equal(wins[2].points, true);
   assert.equal(wins[2].raceTo, null);
+});
+
+// (2026-11-26, the user: "the score I see is the +1 from the rack I need to see the race to score
+// instead" - Rotating Teams, partners changing every rack: each pair's own wins in the race)
+test("Rotating Teams: each pair's own wins in the race, counted - not its players' own, not the pairing's 1-0", () => {
+  const n = night();
+  const from = n.now();
+  const r = { team: 1, rotating: 1, race: 5, raceId: "race-a" };
+  n.rack({ ...r, w: ["Luigi", "Luc"], l: ["Vinan", "Suresh"], tally: { Luigi: 1, Luc: 1, Vinan: 0, Suresh: 0 } });
+  n.rack({ ...r, w: ["Vinan", "Chris"], l: ["Luc", "Suresh"], tally: { Vinan: 1, Chris: 1, Luc: 1, Suresh: 0 } });
+  n.rack({ ...r, w: ["Luc", "Suresh"], l: ["Vinan", "Chris"], tally: { Luc: 2, Suresh: 1, Vinan: 1, Chris: 1 } });
+  n.rack({ ...r, w: ["Luc", "Suresh"], l: ["Vinan", "Chris"], tally: { Luc: 3, Suresh: 2, Vinan: 1, Chris: 1 } });
+  // (Luigi's and Vinan's own wins agree - 2 - but together they had none)
+  const last = n.rack({ ...r, w: ["Luigi", "Vinan"], l: ["Luc", "Suresh"], tally: { Luigi: 2, Vinan: 2, Luc: 3, Suresh: 2 } });
+  const wins = W.between(n.src, from, last);
+  assert.deepEqual(wins.map((w) => w.score), ["1-0", "1-0", "1-1", "2-1", "1-2"]);
+  assert.equal(wins[3].name, "winning shot Luc & Suresh vs Vinan & Chris-8-Ball-2-1-2026-11-12-19h40m00");
+  assert.deepEqual(wins.map((w) => w.raceTo), [5, 5, 5, 5, 5]);
+});
+
+test("a team race: counted within its own race (its raceId; none kept: since the last race was won)", () => {
+  const n = night();
+  const from = n.now();
+  n.rack({ w: ["Kim", "Jo"], l: ["Bob", "Al"], team: 1, race: 2 });
+  n.rack({ w: ["Kim", "Jo"], l: ["Bob", "Al"], team: 1, race: 2, wonRace: true });
+  n.rack({ w: ["Kim", "Jo"], l: ["Bob", "Al"], team: 1, race: 3, raceId: "b" });
+  n.rack({ w: ["Kim", "Al"], l: ["Bob", "Jo"], team: 1, race: 3, raceId: "c" }); // (🏁 two races at once)
+  const last = n.rack({ w: ["Bob", "Al"], l: ["Kim", "Jo"], team: 1, race: 3, raceId: "b" });
+  assert.deepEqual(W.between(n.src, from, last).map((w) => w.score), ["1-0", "2-0", "1-0", "1-0", "1-1"]);
+});
+
+test("a team game kept with the teams' own count (raceTeams): the board's, as it was", () => {
+  const n = night();
+  const from = n.now();
+  const last = n.rack({ w: ["Luc", "Suresh"], l: ["Vinan", "Chris"], team: 1, rotating: 1, race: 5, raceId: "a",
+    tally: { Luc: 4, Suresh: 2, Vinan: 3, Chris: 3 }, teams: [{ names: ["Vinan", "Chris"], wins: 3 }, { names: ["Suresh", "Luc"], wins: 4 }] });
+  const wins = W.between(n.src, from, last);
+  assert.deepEqual(wins.map((w) => w.score), ["4-3"]);
+});
+
+// (2026-11-26, the user: "I would like to see with a similar animation the q-score of the winners going up")
+test("the winners' Q-Scores just before the game and after it, from their rating history (src.ratings)", () => {
+  const n = night();
+  const from = n.now();
+  const t1 = n.rack({ w: ["Luc", "Chris"], l: ["Bob", "Kim"], team: 1 });
+  const t2 = n.rack({ w: ["Bob"], l: ["Luc"] });
+  const iso = (t) => new Date(t).toISOString();
+  n.src.ratings = {
+    "luc ": { name: "Luc", history: [{ ts: iso(t1 - 3600000), rating: 400, delta: 0 }, { ts: iso(t1), rating: 411.4, delta: 7.2, fromGame: true }, { ts: iso(t2), rating: 405, delta: -6.4, fromGame: true }] },
+    Chris: { name: "Chris", history: [{ ts: iso(t1 + 400), rating: 388, fromGame: true }] }, // (no delta, nothing before: left out)
+    Bob: { name: "Bob", history: [{ ts: iso(t2 - 60000), rating: 450, delta: 3 }, { ts: iso(t2 + 300), rating: 456, fromGame: true }] } // (within the second, no delta: the one before)
+  };
+  const wins = W.between(n.src, from, t2);
+  assert.deepEqual(wins.map((w) => w.ratings), [[{ name: "Luc", from: 404, to: 411 }], [{ name: "Bob", from: 450, to: 456 }]]);
+  delete n.src.ratings;
+  assert.equal(W.between(n.src, from, t2)[0].ratings, undefined);
 });
 
 test("the race as it stood at a moment - for a cue's caption", () => {

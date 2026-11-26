@@ -9550,12 +9550,21 @@
     // game that ends a race holds its final score) - taken before Winner
     // Stays seats someone else.
     var raceTally = null;
+    // (a team game: each team at the table's own wins too, as the board shows them - a pair's,
+    // not its players' wins on their own; 2026-11-26, the user: the score cards showed "the +1
+    // from the rack", not the race score)
+    var raceTeams = null;
     var raceSaid = null; // (and the race score for the voice - see speakRackWin)
     function takeRaceTally() {
       raceTally = {};
       activePlayers().forEach(function (p) {
         raceTally[p.name] = state.playerWins[p.id] || 0;
       });
+      if (isTeam) {
+        raceTeams = seatedTeamIds().map(function (id) {
+          return { names: teamMembersLive(id).map(function (p) { return p.name; }), wins: state.teamWins[id] || 0 };
+        });
+      }
       raceSaid = { name: isTeam ? teamSlotLabel(key) : shortDisplayNameForPlayer(getPlayer(key)), score: spokenRaceScore(key) };
     }
     if (isTeam) {
@@ -9836,6 +9845,7 @@
       raceTarget: target,
       scores: finalScores,
       raceTally: raceTally,
+      raceTeams: raceTeams,
       skunk: skunk,
       raceCount: milestoneCount,
       ballsLeftOnTable: ballsLeftPrefill,
@@ -26467,6 +26477,7 @@
         rotatingTeams: !!entry.rotatingTeams,
         scores: entry.scores || null,
         raceTally: entry.raceTally || null,
+        raceTeams: entry.raceTeams || null,
         raceId: entry.raceId || null,
         // (🔗 joined by hand: what it had before - see joinDayRaces)
         joined: entry.joined || undefined,

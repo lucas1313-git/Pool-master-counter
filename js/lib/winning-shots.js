@@ -41,21 +41,54 @@
     return wins.every(function (v) { return v === wins[0]; }) ? wins[0] : null;
   }
 
+  // a side's key: its players, in any order
+  function sideKey(names) { return names.map(key).sort().join("+"); }
+  // The wins in the race from the racks themselves - for a team game kept without the teams' own
+  // count (raceTeams - before 2026-11-26): each pair's, as the board keeps it (a pair's own wins,
+  // partners changed or not - js/app.js syncTeamCombos), and each player's, up to and including
+  // rack i of the day's (all, in order - { raceId, endsRace, winner (its side's key), winners
+  // (its players' keys) }): the racks with its raceId; none kept, since the last race ended
+  // -> { sides { side key: wins }, players { name key: wins } }
+  function raceWins(all, i) {
+    var me = all[i], sides = {}, players = {};
+    for (var j = i; j >= 0; j--) {
+      var x = all[j];
+      if (!me.raceId && j < i && x.endsRace) break;
+      if ((me.raceId && x.raceId !== me.raceId) || !x.winner) continue;
+      sides[x.winner] = (sides[x.winner] || 0) + 1;
+      x.winners.forEach(function (n) { players[n] = (players[n] || 0) + 1; });
+    }
+    return { sides: sides, players: players };
+  }
+
   // the score once rack r was won, each side's (the winner's first - order: the sides' indexes):
   // a points game, its points ("100-45"); else the race score kept with the rack, as the board
   // showed it ("7-3" - 2026-11-16, the user: "the winning shot names all say 1-0, use the race
-  // score": with Winner Stays the two at the table change every rack, each pairing one rack); a
-  // rack kept with no race score, the games won in the match ("3-2")
+  // score": with Winner Stays the two at the table change every rack, each pairing one rack) - a
+  // team game: the teams' (raceTeams; kept without: counted - won: see raceWins; 2026-11-26, the
+  // user: "the score I see is the +1 from the rack I need to see the race to score instead" -
+  // Rotating Teams, partners changing every rack, each pair's own count); a rack kept with no race
+  // score, the games won in the match ("3-2")
   // -> { values [], points (true: points) }
-  function scoreAfter(m, r, order, sideNames) {
+  function scoreAfter(m, r, order, sideNames, won) {
     var rack = m.racks[r];
     if (rack.points && (isPointsUnit(rack.unit) || (!rack.unit && m.racks.length === 1 && !m.raceTo))) {
       return { values: order.map(function (i) { return rack.points[i]; }), points: true };
     }
-    if (rack.raceTally && typeof rack.raceTally === "object") {
+    if (Array.isArray(rack.raceTeams) && rack.raceTeams.length) {
+      var byTeam = {};
+      rack.raceTeams.forEach(function (t) { if (t && Array.isArray(t.names)) byTeam[sideKey(t.names)] = t.wins; });
+      var teams = order.map(function (i) { var v = byTeam[sideKey(sideNames[i])]; return typeof v === "number" ? v : null; });
+      if (teams.every(function (v) { return v !== null; })) return { values: teams, points: false };
+    }
+    var counted = m.mode === "teams" && !m.tournament && won ? order.map(function (i) { return won.sides[sideKey(sideNames[i])] || 0; }) : null;
+    // (a team's: its players' own wins when they've played together all race - partners changed, theirs aren't its)
+    var steady = !counted || order.every(function (i, k) { return sideNames[i].every(function (n) { return (won.players[key(n)] || 0) === counted[k]; }); });
+    if (steady && rack.raceTally && typeof rack.raceTally === "object") {
       var race = order.map(function (i) { return sideWins(rack.raceTally, sideNames[i]); });
       if (race.every(function (v) { return v !== null; })) return { values: race, points: false };
     }
+    if (counted) return { values: counted, points: false };
     var wins = m.sides.map(function () { return 0; });
     for (var k = 0; k <= r; k++) if (m.racks[k].winner >= 0) wins[m.racks[k].winner] += 1;
     return { values: order.map(function (i) { return wins[i]; }), points: false };
@@ -70,8 +103,10 @@
   // The games won from start to end (ms), in order:
   // [{ at, winners [names], losers [[names] a side], game, gameType, score ("7-3"), sides
   //   [{ names, value }] (the winner's first - the score's numbers), points (true: a points game's
-  //   points), raceTo (a race: its length), wonRace (true: it won the race), name }]
-  //   src = { gameHistory, playerStats, tournamentResults } - as js/lib/night-timeline.js takes it
+  //   points), raceTo (a race: its length), wonRace (true: it won the race), name, ratings (src
+  //   with ratings: the winners' Q-Scores [{ name, from, to }] - see ratingsAt) }]
+  //   src = { gameHistory, playerStats, tournamentResults, ratings } - as js/lib/night-timeline.js
+  //   takes it (and the scoreboard's ratings)
   function between(src, start, end) {
     var days = {}, out = [];
     for (var t = start; t < end; t += 3 * 3600000) days[poolDay(t)] = true;
@@ -80,32 +115,65 @@
       var night = timeline.build(day, src || {});
       var nameOf = {};
       night.players.forEach(function (p) { nameOf[p.id] = p.name; });
+      // (every rack of the day, in order - for the race score counted: see raceWins)
+      var all = [];
       night.matches.forEach(function (m) {
+        var sideNames = m.sides.map(function (side) { return side.players.map(function (id) { return nameOf[id]; }); });
         m.racks.forEach(function (rack, r) {
-          var at = new Date(rack.endedAt).getTime();
-          if (!(at >= start && at <= end) || rack.winner < 0) return;
-          var sideNames = m.sides.map(function (side) { return side.players.map(function (id) { return nameOf[id]; }); });
-          var order = [rack.winner].concat(m.sides.map(function (s, i) { return i; }).filter(function (i) { return i !== rack.winner; }));
-          var score = scoreAfter(m, r, order, sideNames);
-          var w = {
-            at: at,
-            winners: sideNames[rack.winner],
-            losers: order.slice(1).map(function (i) { return sideNames[i]; }),
-            game: m.game || m.gameType || "Game",
-            gameType: m.gameType || "",
-            score: score.values.join("-"),
-            sides: order.map(function (i, k) { return { names: sideNames[i], value: score.values[k] }; }),
-            points: score.points,
-            raceTo: !score.points && rack.raceTarget > 1 ? rack.raceTarget : null
-          };
-          // (the race won with it - not stopped early)
-          w.wonRace = !!w.raceTo && (!!rack.wonRace || w.sides[0].value >= w.raceTo);
-          w.name = shotName(w);
-          out.push(w);
+          all.push({ m: m, r: r, sideNames: sideNames, ms: Date.parse(rack.ts || "") || new Date(rack.endedAt).getTime(),
+            raceId: rack.raceId || null, endsRace: !!rack.endsRace, winner: rack.winner >= 0 ? sideKey(sideNames[rack.winner]) : null,
+            winners: rack.winner >= 0 ? sideNames[rack.winner].map(key) : [] });
         });
+      });
+      all.sort(function (a, b) { return a.ms - b.ms; });
+      all.forEach(function (x, k) {
+        var m = x.m, r = x.r, rack = m.racks[r], sideNames = x.sideNames;
+        var at = new Date(rack.endedAt).getTime();
+        if (!(at >= start && at <= end) || rack.winner < 0) return;
+        var order = [rack.winner].concat(m.sides.map(function (s, i) { return i; }).filter(function (i) { return i !== rack.winner; }));
+        var score = scoreAfter(m, r, order, sideNames, m.mode === "teams" ? raceWins(all, k) : null);
+        var w = {
+          at: at,
+          winners: sideNames[rack.winner],
+          losers: order.slice(1).map(function (i) { return sideNames[i]; }),
+          game: m.game || m.gameType || "Game",
+          gameType: m.gameType || "",
+          score: score.values.join("-"),
+          sides: order.map(function (i, k) { return { names: sideNames[i], value: score.values[k] }; }),
+          points: score.points,
+          raceTo: !score.points && rack.raceTarget > 1 ? rack.raceTarget : null
+        };
+        // (the race won with it - not stopped early)
+        w.wonRace = !!w.raceTo && (!!rack.wonRace || w.sides[0].value >= w.raceTo);
+        w.name = shotName(w);
+        if (src && src.ratings) w.ratings = ratingsAt(src.ratings, w.winners, rack.ts || new Date(x.ms).toISOString());
+        out.push(w);
       });
     });
     return out.sort(function (a, b) { return a.at - b.at; });
+  }
+
+  // Each winner's Q-Score (rating) just before the game and just after it (2026-11-26, the user:
+  // "I would like to see with a similar animation the q-score of the winners going up"): from
+  // their rating history (ratings - the scoreboard's: { name: { history [{ ts, rating, delta }] } }),
+  // the point the game made (at its time, ts) -> [{ name, from, to }] - a winner without one left
+  // out (an unrated game, a history trimmed)
+  function ratingsAt(ratings, names, ts) {
+    var byKey = {}, t = Date.parse(ts);
+    Object.keys(ratings || {}).forEach(function (k) { byKey[key(k)] = ratings[k]; });
+    return names.map(function (n) {
+      var e = byKey[key(n)], hist = e && Array.isArray(e.history) ? e.history : [];
+      var find = function (same) {
+        for (var i = hist.length - 1; i >= 0; i--) if (hist[i] && typeof hist[i].rating === "number" && same(hist[i])) return i;
+        return -1;
+      };
+      // (its own time - else within the second: a time kept to the second)
+      var i = find(function (h) { return h.ts === ts; });
+      if (i === -1) i = find(function (h) { return Math.abs(Date.parse(h.ts) - t) < 1000; });
+      if (i === -1) return null;
+      var h = hist[i], before = typeof h.delta === "number" ? h.rating - h.delta : i > 0 && hist[i - 1] && typeof hist[i - 1].rating === "number" ? hist[i - 1].rating : null;
+      return before === null ? null : { name: n, from: Math.round(before), to: Math.round(h.rating) };
+    }).filter(Boolean);
   }
 
   // The race as it stood at t (ms) - for the caption of a cue that isn't a win: from the racks of
@@ -160,7 +228,7 @@
     return { startedAt: Math.max(from, end - CLIP_MS), endedAt: end, ballInAt: b.at, how: b.how };
   }
 
-  var api = { between: between, clipSpan: clipSpan, ballIn: ballIn, shotName: shotName, scoreAt: scoreAt, stamp: stamp, BEFORE_MS: BEFORE_MS, AFTER_MS: AFTER_MS, BALL_TAIL_MS: BALL_TAIL_MS };
+  var api = { between: between, clipSpan: clipSpan, ballIn: ballIn, shotName: shotName, scoreAt: scoreAt, stamp: stamp, ratingsAt: ratingsAt, BEFORE_MS: BEFORE_MS, AFTER_MS: AFTER_MS, BALL_TAIL_MS: BALL_TAIL_MS };
   root.PMCLib = root.PMCLib || {};
   root.PMCLib.winningShots = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

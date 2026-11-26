@@ -7,7 +7,8 @@
 // draws): the video goes on under it for its seconds (the last picture held if the recording
 // stops), darkened, the card fading in over the middle - with a roll (clip.roll: the winner's
 // number as a strip PNG, the old one over the new, and a glow), the old score rolling up into the
-// new and its panel flashing gold as it lands; then straight to the next clip, the card
+// new and its panel flashing gold as it lands, then the winners' Q-Scores rolling up the same way
+// (clip.qroll); then straight to the next clip, the card
 // and the dark fading off it as it starts (2026-11-26, the user: "make sure that the transition
 // from the score card goes straight to the next clip") - after the last clip, all to black. Its
 // fade (in, and off the next clip) as long as asked (opts.fade - 0: none, the card just there).
@@ -78,7 +79,8 @@ function clipSource(rec, clip, tmpDir, i, cb) {
 
 // opts: { clips: [{ from, to (wall-clock ms), bug: PNG Buffer or null, card: PNG Buffer
 // or null (its score card after it), cardSecs, roll: { strip, flash (PNG Buffers), x, y, w, h
-// (the number's box in the card), fx, fy (the glow's corner) } or null }],
+// (the number's box in the card), fx, fy (the glow's corner) } or null, qroll: [{ strip, x, y,
+// w, h }] (the Q-Scores') }],
 // aspect "16:9" | "9:16", sound (false), size (the short side, 1080),
 // name, outDir (default <recordings>/Highlights), fade (a score card's, s - 0.4) }
 // -> cb(err, { file, path, seconds, clips, skipped })
@@ -90,8 +92,8 @@ function buildReel(rec, opts, cb) {
   var outDir = opts.outDir || path.join(rec.root(), "Highlights");
   fs.mkdirSync(outDir, { recursive: true });
   var tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pmc-reel-"));
-  // (carry: the score card before - { file (its PNG), fade } - laid over the next clip's start as
-  // it fades off)
+  // (carry: the score card before - { card (its PNG), strips [{ file, r }] (its numbers - landed),
+  // k, x, y, fade } - laid over the next clip's start as it fades off)
   var segs = [], skipped = [], seconds = 0, i = 0, carry = null;
   var fade = typeof opts.fade === "number" && isFinite(opts.fade) ? Math.max(0, Math.min(2, opts.fade)) : 0.4;
   var SOUND_OUT = 0.6, SOUND_CUT = 0.15;
@@ -134,25 +136,27 @@ function buildReel(rec, opts, cb) {
           args.push("-i", bugFile);
           bugInput = inputs++;
         }
-        // the card: where it goes (its own size - smaller should the video be), its pieces
+        // the card: where it goes (its own size - smaller should the video be), its pieces - the
+        // strips that roll (the score's, the Q-Scores')
         if (card) {
           mine = placeCard(card, size);
           mine.card = still(card, "card", total);
+          mine.strips = [];
           if (clip.roll) {
-            mine.roll = clip.roll;
-            mine.strip = still(clip.roll.strip, "strip", total);
+            mine.strips.push({ r: clip.roll, s: still(clip.roll.strip, "strip", total) });
             if (clip.roll.flash) mine.flash = still(clip.roll.flash, "flash", total);
           }
+          (clip.qroll || []).forEach(function (q, k) { mine.strips.push({ r: q, s: still(q.strip, "q" + k, total), q: true }); });
         }
-        // (the card before, fading off this clip: its own, its number landed)
-        var before = cardOut ? { k: cardOut.k, x: cardOut.x, y: cardOut.y, roll: cardOut.roll } : null;
+        // (the card before, fading off this clip: its own, its numbers landed)
+        var before = cardOut ? { k: cardOut.k, x: cardOut.x, y: cardOut.y } : null;
         if (before) {
           before.card = { input: inputs++ };
           args.push("-loop", "1", "-framerate", "30", "-t", num(cardOut.fade + 0.1), "-i", cardOut.card);
-          if (cardOut.strip) {
-            before.strip = { input: inputs++ };
-            args.push("-loop", "1", "-framerate", "30", "-t", num(cardOut.fade + 0.1), "-i", cardOut.strip);
-          }
+          before.strips = cardOut.strips.map(function (st) {
+            args.push("-loop", "1", "-framerate", "30", "-t", num(cardOut.fade + 0.1), "-i", st.file);
+            return { r: st.r, input: inputs++ };
+          });
         }
         if (sound && !audio) {
           args.push("-f", "lavfi", "-t", num(total), "-i", "anullsrc=r=48000:cl=stereo");
@@ -180,7 +184,9 @@ function buildReel(rec, opts, cb) {
           graph += ";" + dimOf(cardOut.fade + 0.1) + going + "[dimout];[" + last + "][dimout]overlay=format=auto:eof_action=pass[vo]";
           last = "vo";
           lay(before.card.input, scaled(before.k) + going, before.x, before.y, ":eof_action=pass");
-          if (before.strip) lay(before.strip.input, ",crop=" + before.roll.w + ":" + before.roll.h + ":0:" + before.roll.h + scaled(before.k) + going, before.x + before.roll.x * before.k, before.y + before.roll.y * before.k, ":eof_action=pass");
+          before.strips.forEach(function (st) {
+            lay(st.input, ",crop=" + st.r.w + ":" + st.r.h + ":0:" + st.r.h + scaled(before.k) + going, before.x + st.r.x * before.k, before.y + st.r.y * before.k, ":eof_action=pass");
+          });
         }
         // the card: the video darker, the card fading in over the middle
         if (card) {
@@ -190,14 +196,16 @@ function buildReel(rec, opts, cb) {
           last = "vd";
           lay(mine.card.input, scaled(mine.k) + coming, mine.x, mine.y, from);
           // the old score turning into the new: the winner's number rolling up (a box of the
-          // strip, moving down it - eased), its panel flashing gold as the new one lands
-          if (mine.strip) {
-            var r = mine.roll, rollAt = cardAt + Math.min(f + 0.3, cardSecs * 0.3), d = Math.min(0.6, cardSecs * 0.25), landed = rollAt + d;
-            var p = "(t-" + num(rollAt) + ")/" + num(d);
-            var y = "if(lt(t," + num(rollAt) + "),0,if(gt(t," + num(landed) + ")," + r.h + "," + r.h + "*" + p + "*" + p + "*(3-2*" + p + ")))";
-            lay(mine.strip.input, ",crop=" + r.w + ":" + r.h + ":0:'" + y + "'" + scaled(mine.k) + coming, mine.x + r.x * mine.k, mine.y + r.y * mine.k, from);
-            if (mine.flash) lay(mine.flash.input, scaled(mine.k) + ",fade=t=in:st=" + num(landed - 0.05) + ":d=0.12:alpha=1,fade=t=out:st=" + num(landed + 0.15) + ":d=0.7:alpha=1", mine.x + r.fx * mine.k, mine.y + r.fy * mine.k);
-          }
+          // strip, moving down it - eased), its panel flashing gold as the new one lands; then the
+          // Q-Scores, all at once (no score rolling: they go first)
+          var rollAt = cardAt + Math.min(f + 0.3, cardSecs * 0.3), d = Math.min(0.6, cardSecs * 0.25), landed = rollAt + d;
+          var qAt = mine.strips.some(function (st) { return !st.q; }) ? landed + Math.min(0.15, cardSecs * 0.05) : rollAt;
+          mine.strips.forEach(function (st) {
+            var r = st.r, at = st.q ? qAt : rollAt, p = "(t-" + num(at) + ")/" + num(d);
+            var y = "if(lt(t," + num(at) + "),0,if(gt(t," + num(at + d) + ")," + r.h + "," + r.h + "*" + p + "*" + p + "*(3-2*" + p + ")))";
+            lay(st.s.input, ",crop=" + r.w + ":" + r.h + ":0:'" + y + "'" + scaled(mine.k) + coming, mine.x + r.x * mine.k, mine.y + r.y * mine.k, from);
+            if (!st.q && mine.flash) lay(mine.flash.input, scaled(mine.k) + ",fade=t=in:st=" + num(landed - 0.05) + ":d=0.12:alpha=1,fade=t=out:st=" + num(landed + 0.15) + ":d=0.7:alpha=1", mine.x + r.fx * mine.k, mine.y + r.fy * mine.k);
+          });
         }
         // (a card after the last clip: the video ends - to black)
         graph += ";[" + last + "]" + (card && end && f > 0 ? "fade=t=out:st=" + num(total - f) + ":d=" + num(f) + "," : "") + "format=yuv420p[v]";
@@ -217,7 +225,7 @@ function buildReel(rec, opts, cb) {
           if (err2) { skipped.push(n); return next(); }
           segs.push(seg);
           seconds += total;
-          carry = card && f > 0 ? { card: mine.card.file, strip: mine.strip ? mine.strip.file : null, roll: mine.roll || null, k: mine.k, x: mine.x, y: mine.y, fade: f } : null;
+          carry = card && f > 0 ? { card: mine.card.file, strips: mine.strips.map(function (st) { return { file: st.s.file, r: st.r }; }), k: mine.k, x: mine.x, y: mine.y, fade: f } : null;
           next();
         });
       });

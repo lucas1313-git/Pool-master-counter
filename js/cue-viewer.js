@@ -215,6 +215,7 @@
       '<div class="cv-one-opts"><span class="dim">' + esc(tr("rec.oneVideo", "🎞 One video")) + ':</span>' +
       '<label title="' + esc(tr("rec.oneCardsTitle", "After each winning shot, the score after it (a race won: the race-won screen)")) + '"><input type="checkbox" class="cv-one-cards"> ' + esc(tr("rec.oneCards", "Score cards")) + '</label>' +
       '<label title="' + esc(tr("rec.oneCaptionsTitle", "At the bottom left of each clip: who plays who, the race score (a points game: the points), the time")) + '"><input type="checkbox" class="cv-one-captions"> ' + esc(tr("rec.oneCaptions", "Captions")) + '</label>' +
+      '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneQTitle", "On the score card: each winner's rating, going up to the new one")) + '"><input type="checkbox" class="cv-one-q"> ' + esc(tr("rec.oneQ", "Ratings")) + '</label>' +
       '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneFadeTitle", "How long the score card takes to fade in, and to fade off onto the next clip, in seconds (0: no fade)")) + '">' + esc(tr("rec.oneFade", "Fade")) + ' <input type="number" class="cv-one-fade" min="0" max="2" step="0.1" inputmode="decimal"> ' + esc(tr("rec.secondsUnit", "s")) + '</label>' +
       '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneCardSecsTitle", "How long the score card stays, in seconds (a race won: 2 s more)")) + '">' + esc(tr("rec.oneCardSecs", "On screen")) + ' <input type="number" class="cv-one-secs" min="1" max="10" step="0.5" inputmode="decimal"> ' + esc(tr("rec.secondsUnit", "s")) + '</label></div>' +
       '<div class="cv-filter" hidden></div>' +
@@ -721,10 +722,11 @@
     }
     // 🏆 The scoreboard's games, from this browser's storage (the scoreboard runs on this computer,
     // beside the recording page): the open session's (state.gameHistory) and every player's saved
-    // ones (js/big-store.js - the scoreboard's "playerStats")
+    // ones (js/big-store.js - the scoreboard's "playerStats"); and the players' Q-Scores (ratings)
     function scoreboardGames() {
-      var history = [], statsKey = "poolMasterCounter.playerStats.v1";
+      var history = [], ratings = null, statsKey = "poolMasterCounter.playerStats.v1";
       try { history = (JSON.parse(localStorage.getItem("poolMasterCounter.state.v2") || "null") || {}).gameHistory || []; } catch (e) {}
+      try { ratings = JSON.parse(localStorage.getItem("poolMasterCounter.ratings.v1") || "null"); } catch (e) {}
       var stats = Promise.resolve(null);
       if (window.PMCBigStore) {
         window.PMCBigStore.register("playerStats", statsKey);
@@ -732,7 +734,7 @@
       }
       return stats.then(function (ps) {
         if (!ps) try { ps = JSON.parse(localStorage.getItem(statsKey) || "null"); } catch (e) {}
-        return { gameHistory: Array.isArray(history) ? history : [], playerStats: ps || {} };
+        return { gameHistory: Array.isArray(history) ? history : [], playerStats: ps || {}, ratings: ratings && typeof ratings === "object" ? ratings : null };
       });
     }
     // a winning shot still named as before the race score and the time were in it: "winning shot
@@ -959,14 +961,17 @@
     // Its choices, kept on this device (2026-11-26, the user: "i need to be able to have it or not as
     // well as i want to decide if I have the caption also the length of the fadein fade out"): the
     // score cards on or off, the captions on or off, the card's fade (in, and off onto the next
-    // clip - 0: none) and how long it stays (a race won: 2 s more).
+    // clip - 0: none) and how long it stays (a race won: 2 s more); the winners' Q-Scores on the
+    // card, going up, or not ("I would like to see with a similar animation the q-score of the
+    // winners going up").
     var oneBusy = false, RACE_WON_MORE = 2, ONE_KEY = "pmc-one-video";
-    var oneOpts = { cards: true, captions: true, fade: 0.4, cardSecs: 3 };
+    var oneOpts = { cards: true, captions: true, qscores: true, fade: 0.4, cardSecs: 3 };
     try { Object.assign(oneOpts, JSON.parse(localStorage.getItem(ONE_KEY) || "{}")); } catch (e) {}
     function clampNum(v, lo, hi, dflt) { v = Number(v); return isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v * 10) / 10)) : dflt; }
     function tidyOneOpts() {
       oneOpts.cards = oneOpts.cards !== false;
       oneOpts.captions = oneOpts.captions !== false;
+      oneOpts.qscores = oneOpts.qscores !== false;
       oneOpts.fade = clampNum(oneOpts.fade, 0, 2, 0.4);
       oneOpts.cardSecs = clampNum(oneOpts.cardSecs, 1, 10, 3);
     }
@@ -974,16 +979,17 @@
       tidyOneOpts();
       q(".cv-one-cards").checked = oneOpts.cards;
       q(".cv-one-captions").checked = oneOpts.captions;
+      q(".cv-one-q").checked = oneOpts.qscores;
       q(".cv-one-fade").value = oneOpts.fade;
       q(".cv-one-secs").value = oneOpts.cardSecs;
-      // (the fade and the time: the cards')
+      // (the Q-Scores, the fade and the time: the cards')
       root.querySelectorAll(".cv-one-card-opt").forEach(function (l) {
         l.classList.toggle("off", !oneOpts.cards);
         l.querySelector("input").disabled = !oneOpts.cards;
       });
     }
     q(".cv-one-opts").addEventListener("change", function () {
-      oneOpts = { cards: q(".cv-one-cards").checked, captions: q(".cv-one-captions").checked, fade: q(".cv-one-fade").value, cardSecs: q(".cv-one-secs").value };
+      oneOpts = { cards: q(".cv-one-cards").checked, captions: q(".cv-one-captions").checked, qscores: q(".cv-one-q").checked, fade: q(".cv-one-fade").value, cardSecs: q(".cv-one-secs").value };
       renderOneOpts();
       try { localStorage.setItem(ONE_KEY, JSON.stringify(oneOpts)); } catch (e) {}
     });
@@ -1000,11 +1006,18 @@
       if (c.kind !== "win" || !c.winAt) return null;
       return window.PMCLib.winningShots.between(src, c.winAt - 2000, c.winAt + 2000).sort(function (x, y) { return Math.abs(x.at - c.winAt) - Math.abs(y.at - c.winAt); })[0] || null;
     }
-    // its score card (js/lib/score-bug.js cardParts) - the race won: the race-won screen's words
+    // its score card (js/lib/score-bug.js cardParts) - the race won: the race-won screen's words;
+    // the winners' Q-Scores (first names - whole where two share one), when asked for
     function cardFor(w) {
       var who = function (sd) { return sd.names.join(" & "); };
-      var v = w.sides[0].value;
+      var v = w.sides[0].value, first = function (n) { return String(n).trim().split(/\s+/)[0]; };
+      var qs = oneOpts.qscores ? w.ratings || [] : [];
       return {
+        q: qs.map(function (r) {
+          var short = first(r.name), shared = qs.some(function (o) { return o !== r && first(o.name) === short; });
+          return { name: shared ? r.name : short, from: r.from, value: r.to };
+        }),
+        qLabel: tr("rec.cardQ", "Rating"),
         head: tr("rec.cardWon", "{{names}} won!", { names: who(w.sides[0]) }),
         title: [w.game, w.wonRace ? tr("milestone.raceToWins", "Race to {{target}} wins", { target: w.raceTo }) : raceToText(w.raceTo)].filter(Boolean).join(" · "),
         sides: w.sides.map(function (sd) { return { name: who(sd), value: sd.value }; }),
@@ -1057,6 +1070,7 @@
             var parts = B.cardParts(cardFor(won), cw);
             clip.card = parts.card;
             if (parts.roll) clip.roll = parts.roll;
+            if (parts.qroll && parts.qroll.length) clip.qroll = parts.qroll;
             clip.cardSecs = oneOpts.cardSecs + (won.wonRace ? RACE_WON_MORE : 0);
           }
           return clip;
