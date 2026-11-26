@@ -10,7 +10,14 @@
 //   more of the recording under it, darker, the card in the middle; then straight to the next
 //   clip, no black between ("make sure that the transition from the score card goes straight to
 //   the next clip"), the card fading off it; a card past the end of the recording: the last
-//   picture held under it; a card after the last clip: to black, the sound fading out.
+//   picture held under it; a card after the last clip: to black, the sound fading out;
+// - the fade as asked ("the length of the fadein fade out"): 0 - the card there at once, gone at
+//   the cut, the video ending on it; 1 s - half there half a second in, still going a moment into
+//   the next clip;
+// - the old score rolling into the new ("I would like to see the score board change from old
+//   score to new score with a visual effect when the score card show" - a strip, red over green
+//   here, and a white glow): red once the card's in, half and half rolling, green once landed,
+//   the glow flashing as it lands, green still as the card fades off the next clip.
 // usage: node tests/test_highlight_reel.js
 const fs = require("fs");
 const os = require("os");
@@ -113,6 +120,39 @@ const build = (body) => new Promise((ok) => recorder._buildHighlightReel(body, (
       check("...a card past the end of the recording: still there (" + held.join(",") + ")", yellow(held), held);
       const black = colourAt(out3, 18.97, 0, 0, 1920, 1080), quiet = loudness(out3, 18.86, 0.1);
       check("...the card after the last clip: the video ends to black (" + black.join(",") + "), the sound fading out (" + quiet + " dB)", lum(black) < 40 && quiet < loud - 12, { black, quiet });
+
+      // the fade: none
+      ({ err, r } = await build({ clips: carded, aspect: "16:9", sound: true, name: "No fade", fade: 0 }));
+      const nf = r && path.join(root, "Highlights", r.file);
+      const nfBefore = nf && colourAt(nf, 5.96, 900, 500, 120, 80), nfIn = nf && colourAt(nf, 6.04, 900, 500, 120, 80), nfCut = nf && colourAt(nf, 9.04, 900, 500, 120, 80), nfEnd = nf && colourAt(nf, 18.97, 900, 500, 120, 80);
+      check("fade 0: the card there at once (" + (nfBefore && nfBefore.join(",")) + " -> " + (nfIn && nfIn.join(",")) + "), gone at the cut (" + (nfCut && nfCut.join(",")) + "), the video ending on it (" + (nfEnd && nfEnd.join(",")) + ")",
+        !err && !yellow(nfBefore) && yellow(nfIn) && !yellow(nfCut) && lum(nfCut) > 150 && yellow(nfEnd), { err: err && err.message, nfBefore, nfIn, nfCut, nfEnd });
+      // the fade: 1 s
+      ({ err, r } = await build({ clips: carded, aspect: "16:9", sound: true, name: "Slow fade", fade: 1 }));
+      const sf = r && path.join(root, "Highlights", r.file);
+      const half = (c) => c[2] < 110 && c[0] > 150 && c[0] < 235;
+      const sfIn = sf && colourAt(sf, 6.5, 900, 500, 120, 80), sfOn = sf && colourAt(sf, 7.5, 900, 500, 120, 80), sfOff = sf && colourAt(sf, 9.5, 900, 500, 120, 80), sfGone = sf && colourAt(sf, 10.2, 900, 500, 120, 80);
+      check("fade 1 s: half there half a second in (" + (sfIn && sfIn.join(",")) + "), all there (" + (sfOn && sfOn.join(",")) + "), half gone half a second into the next clip (" + (sfOff && sfOff.join(",")) + "), then gone (" + (sfGone && sfGone.join(",")) + ")",
+        !err && half(sfIn) && yellow(sfOn) && half(sfOff) && !yellow(sfGone) && sfGone[2] > 110, { err: err && err.message, sfIn, sfOn, sfOff, sfGone });
+
+      // the roll: the card at 560, 340; its number's box at 100, 150 in it (200 x 100) -> 660-860,
+      // 490-590; the glow (60 x 60) at 700, 20 in it -> 1260, 360. The 2nd clip's card: in at 6 s,
+      // rolling 6.7-7.3 s
+      const stripFile = path.join(HOME, "strip.png"), flashFile = path.join(HOME, "flash.png");
+      ff(["-f", "lavfi", "-i", "color=c=red:s=200x100", "-f", "lavfi", "-i", "color=c=green:s=200x100", "-filter_complex", "vstack", "-frames:v", "1", stripFile]);
+      ff(["-f", "lavfi", "-i", "color=c=white:s=60x60", "-frames:v", "1", flashFile]);
+      const b64 = (f) => "data:image/png;base64," + fs.readFileSync(f).toString("base64");
+      const roll = { strip: b64(stripFile), flash: b64(flashFile), x: 100, y: 150, w: 200, h: 100, fx: 700, fy: 20 };
+      ({ err, r } = await build({ clips: carded.map((c) => (c.card ? Object.assign({ roll }, c) : c)), aspect: "16:9", sound: true, name: "Rolling" }));
+      const rl = r && path.join(root, "Highlights", r.file);
+      const isRed = (c) => c && c[0] > 180 && c[1] < 70 && c[2] < 70, isGreen = (c) => c && c[1] > 100 && c[0] < 70 && c[2] < 70, isWhite = (c) => c && c.every((v) => v > 220);
+      const box = (t, y0, hh) => rl && colourAt(rl, t, 680, y0, 160, hh);
+      const old = box(6.55, 500, 80), midTop = box(7.0, 494, 36), midLow = box(7.0, 546, 36), landed = box(7.6, 500, 80), carried = box(9.04, 500, 80);
+      check("the old score rolling into the new: old once the card's in (" + (old && old.join(",")) + "), half and half rolling (" + (midTop && midTop.join(",")) + " over " + (midLow && midLow.join(",")) + "), new once landed (" + (landed && landed.join(",")) + "), still new as it fades off the next clip (" + (carried && carried.join(",")) + ")",
+        !err && isRed(old) && isRed(midTop) && isGreen(midLow) && isGreen(landed) && carried && carried[1] > 90 && carried[0] < 90, { err: err && err.message, old, midTop, midLow, landed, carried });
+      const glow = (t) => rl && colourAt(rl, t, 1270, 370, 40, 40);
+      const glowBefore = glow(6.9), glowAt = glow(7.42), glowAfter = glow(8.4);
+      check("...its panel flashing as it lands (" + (glowBefore && glowBefore.join(",")) + " -> " + (glowAt && glowAt.join(",")) + " -> " + (glowAfter && glowAfter.join(",")) + ")", yellow(glowBefore) && isWhite(glowAt) && yellow(glowAfter), { glowBefore, glowAt, glowAfter });
     }
   } finally {
     fs.rmSync(HOME, { recursive: true, force: true });

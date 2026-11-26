@@ -117,6 +117,12 @@
     ".cv .cv-group button { min-height: 36px; }",
     ".cv .cv-group button.cv-group-del.sure { background: #b3261e; border-color: #b3261e; color: #fff; font-weight: 800; }",
     ".cv .cv-group button.ready { background: var(--accent, #e8b923); color: #1a0d0d; font-weight: 800; }",
+    // 🎞 One video's choices
+    ".cv .cv-one-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 6px; padding: 0 8px; }",
+    ".cv .cv-one-opts label { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; }",
+    ".cv .cv-one-opts input[type=checkbox] { width: 18px; height: 18px; margin: 0; }",
+    ".cv .cv-one-opts input[type=number] { width: 4.5em; }",
+    ".cv .cv-one-opts label.off { opacity: 0.45; }",
     ".cv td.pk { width: 1%; }",
     ".cv td.pk input { width: 20px; height: 20px; margin: 0; }",
     ".cv .kept { color: var(--accent, #e8b923); }",
@@ -206,6 +212,11 @@
       '<button class="cv-group-del" data-g="delete" disabled>🗑 Delete</button><button data-g="export" disabled title="Cut each one out and download it">⬇ Export</button>' +
       '<button data-g="keep" disabled title="Cut out and kept for good - not cleaned up, not deleted with its recording">📌 Save (keep forever)</button><button data-g="share" disabled title="This computer\'s share menu">📤 Share</button>' +
       '<button data-g="one" disabled title="' + esc(tr("rec.oneVideoTitle", "The checked clips joined into one video, in the order they happened, each with its caption: who plays who, the race score (a points game: the points), the time; after each winning shot, the score card (a race won: the race-won screen)")) + '">' + esc(tr("rec.oneVideo", "🎞 One video")) + "</button></div>" +
+      '<div class="cv-one-opts"><span class="dim">' + esc(tr("rec.oneVideo", "🎞 One video")) + ':</span>' +
+      '<label title="' + esc(tr("rec.oneCardsTitle", "After each winning shot, the score after it (a race won: the race-won screen)")) + '"><input type="checkbox" class="cv-one-cards"> ' + esc(tr("rec.oneCards", "Score cards")) + '</label>' +
+      '<label title="' + esc(tr("rec.oneCaptionsTitle", "At the bottom left of each clip: who plays who, the race score (a points game: the points), the time")) + '"><input type="checkbox" class="cv-one-captions"> ' + esc(tr("rec.oneCaptions", "Captions")) + '</label>' +
+      '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneFadeTitle", "How long the score card takes to fade in, and to fade off onto the next clip, in seconds (0: no fade)")) + '">' + esc(tr("rec.oneFade", "Fade")) + ' <input type="number" class="cv-one-fade" min="0" max="2" step="0.1" inputmode="decimal"> ' + esc(tr("rec.secondsUnit", "s")) + '</label>' +
+      '<label class="cv-one-card-opt" title="' + esc(tr("rec.oneCardSecsTitle", "How long the score card stays, in seconds (a race won: 2 s more)")) + '">' + esc(tr("rec.oneCardSecs", "On screen")) + ' <input type="number" class="cv-one-secs" min="1" max="10" step="0.5" inputmode="decimal"> ' + esc(tr("rec.secondsUnit", "s")) + '</label></div>' +
       '<div class="cv-filter" hidden></div>' +
       '<table><tbody class="cv-rows"></tbody></table>' +
       (opts.sessions ? '<div class="cv-sessions"><b>Recordings</b><div class="cv-sess dim">Loading...</div></div>' +
@@ -940,10 +951,43 @@
     // After each winning shot, its score card (2026-11-26, the user: "in between every win, after
     // the most recent one, a quick fade in fade out of the score card, as a transition. this way we
     // can see the progress ... when there is a race-to win, the transition could even be the
-    // winning window"): the video goes on under it a moment, darker, the card fading in, then
+    // winning window"): the video goes on under it a moment, darker, the card fading in - the old
+    // score turning into the new ("I would like to see the score board change from old score to
+    // new score with a visual effect when the score card show"), "Luc won!" on top - then
     // straight to the next clip, the card fading off it ("make sure that the transition from the
-    // score card goes straight to the next clip") - 3 s; the race won: the race-won screen, 5 s.
-    var oneBusy = false, CARD_SECS = 3, RACE_WON_SECS = 5;
+    // score card goes straight to the next clip") - 3 s; the race won: the race-won screen, 2 s more.
+    // Its choices, kept on this device (2026-11-26, the user: "i need to be able to have it or not as
+    // well as i want to decide if I have the caption also the length of the fadein fade out"): the
+    // score cards on or off, the captions on or off, the card's fade (in, and off onto the next
+    // clip - 0: none) and how long it stays (a race won: 2 s more).
+    var oneBusy = false, RACE_WON_MORE = 2, ONE_KEY = "pmc-one-video";
+    var oneOpts = { cards: true, captions: true, fade: 0.4, cardSecs: 3 };
+    try { Object.assign(oneOpts, JSON.parse(localStorage.getItem(ONE_KEY) || "{}")); } catch (e) {}
+    function clampNum(v, lo, hi, dflt) { v = Number(v); return isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v * 10) / 10)) : dflt; }
+    function tidyOneOpts() {
+      oneOpts.cards = oneOpts.cards !== false;
+      oneOpts.captions = oneOpts.captions !== false;
+      oneOpts.fade = clampNum(oneOpts.fade, 0, 2, 0.4);
+      oneOpts.cardSecs = clampNum(oneOpts.cardSecs, 1, 10, 3);
+    }
+    function renderOneOpts() {
+      tidyOneOpts();
+      q(".cv-one-cards").checked = oneOpts.cards;
+      q(".cv-one-captions").checked = oneOpts.captions;
+      q(".cv-one-fade").value = oneOpts.fade;
+      q(".cv-one-secs").value = oneOpts.cardSecs;
+      // (the fade and the time: the cards')
+      root.querySelectorAll(".cv-one-card-opt").forEach(function (l) {
+        l.classList.toggle("off", !oneOpts.cards);
+        l.querySelector("input").disabled = !oneOpts.cards;
+      });
+    }
+    q(".cv-one-opts").addEventListener("change", function () {
+      oneOpts = { cards: q(".cv-one-cards").checked, captions: q(".cv-one-captions").checked, fade: q(".cv-one-fade").value, cardSecs: q(".cv-one-secs").value };
+      renderOneOpts();
+      try { localStorage.setItem(ONE_KEY, JSON.stringify(oneOpts)); } catch (e) {}
+    });
+    renderOneOpts();
     function sidesText(sides) {
       var who = function (sd) { return sd.names.join(" & "); };
       if (sides.length === 2) return who(sides[0]) + "  " + sides[0].value + " – " + sides[1].value + "  " + who(sides[1]);
@@ -956,12 +1000,16 @@
       if (c.kind !== "win" || !c.winAt) return null;
       return window.PMCLib.winningShots.between(src, c.winAt - 2000, c.winAt + 2000).sort(function (x, y) { return Math.abs(x.at - c.winAt) - Math.abs(y.at - c.winAt); })[0] || null;
     }
-    // its score card (js/lib/score-bug.js cardPng) - the race won: the race-won screen's words
+    // its score card (js/lib/score-bug.js cardParts) - the race won: the race-won screen's words
     function cardFor(w) {
       var who = function (sd) { return sd.names.join(" & "); };
+      var v = w.sides[0].value;
       return {
+        head: tr("rec.cardWon", "{{names}} won!", { names: who(w.sides[0]) }),
         title: [w.game, w.wonRace ? tr("milestone.raceToWins", "Race to {{target}} wins", { target: w.raceTo }) : raceToText(w.raceTo)].filter(Boolean).join(" · "),
         sides: w.sides.map(function (sd) { return { name: who(sd), value: sd.value }; }),
+        // (a race: the winner's games before this one - a points game's points before aren't kept)
+        from: !w.points && typeof v === "number" && v >= 1 ? v - 1 : null,
         foot: clockOf(w.at),
         won: w.wonRace ? {
           congrats: tr("milestone.congrats", "Congratulations!"),
@@ -997,22 +1045,28 @@
       oneBusy = true;
       renderGroup();
       var secs = list.reduce(function (t, c) { return t + (c.endedAt - c.startedAt) / 1000; }, 0);
-      status(tr("rec.oneMaking", "🎞 Making one video of {{n}} clips ({{len}}), each with its caption - a few minutes...", { n: list.length, len: len(secs * 1000) }));
+      status(tr("rec.oneMaking", "🎞 Making one video of {{n}} clips ({{len}}) - a few minutes...", { n: list.length, len: len(secs * 1000) }));
       var first = W.stamp(list[0].startedAt), last = W.stamp(list[list.length - 1].startedAt);
       var name = (list.every(function (c) { return c.kind === "win"; }) ? "Winning shots " : "Cues ") + first.slice(0, 10) + " " + first.slice(11, 16) + "-" + last.slice(11, 16);
       var w = B.width("16:9", 1920), cw = B.cardWidth("16:9", 1920);
       scoreboardGames().then(function (src) {
         var body = { clips: list.map(function (c) {
-          var clip = { from: c.startedAt, to: c.endedAt, bug: B.png(captionFor(c, src), w) }, won = winOf(c, src);
-          if (won) { clip.card = B.cardPng(cardFor(won), cw); clip.cardSecs = won.wonRace ? RACE_WON_SECS : CARD_SECS; }
+          var clip = { from: c.startedAt, to: c.endedAt }, won = oneOpts.cards ? winOf(c, src) : null;
+          if (oneOpts.captions) clip.bug = B.png(captionFor(c, src), w);
+          if (won) {
+            var parts = B.cardParts(cardFor(won), cw);
+            clip.card = parts.card;
+            if (parts.roll) clip.roll = parts.roll;
+            clip.cardSecs = oneOpts.cardSecs + (won.wonRace ? RACE_WON_MORE : 0);
+          }
           return clip;
-        }), aspect: "16:9", sound: true, name: name };
+        }), aspect: "16:9", sound: true, name: name, fade: oneOpts.fade };
         return api("/api/rec/reel", body);
       }).then(function (r) {
         oneBusy = false;
         renderGroup();
         downloadFrom("/api/rec/highlights/" + encodeURIComponent(r.file), r.file);
-        status(tr("rec.oneDone", "🎞 One video: {{n}} clips, {{len}}, each with its caption - downloaded, and kept in {{folder}} ({{file}}).", { n: r.clips, len: len(r.seconds * 1000), folder: r.folder, file: r.file }) +
+        status(tr("rec.oneDone", "🎞 One video: {{n}} clips, {{len}} - downloaded, and kept in {{folder}} ({{file}}).", { n: r.clips, len: len(r.seconds * 1000), folder: r.folder, file: r.file }) +
           (r.skipped && r.skipped.length ? " " + tr("rec.oneSkipped", "{{n}} left out - no recording covers them.", { n: r.skipped.length }) : ""));
       }).catch(function (err) {
         oneBusy = false;

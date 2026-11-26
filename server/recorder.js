@@ -684,22 +684,30 @@ function attachRecorderRoutes(app) {
 }
 
 // body: { clips: [{ from, to, bug: "data:image/png;base64,...", card (the same - a score card
-// after it), cardSecs }], aspect, sound, name }
+// after it), cardSecs, roll (its old score rolling into the new - server/reel.js) }], aspect,
+// sound, name, fade (a card's, in and off - s) }
 function buildHighlightReel(body, cb) {
   var pngOf = function (v) {
     var m = /^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/.exec(String(v || ""));
     return m ? Buffer.from(m[1], "base64") : null;
   };
   // (up to 200: 🎞 One video of a night's checked cues - js/cue-viewer.js)
+  // (a card's roll: the winner's old number into the new - its box inside the card)
+  var rollOf = function (r) {
+    var strip = pngOf(r && r.strip), at = r ? [r.x, r.y, r.w, r.h, r.fx || 0, r.fy || 0].map(Number) : [];
+    if (!strip || !at.every(isFinite) || !(at[2] > 0 && at[3] > 0)) return null;
+    return { strip: strip, flash: pngOf(r.flash), x: Math.round(at[0]), y: Math.round(at[1]), w: Math.round(at[2]), h: Math.round(at[3]), fx: Math.round(at[4]), fy: Math.round(at[5]) };
+  };
   var clips = body.clips.slice(0, 200).map(function (c) {
     var card = pngOf(c && c.card);
-    return { from: Number(c && c.from), to: Number(c && c.to), bug: pngOf(c && c.bug), card: card, cardSecs: card ? Math.max(1.5, Math.min(8, Number(c.cardSecs) || 3)) : 0 };
+    return { from: Number(c && c.from), to: Number(c && c.to), bug: pngOf(c && c.bug), card: card, cardSecs: card ? Math.max(1, Math.min(12, Number(c.cardSecs) || 3)) : 0, roll: card ? rollOf(c.roll) : null };
   }).filter(function (c) { return c.from > 0 && c.to > c.from && c.to - c.from <= 120000; });
   reel.buildReel({ ffmpeg: ffmpeg, runFfmpeg: runFfmpeg, piecesFor: piecesFor, root: root }, {
     clips: clips,
     aspect: body.aspect === "9:16" ? "9:16" : "16:9",
     sound: body.sound === true,
     size: Number(body.size) || 1080,
+    fade: body.fade === undefined ? undefined : Number(body.fade),
     name: String(body.name || "Highlights").slice(0, 100)
   }, cb);
 }

@@ -28,6 +28,10 @@
 //   fade out of the score card ... when there is a race-to win, the transition could even be the
 //   winning window") - the last one won the race to 4: the race-won screen's words, 5 s; a frame of
 //   it and the cards in the screenshots;
+// - its choices (2026-11-26: "i need to be able to have it or not as well as i want to decide if I
+//   have the caption also the length of the fadein fade out"): score cards ☑, captions ☑, fade 0.4
+//   s, on screen 3 s at first; captions off, fade 1, on screen 2: no caption pictures, cards of 2,
+//   2 and 4 s, fade 1 - kept on this device; score cards off: their fade and time greyed, no card;
 // - the recording with no game: "No game was won...";
 // - record.html loads it too; no page errors.
 // usage: node tests/probe_winning_shots.js [screenshot dir]
@@ -175,26 +179,70 @@ const GREEN = "rgb(79, 209, 139)";
     const reelName = "Cues " + stamp(wins[0] - 25000).slice(0, 10) + " " + stamp(wins[0] - 25000).slice(11, 16) + "-" + stamp(s0 + 150000).slice(11, 16) + ".mp4";
     const reelFile = path.join(ROOT, "Highlights", reelName);
     const reelLen = fs.existsSync(reelFile) ? +execFileSync(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", reelFile]).toString().trim() : null;
-    check("🎞 \"" + made + "\" - " + reelName + ", " + (reelLen && reelLen.toFixed(1)) + " s (95 s of clips, 3 + 3 + 5 s of score cards)", /^🎞 One video: 4 clips, 1:46, each with its caption - downloaded, and kept in .+Highlights \(.+\.mp4\)\.$/.test(made) && reelLen !== null && Math.abs(reelLen - 106) <= 3, { made, reelName, reelLen });
+    check("🎞 \"" + made + "\" - " + reelName + ", " + (reelLen && reelLen.toFixed(1)) + " s (95 s of clips, 3 + 3 + 5 s of score cards)", /^🎞 One video: 4 clips, 1:46 - downloaded, and kept in .+Highlights \(.+\.mp4\)\.$/.test(made) && reelLen !== null && Math.abs(reelLen - 106) <= 3, { made, reelName, reelLen });
     const spans = reelBody ? reelBody.clips.map((c) => [c.from - s0, c.to - s0]) : null;
     check("the four in the order they happened, with the sound, each with its caption picture: " + JSON.stringify(spans), reelBody && reelBody.sound === true && JSON.stringify(spans) === JSON.stringify([[15000, 45000], [54000, 84000], [145000, 175000], [150000, 155000]].sort((a, b) => a[0] - b[0])) && reelBody.clips.every((c) => /^data:image\/png;base64,/.test(c.bug)), spans);
     const drawn = await page.evaluate(() => window.__drawn);
     const time = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    const wantDrawn = ["Luc  3 – 2  Bob", "8-Ball · Race to 4 · " + time(wins[0]), "8-Ball · Race to 4", "Luc", "3", "Bob", "2", time(wins[0]),
-      "Bob  3 – 3  Luc", "8-Ball · Race to 4 · " + time(wins[1]), "8-Ball · Race to 4", "Bob", "3", "Luc", "3", time(wins[1]),
-      "Luc  4 – 3  Bob", "8-Ball · Race to 4 · " + time(wins[2]), "🎉🏆🎉", "Congratulations!", "Luc won the tournament with 4 wins! (race-to 4)", "8-Ball · Race to 4 wins", "Luc", "4", "Bob", "3", time(wins[2]),
+    // (each card: "<winner> won!" on top, without the winner's number - it rolls in, old over new)
+    const wantDrawn = ["Luc  3 – 2  Bob", "8-Ball · Race to 4 · " + time(wins[0]), "Luc won!", "8-Ball · Race to 4", "Luc", "Bob", "2", time(wins[0]), "2", "3",
+      "Bob  3 – 3  Luc", "8-Ball · Race to 4 · " + time(wins[1]), "Bob won!", "8-Ball · Race to 4", "Bob", "Luc", "3", time(wins[1]), "2", "3",
+      "Luc  4 – 3  Bob", "8-Ball · Race to 4 · " + time(wins[2]), "🎉🏆🎉", "Congratulations!", "Luc won the tournament with 4 wins! (race-to 4)", "8-Ball · Race to 4 wins", "Luc", "Bob", "3", time(wins[2]), "3", "4",
       "Luc  3 – 3  Bob", "8-Ball · Race to 4 · " + time(s0 + 150000)];
     check("the captions: who plays who, the race score, the game, the race to, the time; each winning shot's score card - the score after it, the race won: the race-won screen's words - " + JSON.stringify(drawn), JSON.stringify(drawn) === JSON.stringify(wantDrawn), { drawn, wantDrawn });
+    const reelBodyFirst = reelBody;
     const cards = reelBody ? reelBody.clips.map((c) => (/^data:image\/png;base64,/.test(c.card || "") ? c.cardSecs : 0)) : null;
     check("a score card after each winning shot, 3 s - 5 s for the race won - none after the cue: " + JSON.stringify(cards) + ", " + (reelBody ? Math.round(JSON.stringify(reelBody).length / 1024) : "-") + " KB sent", JSON.stringify(cards) === JSON.stringify([3, 3, 5, 0]), cards);
+    const rolls = reelBody ? reelBody.clips.map((c) => c.roll && /^data:image\/png;base64,/.test(c.roll.strip) && /^data:image\/png;base64,/.test(c.roll.flash) && [c.roll.x, c.roll.y, c.roll.w, c.roll.h].every((v) => v > 0)) : null;
+    check("...each with its roll (the winner's old number into the new, its glow): " + JSON.stringify(rolls), JSON.stringify(rolls) === JSON.stringify([true, true, true, undefined]), rolls);
     if (OUT && reelLen) {
       execFileSync(FF, ["-v", "error", "-y", "-ss", "40", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_frame.png")]);
       // the cards in the video: the first's middle (30-33 s), the race won's (96-101 s)
       execFileSync(FF, ["-v", "error", "-y", "-ss", "31.8", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_card.png")]);
+      // (rolling: 30 + 0.7 s in; just before, the old score)
+      execFileSync(FF, ["-v", "error", "-y", "-ss", "30.55", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_card_old.png")]);
+      execFileSync(FF, ["-v", "error", "-y", "-ss", "31.0", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_card_rolling.png")]);
+      execFileSync(FF, ["-v", "error", "-y", "-ss", "31.4", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_card_landed.png")]);
       execFileSync(FF, ["-v", "error", "-y", "-ss", "99", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_race_won.png")]);
       execFileSync(FF, ["-v", "error", "-y", "-ss", "33.1", "-i", reelFile, "-frames:v", "1", path.join(OUT, "one_video_after_card.png")]);
       reelBody.clips.forEach((c, i) => { if (c.card) fs.writeFileSync(path.join(OUT, "card_" + i + ".png"), Buffer.from(c.card.split(",")[1], "base64")); });
     }
+
+    // its choices
+    const opts = () => page.evaluate(() => {
+      const r = document.querySelector(".cv-one-opts"), v = (c) => r.querySelector(c);
+      return { cards: v(".cv-one-cards").checked, captions: v(".cv-one-captions").checked, fade: v(".cv-one-fade").value, secs: v(".cv-one-secs").value, greyed: v(".cv-one-fade").disabled && v(".cv-one-secs").disabled, text: r.textContent.replace(/\s+/g, " ").trim(), kept: localStorage.getItem("pmc-one-video") };
+    });
+    const setOpts = (o) => page.evaluate((o) => {
+      const r = document.querySelector(".cv-one-opts");
+      if ("cards" in o) r.querySelector(".cv-one-cards").checked = o.cards;
+      if ("captions" in o) r.querySelector(".cv-one-captions").checked = o.captions;
+      if ("fade" in o) r.querySelector(".cv-one-fade").value = o.fade;
+      if ("secs" in o) r.querySelector(".cv-one-secs").value = o.secs;
+      r.querySelector(".cv-one-cards").dispatchEvent(new Event("change", { bubbles: true }));
+    }, o);
+    const oneAgain = async () => {
+      reelBody = null;
+      await page.evaluate(() => document.querySelector('.cv-group [data-g="one"]').click());
+      for (let i = 0; i < 480; i++) { const t = await page.evaluate(() => document.querySelector(".cv-status").textContent); if (!/Making/.test(t) && reelBody) return t; await sleep(250); }
+      return "";
+    };
+    let o = await opts();
+    check("its choices, at first: \"" + o.text + "\" - score cards ☑, captions ☑, fade 0.4 s, on screen 3 s; the video made with fade " + (reelBodyFirst && reelBodyFirst.fade), o.cards && o.captions && o.fade === "0.4" && o.secs === "3" && !o.greyed && o.text.replace(/\s/g, "") === "🎞Onevideo:ScorecardsCaptionsFadesOnscreens" && reelBodyFirst && reelBodyFirst.fade === 0.4, { o, fade: reelBodyFirst && reelBodyFirst.fade });
+    await setOpts({ captions: false, fade: "1", secs: "2" });
+    let made2 = await oneAgain();
+    o = await opts();
+    const got2 = reelBody && { bugs: reelBody.clips.filter((c) => c.bug).length, cards: reelBody.clips.map((c) => (c.card ? c.cardSecs : 0)), fade: reelBody.fade };
+    check("captions off, fade 1, on screen 2: no caption pictures, cards of 2, 2 and 4 s (the race won: 2 s more), fade 1 - " + JSON.stringify(got2) + "; kept " + o.kept + "; \"" + made2 + "\"", got2 && got2.bugs === 0 && JSON.stringify(got2.cards) === JSON.stringify([2, 2, 4, 0]) && got2.fade === 1 && JSON.stringify(JSON.parse(o.kept || "{}")) === JSON.stringify({ cards: true, captions: false, fade: 1, cardSecs: 2 }) && /^🎞 One video: 4 clips, 1:43 - /.test(made2), { got2, o, made2 });
+    await setOpts({ cards: false });
+    o = await opts();
+    const made3 = await oneAgain();
+    const got3 = reelBody && { bugs: reelBody.clips.filter((c) => c.bug).length, cards: reelBody.clips.filter((c) => c.card).length };
+    check("score cards off: their fade and time greyed (" + o.greyed + "), no card, no caption - " + JSON.stringify(got3) + "; \"" + made3 + "\"", o.greyed && !o.cards && got3 && got3.bugs === 0 && got3.cards === 0 && /^🎞 One video: 4 clips, 1:35 - /.test(made3), { o, got3, made3 });
+    await page.reload({ waitUntil: "networkidle0" });
+    await sleep(800);
+    o = await opts();
+    check("...still so after a reload: " + JSON.stringify({ cards: o.cards, captions: o.captions, fade: o.fade, secs: o.secs }), !o.cards && !o.captions && o.fade === "1" && o.secs === "2" && o.greyed, o);
 
     const none = await press(emptyId);
     check("the recording with no game: \"" + none + "\"", none === "🏆 No game was won on this computer's scoreboard while this recording ran.", none);

@@ -87,13 +87,17 @@
   // a transition. this way we can see the progress. if possible when there is a race-to win, the
   // transition could even be the winning window"): the score once it was won, big - a panel a
   // side, the winner's edged in gold, its number gold - on the board's red felt with its gold
-  // edge; the race won: the race-won screen's look above it (🎉🏆🎉, Congratulations!, who won).
-  // card: { title ("8-Ball · Race to 7"), sides [{ name, value }] (the winner's first), foot
-  // ("9:41 PM"), won: { congrats, headline } or null }; w wide -> its height
+  // edge, "Luc won!" on top ("in top of the score card I would like to see [player name/ team]
+  // won!"); the race won: the race-won screen's look above it (🎉🏆🎉, Congratulations!, who won).
+  // card: { head ("Luc won!"), title ("8-Ball · Race to 7"), sides [{ name, value }] (the winner's
+  // first), from (the winner's number before the win - it rolls from that to its value: see
+  // cardParts), foot ("9:41 PM"), won: { congrats, headline } or null }; w wide
   function cardHeight(card, w) {
-    return Math.round(w * (card.won ? 0.74 : 0.5));
+    return Math.round(w * (card.won ? 0.74 : card.head ? 0.58 : 0.5));
   }
-  function drawCard(ctx, x, y, w, card) {
+  // -> { h, box (the winner's number: { x, y, w, h }), panel (the winner's: { x, y, w, h, r }) };
+  // bare: the winner's number left out (it rolls in over it)
+  function drawCard(ctx, x, y, w, card, bare) {
     var h = cardHeight(card, w), pad = Math.round(w * 0.05), edge = Math.max(3, Math.round(w * 0.005));
     ctx.save();
     roundRect(ctx, x + edge / 2, y + edge / 2, w - edge, h - edge, Math.round(w * 0.035));
@@ -115,48 +119,91 @@
       centred(ctx, card.won.congrats, cx, at + w * 0.15, Math.round(w * 0.06), "800", inner);
       centred(ctx, card.won.headline, cx, at + w * 0.205, Math.round(w * 0.034), "600", inner);
       at += w * 0.24;
+    } else if (card.head) {
+      ctx.fillStyle = "#ffffff";
+      centred(ctx, card.head, cx, at + w * 0.055, Math.round(w * 0.062), "800", inner);
+      at += w * 0.08;
     }
     ctx.fillStyle = "#e8b923";
     centred(ctx, card.title || "", cx, at + w * 0.04, Math.round(w * 0.038), "700", inner);
     // the panels
     var n = Math.max(1, card.sides.length), gap = Math.round(w * (n === 2 ? 0.05 : 0.03));
-    var pw = (inner - gap * (n - 1)) / n, ph = Math.round(w * 0.25), py = at + w * 0.075;
+    var pw = (inner - gap * (n - 1)) / n, ph = Math.round(w * 0.25), py = at + w * 0.075, out = { h: h };
     card.sides.forEach(function (sd, i) {
-      var px = x + pad + i * (pw + gap), win = i === 0;
-      roundRect(ctx, px, py, pw, ph, Math.round(w * 0.022));
+      var px = x + pad + i * (pw + gap), win = i === 0, r = Math.round(w * 0.022);
+      roundRect(ctx, px, py, pw, ph, r);
       ctx.fillStyle = win ? "rgba(232, 185, 35, 0.16)" : "rgba(0, 0, 0, 0.3)";
       ctx.fill();
       if (win) {
         ctx.lineWidth = Math.max(3, Math.round(w * 0.006));
         ctx.strokeStyle = "#ffd23f";
         ctx.stroke();
+        out.panel = { x: Math.round(px), y: Math.round(py), w: Math.round(pw), h: ph, r: r };
+        out.box = { x: Math.round(px + ph * 0.06), y: Math.round(py + ph * 0.36), w: Math.round(pw - ph * 0.12), h: Math.round(ph * 0.6) };
       }
       ctx.fillStyle = "#ffffff";
       centred(ctx, sd.name, px + pw / 2, py + ph * 0.28, Math.round(ph * 0.19), "800", pw - ph * 0.16);
+      if (win && bare) return;
       ctx.fillStyle = win ? "#ffd23f" : "#f6efe9";
-      centred(ctx, sd.value === null || sd.value === undefined ? "–" : String(sd.value), px + pw / 2, py + ph * 0.86, Math.round(ph * 0.54), "800", pw - ph * 0.16);
+      centred(ctx, valueText(sd.value), px + pw / 2, py + ph * 0.86, Math.round(ph * 0.54), "800", pw - ph * 0.16);
     });
     if (card.foot) {
       ctx.fillStyle = "#c9a2a2";
       centred(ctx, card.foot, cx, py + ph + w * 0.06, Math.round(w * 0.03), "600", inner);
     }
     ctx.restore();
-    return h;
+    return out;
   }
+  function valueText(v) { return v === null || v === undefined ? "–" : String(v); }
   // how wide on a frame frameW wide: half a wide video, most of a tall one
   function cardWidth(aspect, frameW) {
     return Math.round(frameW * (aspect === "9:16" ? 0.88 : 0.5));
   }
-  // as a PNG data URL, w wide (see the clear corners: the video shows through)
-  function cardPng(card, w) {
+  function canvasOf(w, h) {
     var c = document.createElement("canvas");
     c.width = w;
-    c.height = cardHeight(card, w);
+    c.height = h;
+    return c;
+  }
+  // as a PNG data URL, w wide (see the clear corners: the video shows through)
+  function cardPng(card, w) {
+    var c = canvasOf(w, cardHeight(card, w));
     drawCard(c.getContext("2d"), 0, 0, w, card);
     return c.toDataURL("image/png");
   }
+  // The card in pieces, for the old score to turn into the new one as it shows ("I would like to
+  // see the score board change from old score to new score with a visual effect when the score
+  // card show"): the card without the winner's number; the strip its number rolls up (the old
+  // one above the new - server/reel.js shows a box of it, moving down), where (x, y, w, h - in
+  // the card), and the gold glow its panel flashes as the new one lands (fx, fy). No number
+  // before (card.from null - a points game): the card whole, no roll.
+  // -> { card (PNG data URL), roll: { strip, flash (PNG data URLs), x, y, w, h, fx, fy } or null }
+  function cardParts(card, w) {
+    var rolls = typeof card.from === "number" && card.from !== card.sides[0].value;
+    var c = canvasOf(w, cardHeight(card, w)), at = drawCard(c.getContext("2d"), 0, 0, w, card, rolls);
+    if (!rolls || !at.box) return { card: c.toDataURL("image/png"), roll: null };
+    var b = at.box, p = at.panel, ph = p.h;
+    // the strip: the old number, the new one under it - drawn where the card has them
+    var st = canvasOf(b.w, b.h * 2), sx = st.getContext("2d"), base = p.y + ph * 0.86 - b.y;
+    sx.textBaseline = "alphabetic";
+    sx.fillStyle = "#ffd23f";
+    centred(sx, valueText(card.from), b.w / 2, base, Math.round(ph * 0.54), "800", p.w - ph * 0.16);
+    centred(sx, valueText(card.sides[0].value), b.w / 2, b.h + base, Math.round(ph * 0.54), "800", p.w - ph * 0.16);
+    // the flash: the panel's edge, glowing
+    var m = Math.round(ph * 0.22), fl = canvasOf(p.w + m * 2, p.h + m * 2), fx = fl.getContext("2d");
+    fx.shadowColor = "#ffd23f";
+    fx.shadowBlur = m * 0.8;
+    fx.lineWidth = Math.max(4, Math.round(w * 0.01));
+    fx.strokeStyle = "#fff3b0";
+    roundRect(fx, m, m, p.w, p.h, p.r);
+    fx.stroke();
+    fx.stroke();
+    fx.fillStyle = "rgba(255, 210, 63, 0.18)";
+    fx.fill();
+    return { card: c.toDataURL("image/png"), roll: { strip: st.toDataURL("image/png"), flash: fl.toDataURL("image/png"), x: b.x, y: b.y, w: b.w, h: b.h, fx: p.x - m, fy: p.y - m } };
+  }
 
-  var api = { draw: draw, width: width, png: png, drawCard: drawCard, cardWidth: cardWidth, cardPng: cardPng };
+  var api = { draw: draw, width: width, png: png, drawCard: drawCard, cardWidth: cardWidth, cardPng: cardPng, cardParts: cardParts };
   root.PMCLib = root.PMCLib || {};
   root.PMCLib.scoreBug = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
