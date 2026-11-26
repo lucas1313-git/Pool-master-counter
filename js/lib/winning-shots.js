@@ -3,8 +3,9 @@
 // end of all games in the video ... a 30 seconds extract of these and call it winning shot [player]
 // vs [player]-[game type]-[score]"): every game the scoreboard saw won while the recording ran -
 // when the win was entered (the game's ts, a moment after the ball that won it), who won, who lost,
-// the game and the score then (the race's), the time - and its clip, 25 s before that moment to
-// 5 s after.
+// the game and the score then (the race's), the time - and its clip: 30 s ending 2 s after the
+// ball that won it went in, when the camera page watched the table (see ballIn), else 25 s before
+// the win was entered to 5 s after.
 // Pure: no page, no storage - js/cue-viewer.js calls it through PMCLib.winningShots (with
 // js/lib/night-timeline.js loaded before it), the unit tests load it in Node.
 (function (root) {
@@ -123,12 +124,41 @@
     return { wins: last.rk.endsRace ? {} : wins, raceTo: last.rk.raceTarget || null, unit: last.rk.unit || null };
   }
 
-  // its clip: 25 s before the win to 5 s after - inside the recording (from, to)
-  function clipSpan(at, from, to) {
-    return { startedAt: Math.max(from, at - BEFORE_MS), endedAt: Math.min(to, at + AFTER_MS) };
+  // When the ball that won it went in (2026-11-26, the user: "stop the cue about 2 seconds after the
+  // last shot finishes ... when the ball goes in + 2 seconds" - the win is entered a while after):
+  // the camera's shots during the recording (record.html keeps them - { beganAt, aimAt, endedAt,
+  // shot, pockets [times a ball went into a pocket] }) - the last one begun before the win was
+  // entered (up to 3 minutes before, and after the game before was won - notBefore: a shot the
+  // camera missed mustn't be taken for the last game's): its last ball into a pocket before then;
+  // none seen, everything on the table still again (its end) - if that was before the win was entered.
+  // -> { at, how: "pocket" | "still" } or null (no shot to go by: the camera page wasn't watching)
+  var LOOK_BACK_MS = 3 * 60000, BALL_TAIL_MS = 2000, CLIP_MS = BEFORE_MS + AFTER_MS;
+  function ballIn(at, shots, notBefore) {
+    var last = null, startOf = function (e) { return e.aimAt || e.beganAt || 0; }, since = Math.max(at - LOOK_BACK_MS, notBefore || 0);
+    (shots || []).forEach(function (e) {
+      var s = startOf(e);
+      if (!(e.shot || (e.pockets && e.pockets.length)) || !s || s > at || s < since) return;
+      if (!last || s > startOf(last)) last = e;
+    });
+    if (!last) return null;
+    var drops = (last.pockets || []).filter(function (p) { return typeof p === "number" && p <= at && p >= startOf(last); });
+    if (drops.length) return { at: Math.max.apply(null, drops), how: "pocket" };
+    if (last.endedAt && last.endedAt <= at) return { at: last.endedAt, how: "still" };
+    return null;
   }
 
-  var api = { between: between, clipSpan: clipSpan, shotName: shotName, scoreAt: scoreAt, stamp: stamp, BEFORE_MS: BEFORE_MS, AFTER_MS: AFTER_MS };
+  // its clip, inside the recording (from, to): 30 s ending 2 s after the ball went in (shots: the
+  // camera's, notBefore: the game before's win - see ballIn) - else, as before, 25 s before the win
+  // was entered to 5 s after
+  // -> { startedAt, endedAt, ballInAt, how } (ballInAt / how: only when the ball's moment was found)
+  function clipSpan(at, from, to, shots, notBefore) {
+    var b = ballIn(at, shots, notBefore);
+    if (!b) return { startedAt: Math.max(from, at - BEFORE_MS), endedAt: Math.min(to, at + AFTER_MS) };
+    var end = Math.min(to, b.at + BALL_TAIL_MS);
+    return { startedAt: Math.max(from, end - CLIP_MS), endedAt: end, ballInAt: b.at, how: b.how };
+  }
+
+  var api = { between: between, clipSpan: clipSpan, ballIn: ballIn, shotName: shotName, scoreAt: scoreAt, stamp: stamp, BEFORE_MS: BEFORE_MS, AFTER_MS: AFTER_MS, BALL_TAIL_MS: BALL_TAIL_MS };
   root.PMCLib = root.PMCLib || {};
   root.PMCLib.winningShots = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

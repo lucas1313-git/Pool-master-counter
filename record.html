@@ -41,6 +41,12 @@
   .inset { position: absolute; right: 10px; bottom: 10px; width: 22%; min-width: 120px; aspect-ratio: 16 / 9; border: 2px solid rgba(255,255,255,0.7); border-radius: 6px; overflow: hidden; background: #000; cursor: crosshair; touch-action: none; }
   .inset video { width: 100%; height: 100%; object-fit: fill; display: block; }
   .inset .crop { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 999px rgba(0,0,0,0.45); pointer-events: none; }
+  /* 🎥 following: what's recorded right now (dashed), and the table the camera page sees (dotted) */
+  .inset .crop.live { border: 2px dashed #fff; box-shadow: none; }
+  .inset .table-box { position: absolute; border: 1px dotted rgba(255,255,255,0.85); pointer-events: none; }
+  .inset [hidden] { display: none; }
+  .follow-bar { margin-top: 6px; }
+  .follow-bar .dim { flex: 1; min-width: 200px; }
   .rec-badge { position: absolute; left: 12px; top: 10px; background: rgba(0,0,0,0.65); color: var(--text); border-radius: 8px; padding: 4px 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .rec-badge.on { color: var(--rec); }
   .rec-badge.paused { color: var(--accent); }
@@ -134,12 +140,18 @@
         <div class="inset" id="inset" title="Drag to move the zoomed area">
           <video id="raw" autoplay playsinline muted></video>
           <div class="crop" id="cropBox"></div>
+          <div class="table-box" id="tableBox" hidden></div>
+          <div class="crop live" id="liveBox" hidden></div>
         </div>
       </div>
       <div class="bar" title="The zoom and its position are this recording's own - drag the small picture, or the big one, to move it. The player detection camera isn't touched.">
         <label for="zoom">🔍 Zoom <span id="zoomVal">1.0×</span></label>
         <input type="range" id="zoom" min="1" max="4" step="0.1" value="1">
         <button type="button" id="centreBtn" title="Back to the middle">⌖ Centre</button>
+      </div>
+      <div class="bar follow-bar">
+        <label class="check" data-i18n-title="rec.followHint" title="While a player is down on a shot, the recording widens and moves a little to take them in too - the whole table always in - and glides back after. Needs the camera page watching the table with this same camera."><input type="checkbox" id="followToggle"> <span data-i18n="rec.follow">🎥 Follow the shooter</span></label>
+        <span class="dim" id="followText"></span>
       </div>
     </div>
 
@@ -173,6 +185,7 @@
     <p>⭐ <b>Mark</b> (M, or say "mark" on the scoreboard) right after a good shot: the cue starts <b id="preRollText">20</b> s before the mark - the shot's beginning - and is named as things stood then. ✔ <b>Finish</b> (F, or "finish") ends it - or / (here, or on the scoreboard, or its ⭐ Cue button) for both. Each one is kept as a cue - see 🎞️ Cues.</p>
     <p>🎯 <b>Auto cue</b> (A here, * or 🎯 on the scoreboard, or say "auto cue"): the camera finds the shot - the one going on, or the last one up to <b id="autoBackText">15</b> s before the press, or else the next one within <b id="autoWaitText">25</b> s - and keeps it from <b id="autoLeadText">5</b> s before the player gets down on it to <b id="autoTailText">5</b> s after the balls stop. No shot in that time: no clip. Needs the camera page watching the table (📷 Set Up Camera, table calibrated). Press again to cancel.</p>
     <p>🔍 The zoom and its position are this recording's own (drag the small picture, or the big one, to move it) - the player detection camera isn't touched.</p>
+    <p data-i18n="rec.followHelp">🎥 Follow the shooter: zoom in on the table as you like it. While a player is down on a shot, the recording widens and moves a little to take them in too - the whole table always stays in - then glides back to your zoom a few seconds after. Only the recording moves: the camera page's own picture (what finds the players and the balls) stays put. It needs the camera page watching the table (📷 Set Up Camera, table calibrated) with this same camera. In the small picture: dashed, what's recorded right now; dotted, the table.</p>
   </details>
 
   <div class="panel">
@@ -202,14 +215,14 @@
 </main>
 <div class="toast" id="toast" hidden></div>
 
-<script src="js/camera-i18n.js?v=20261124a"></script>
+<script src="js/camera-i18n.js?v=20261126a"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="js/recording-consent.js?v=20261028m"></script>
-<script src="js/big-store.js?v=20261124a"></script>
-<script src="js/lib/night-timeline.js?v=20261124a"></script>
-<script src="js/lib/winning-shots.js?v=20261124a"></script>
-<script src="js/lib/score-bug.js?v=20261124a"></script>
-<script src="js/cue-viewer.js?v=20261124a"></script>
+<script src="js/big-store.js?v=20261126a"></script>
+<script src="js/lib/night-timeline.js?v=20261126a"></script>
+<script src="js/lib/winning-shots.js?v=20261126a"></script>
+<script src="js/lib/score-bug.js?v=20261126a"></script>
+<script src="js/cue-viewer.js?v=20261126a"></script>
 <script>
 (function () {
   "use strict";
@@ -229,7 +242,7 @@
   var SIZE = { 720: [1280, 720], 1080: [1920, 1080], 2160: [3840, 2160] };
 
   var $ = function (id) { return document.getElementById(id); };
-  var settings = { deviceId: "", quality: "1080", sound: false, preRoll: 20, partMin: 10, autoStart: false, zoom: 1, cx: 0.5, cy: 0.5, autoBack: 15, autoWait: 25, autoLead: 5, autoTail: 5 };
+  var settings = { deviceId: "", quality: "1080", sound: false, preRoll: 20, partMin: 10, autoStart: false, zoom: 1, cx: 0.5, cy: 0.5, follow: true, autoBack: 15, autoWait: 25, autoLead: 5, autoTail: 5 };
   try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch (e) {}
   function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
 
@@ -312,20 +325,31 @@
 
   // ---- The camera, and the crop (zoom) ----
   var cam = null, outStream = null, videoOut = null, worker = null, cropSupported = typeof MediaStreamTrackProcessor !== "undefined" && typeof MediaStreamTrackGenerator !== "undefined";
+  // The crop, frame by frame: x, y its top left and s its size (fractions of
+  // the picture - the same for its width and height, the picture's shape
+  // kept). It glides to the one asked for like a camera operator would - a
+  // spring that starts and stops gently, about 2 s there - or is there at
+  // once (snap: you moved the zoom). It says where it is 4 times a second.
+  var GLIDE = 2.4; // the spring's speed (per second): higher is quicker
   var WORKER_SRC = [
-    "var crop = { zoom: 1, cx: 0.5, cy: 0.5 };",
+    "var want = { x: 0, y: 0, s: 1 }, cur = null, vel = { x: 0, y: 0, s: 0 }, snap = true, lastTs = null, toldAt = -1, W = " + GLIDE + ";",
     "self.onmessage = function (e) {",
     "  var m = e.data;",
-    "  if (m.type === 'crop') { crop = m.crop; return; }",
+    "  if (m.type === 'target') { want = m.rect; if (m.snap) snap = true; return; }",
     "  if (m.type !== 'start') return;",
     "  var canvas = new OffscreenCanvas(m.w, m.h), ctx = canvas.getContext('2d');",
     "  m.readable.pipeThrough(new TransformStream({ transform: function (frame, out) {",
-    "    var fw = frame.displayWidth, fh = frame.displayHeight, z = Math.max(1, crop.zoom), sw = fw / z, sh = fh / z;",
-    "    var sx = Math.min(Math.max(crop.cx * fw - sw / 2, 0), fw - sw), sy = Math.min(Math.max(crop.cy * fh - sh / 2, 0), fh - sh);",
-    "    ctx.drawImage(frame, sx, sy, sw, sh, 0, 0, m.w, m.h);",
+    "    var fw = frame.displayWidth, fh = frame.displayHeight, t = frame.timestamp / 1e6;",
+    "    var dt = lastTs === null ? 0 : Math.min(0.1, Math.max(0, t - lastTs));",
+    "    lastTs = t;",
+    "    if (!cur || snap) { cur = { x: want.x, y: want.y, s: want.s }; vel = { x: 0, y: 0, s: 0 }; snap = false; }",
+    "    else ['x', 'y', 's'].forEach(function (k) { vel[k] += (W * W * (want[k] - cur[k]) - 2 * W * vel[k]) * dt; cur[k] += vel[k] * dt; });",
+    "    var s = Math.min(1, Math.max(0.1, cur.s)), x = Math.min(Math.max(cur.x, 0), 1 - s), y = Math.min(Math.max(cur.y, 0), 1 - s);",
+    "    ctx.drawImage(frame, x * fw, y * fh, s * fw, s * fh, 0, 0, m.w, m.h);",
     "    var next = new VideoFrame(canvas, { timestamp: frame.timestamp, duration: frame.duration || undefined });",
     "    frame.close();",
     "    out.enqueue(next);",
+    "    if (t - toldAt >= 0.25 || t < toldAt) { toldAt = t; self.postMessage({ type: 'now', rect: { x: x, y: y, s: s } }); }",
     "  } })).pipeTo(m.writable).catch(function () {});",
     "};"
   ].join("\n");
@@ -369,7 +393,9 @@
           var processor = new MediaStreamTrackProcessor({ track: track.clone() });
           var generator = new MediaStreamTrackGenerator({ kind: "video" });
           worker = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], { type: "text/javascript" })));
+          worker.onmessage = function (e) { if (e.data && e.data.type === "now") { follow.live = e.data.rect; drawFollow(); } };
           worker.postMessage({ type: "start", readable: processor.readable, writable: generator.writable, w: w, h: h }, [processor.readable, generator.writable]);
+          follow.target = null;
           sendCrop();
           videoOut = generator;
           outStream = new MediaStream([generator].concat(stream.getAudioTracks()));
@@ -400,8 +426,9 @@
     });
   }
 
+  // (you moved the zoom: there at once - taking the shooter in too, while followed)
   function sendCrop() {
-    if (worker) worker.postMessage({ type: "crop", crop: { zoom: settings.zoom, cx: settings.cx, cy: settings.cy } });
+    updateFollow(true);
     drawCropBox();
   }
   function clampCentre() {
@@ -455,6 +482,104 @@
     });
   })();
 
+  // ---- 🎥 Follow the shooter ----
+  // The camera page (player detection) says where the table is and, while
+  // someone's down on a shot, where they are - in the camera's own picture
+  // ("framing" messages, passed on by the scoreboard - docs/camera-protocol.md).
+  // With the same camera here, the recording's crop takes them in: the zoom
+  // you chose, with the whole table, at rest; widened and moved to take the
+  // shooter in too while they shoot and for a few seconds after - gliding
+  // there and back (the worker), never cutting the table. Only the
+  // recording moves: the camera page's picture (what detection reads)
+  // stays put. (2026-11-26, the user: "always see the full table but to
+  // have a small pan to see the player position ... a professional
+  // feeling to the shots".)
+  var FOLLOW_HOLD_MS = 4000;   // the shooter kept in this long after last seen down on the shot
+  var FOLLOW_FRESH_MS = 6000;  // no word from the camera page this long: back to your zoom
+  var FOLLOW_MARGIN = 0.03;    // room around the table (its pockets, its rails)
+  var FOLLOW_PAD = 0.03;       // ...and around the shooter
+  var FOLLOW_STEADY = 0.025;   // a smaller change than this isn't worth a move (no wobbling)
+  var framing = null;          // the camera page's last word: { table, shooter, aiming, camera, aspect, at }
+  var follow = { shooter: null, seenAt: 0, target: null, live: null, why: "off", toldWhy: "" };
+  function baseRect() { var s = 1 / settings.zoom; return { x: settings.cx - s / 2, y: settings.cy - s / 2, s: s }; }
+  // the camera page looks through this same camera (its name, and the picture's shape)
+  function sameCamera(f) {
+    var t = cam && cam.getVideoTracks()[0];
+    if (!t || !f.camera || t.label !== f.camera) return false;
+    var st = t.getSettings ? t.getSettings() : {};
+    return !f.aspect || !st.width || !st.height || Math.abs(st.width / st.height - f.aspect) < 0.02;
+  }
+  // the crop wanted now -> { rect, why }
+  function followRect(now) {
+    var base = baseRect();
+    if (!settings.follow) return { rect: base, why: "off" };
+    if (!cropSupported) return { rect: base, why: "noCrop" };
+    if (!framing || now - framing.at > FOLLOW_FRESH_MS) return { rect: base, why: "noCamera" };
+    if (!sameCamera(framing)) return { rect: base, why: "otherCamera" };
+    if (!framing.table) return { rect: base, why: "noTable" };
+    if (base.s > 0.999) return { rect: base, why: "noRoom" };
+    var x0 = base.x, y0 = base.y, x1 = base.x + base.s, y1 = base.y + base.s;
+    var take = function (b, pad) { x0 = Math.min(x0, b[0] - pad); y0 = Math.min(y0, b[1] - pad); x1 = Math.max(x1, b[2] + pad); y1 = Math.max(y1, b[3] + pad); };
+    take(framing.table, FOLLOW_MARGIN);
+    var shooting = !!follow.shooter && now - follow.seenAt < FOLLOW_HOLD_MS;
+    if (shooting) take(follow.shooter, FOLLOW_PAD);
+    var s = Math.min(1, Math.max(x1 - x0, y1 - y0));
+    return { rect: { x: Math.min(Math.max((x0 + x1 - s) / 2, 0), 1 - s), y: Math.min(Math.max((y0 + y1 - s) / 2, 0), 1 - s), s: s }, why: shooting ? "shooter" : "table" };
+  }
+  // the worker told where to go (snap: there at once)
+  function updateFollow(snap) {
+    var r = followRect(Date.now()), t = follow.target;
+    follow.why = r.why;
+    var far = !t || Math.abs(r.rect.x - t.x) > FOLLOW_STEADY || Math.abs(r.rect.y - t.y) > FOLLOW_STEADY || Math.abs(r.rect.s - t.s) > FOLLOW_STEADY;
+    if (snap || far) {
+      follow.target = r.rect;
+      if (worker) worker.postMessage({ type: "target", rect: r.rect, snap: !!snap });
+    }
+    if (follow.toldWhy !== r.why) {
+      if (follow.toldWhy && r.why !== "shooter" && follow.toldWhy !== "shooter") log("🎥 " + followText(r.why));
+      follow.toldWhy = r.why;
+    }
+    drawFollow();
+  }
+  function noteFraming(m) {
+    framing = { table: m.table || null, shooter: m.shooter || null, aiming: !!m.aiming, camera: m.camera || "", aspect: m.aspect || null, at: Date.now() };
+    if (framing.aiming && framing.shooter) { follow.shooter = framing.shooter; follow.seenAt = framing.at; }
+    updateFollow(false);
+  }
+  function followText(why) {
+    var other = framing && framing.camera ? framing.camera : "?";
+    return why === "noCrop" ? CT("rec.followNoCrop", "this browser can't crop a recording (use Chrome)")
+      : why === "noCamera" ? CT("rec.followNoCamera", "waiting for the camera page (📷 Set Up Camera on the scoreboard, table calibrated)")
+      : why === "otherCamera" ? CT("rec.followOtherCamera", "the camera page uses another camera ({{camera}}) - it follows with the same one only", { camera: other })
+      : why === "noTable" ? CT("rec.followNoTable", "calibrate the table on the camera page")
+      : why === "noRoom" ? CT("rec.followNoRoom", "zoom in on the table first - the whole picture leaves no room to move")
+      : why === "shooter" ? CT("rec.followShooter", "following the shooter")
+      : why === "table" ? CT("rec.followReady", "ready - the whole table in, the next shooter taken in too")
+      : "";
+  }
+  // the small picture: the table (dotted) and what's recorded right now (dashed)
+  function placeBox(el, b) {
+    el.hidden = !b;
+    if (!b) return;
+    el.style.left = (b[0] * 100) + "%"; el.style.top = (b[1] * 100) + "%";
+    el.style.width = ((b[2] - b[0]) * 100) + "%"; el.style.height = ((b[3] - b[1]) * 100) + "%";
+  }
+  function drawFollow() {
+    var on = follow.why === "table" || follow.why === "shooter", base = baseRect(), l = follow.live;
+    placeBox($("tableBox"), on ? framing.table : null);
+    var differs = on && l && (Math.abs(l.x - base.x) > 0.004 || Math.abs(l.y - base.y) > 0.004 || Math.abs(l.s - base.s) > 0.004);
+    placeBox($("liveBox"), differs ? [l.x, l.y, l.x + l.s, l.y + l.s] : null);
+    $("followText").textContent = followText(follow.why);
+  }
+  $("followToggle").checked = !!settings.follow;
+  $("followToggle").disabled = !cropSupported;
+  $("followToggle").addEventListener("change", function () {
+    settings.follow = $("followToggle").checked;
+    saveSettings();
+    updateFollow(false);
+    log(settings.follow ? "🎥 Follow the shooter: on" : "🎥 Follow the shooter: off");
+  });
+
   // ---- Recording: parts of a few minutes, sent to the computer as they come ----
   var partMsForTests = 0;
   var rec = { on: false, id: null, startedAt: 0, part: 0, recorder: null, partStartedAt: 0, partTimer: null, queue: Promise.resolve(), failures: 0 };
@@ -470,7 +595,7 @@
     var go = outStream ? Promise.resolve() : startCamera();
     return go.then(wakeAudio).then(function () {
       var mime = pickMime();
-      return api("/api/rec/start", { mime: mime, ext: /webm/.test(mime) ? "webm" : "mp4", crop: { zoom: settings.zoom, cx: settings.cx, cy: settings.cy }, camera: $("camText").textContent, startedAt: Date.now() })
+      return api("/api/rec/start", { mime: mime, ext: /webm/.test(mime) ? "webm" : "mp4", crop: { zoom: settings.zoom, cx: settings.cx, cy: settings.cy, follow: !!settings.follow }, camera: $("camText").textContent, startedAt: Date.now() })
         .then(function (r) {
           rec = { on: true, id: r.id, mime: mime, startedAt: Date.now(), part: 0, recorder: null, partStartedAt: 0, partTimer: null, queue: Promise.resolve(), failures: 0, paused: false, pausedAt: 0, pausedMs: 0 };
           $("folderText").textContent = "Saving to " + r.folder;
@@ -596,6 +721,7 @@
     if (openCue && Date.now() - openCue.markedAt > MAX_CUE_MS) finishCue("nobody finished it");
     if (auto) evaluateAuto();
     renderAuto();
+    updateFollow(false);
     post({ type: "status", recording: rec.on && !rec.paused, paused: !!rec.paused, since: rec.startedAt, cueOpen: !!openCue, cueSince: openCue ? openCue.markedAt : null,
       auto: auto ? auto.state : null, autoSince: auto ? auto.pressedAt : null, autoShotSince: auto && auto.state === "shot" ? auto.liveSince : null,
       watching: watching(), watchWhy: shotWatch && !shotWatch.ok ? shotWatch.why : null, at: Date.now() });
@@ -719,14 +845,23 @@
       var e = null;
       for (var i = episodes.length - 1; i >= 0; i--) if (episodes[i].live) { e = episodes[i]; break; }
       if (!e) { e = {}; episodes.push(e); }
-      Object.assign(e, { live: false, beganAt: m.beganAt || now, aimAt: m.aimAt || null, endedAt: m.endedAt || now, shot: !!m.shot, moved: m.moved, shooter: m.shooter || "" });
-      if (e.shot) log("Shot seen" + (e.shooter ? " (" + e.shooter + ")" : "") + ": " + clock(e.endedAt - shotStart(e)) + " long");
+      Object.assign(e, { live: false, beganAt: m.beganAt || now, aimAt: m.aimAt || null, endedAt: m.endedAt || now, shot: !!m.shot, moved: m.moved, shooter: m.shooter || "",
+        pockets: (Array.isArray(m.pockets) ? m.pockets : []).filter(function (t) { return typeof t === "number" && isFinite(t); }) });
+      if (e.shot) log("Shot seen" + (e.shooter ? " (" + e.shooter + ")" : "") + ": " + clock(e.endedAt - shotStart(e)) + " long" + (e.pockets.length ? " · " + e.pockets.length + " into a pocket" : ""));
+      keepShot(e);
     }
     // (an end that never came - the camera closed: not a shot)
     episodes.forEach(function (x) { if (x.live && now - x.beganAt > 150000) { x.live = false; x.shot = false; } });
     while (episodes.length && now - (episodes[0].endedAt || episodes[0].beganAt) > 10 * 60000) episodes.shift();
     Object.keys(seenShotMsgs).forEach(function (k) { if (now - seenShotMsgs[k] > 60000) delete seenShotMsgs[k]; });
     if (auto) evaluateAuto();
+  }
+  // a shot (or a ball into a pocket) kept with the recording - a 🏆 winning
+  // shot's clip ends 2 s after its last ball went in (js/lib/winning-shots.js)
+  function keepShot(e) {
+    if (!rec.on || rec.paused || !rec.id || !(e.shot || e.pockets.length)) return;
+    api("/api/rec/" + encodeURIComponent(rec.id) + "/shots", { beganAt: e.beganAt, aimAt: e.aimAt, endedAt: e.endedAt, shot: e.shot, moved: typeof e.moved === "number" ? e.moved : null, shooter: e.shooter, pockets: e.pockets })
+      .catch(function (err) { log("Couldn't keep the shot: " + err.message); });
   }
   function autoSpan(e) {
     return { start: Math.max(rec.startedAt || 0, shotStart(e) - settings.autoLead * 1000), end: e.endedAt + settings.autoTail * 1000 };
@@ -825,6 +960,7 @@
     else if (m.type === "finish") post({ type: "reply", id: m.id, result: finishCue("", m.source) });
     else if (m.type === "auto-cue") post({ type: "reply", id: m.id, result: autoCue(m.source || "scoreboard") });
     else if (m.type === "shot") noteShot(m);
+    else if (m.type === "framing") noteFraming(m);
     else if (m.type === "game-start") gameMark(m);
   };
   post({ type: "context-request" });
@@ -892,7 +1028,7 @@
   startCamera().then(function () { if (settings.autoStart) askThenRecord(); }).catch(function () {});
 
   // (tests)
-  window.PMCRecorder = { viewer: viewer, mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, pause: pauseRecording, resume: resumeRecording, duck: duck, recordedStream: function () { return outStream; }, setPartMs: function (ms) { partMsForTests = ms; }, autoCue: autoCue, shotsSeen: function () { return episodes; }, state: function () { return { auto: auto, watching: watching(), ducks: ducks, ducking: !!duckGain, on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported }; } };
+  window.PMCRecorder = { viewer: viewer, mark: mark, finish: finishCue, start: startRecording, stop: stopRecording, pause: pauseRecording, resume: resumeRecording, duck: duck, recordedStream: function () { return outStream; }, setPartMs: function (ms) { partMsForTests = ms; }, autoCue: autoCue, shotsSeen: function () { return episodes; }, state: function () { return { auto: auto, watching: watching(), ducks: ducks, ducking: !!duckGain, on: rec.on, id: rec.id, part: rec.part, openCue: openCue, board: board, settings: settings, cropSupported: cropSupported, follow: { why: follow.why, target: follow.target, live: follow.live, shooter: follow.shooter } }; } };
 })();
 </script>
 </body>

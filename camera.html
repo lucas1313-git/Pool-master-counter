@@ -871,7 +871,7 @@
   </div>
 </div>
 
-<script src="js/camera-i18n.js?v=20261124a"></script>
+<script src="js/camera-i18n.js?v=20261126a"></script>
 <script src="js/pairing.js?v=20261028m"></script>
 <script src="camera/tfjs.js"></script>
 <script src="camera/pose-detection.js"></script>
@@ -4161,7 +4161,7 @@
   var SHOT_MOVED_LEVEL = 28;
   var SHOT_MOVED_PIXELS = 5;
   var SHOT_WATCH_MS = 3000;
-  var shotTrack = { active: null, still: 0, rest: null, lastWatchAt: 0, last: null };
+  var shotTrack = { active: null, still: 0, rest: null, restAt: 0, lastWatchAt: 0, last: null };
   function shotShooterName() {
     return shootingVia === "cue-hidden" ? cueHiddenShooterName : (candidate && candidate.name) || (cueTrack && cueTrack.shooterName) || null;
   }
@@ -4181,19 +4181,27 @@
     shotTrack.active = null;
     shotTrack.still = 0;
     shotTrack.rest = ballPrevMotionFrame;
-    shotTrack.last = { shot: isShot, moved: moved, beganAt: a.beganAt, aimAt: a.aimAt, endedAt: a.lastBusyAt, shooter: a.shooter };
-    send({ type: "shot", phase: "end", shot: isShot, moved: moved, beganAgo: now - a.beganAt, aimAgo: a.aimAt ? now - a.aimAt : null, endAgo: now - a.lastBusyAt, shooter: a.shooter || null, ts: now });
+    shotTrack.restAt = now;
+    // (the balls that went into a pocket since the table was last seen still - the newest first;
+    // nobody seen near it, a pass only every few seconds: the shot may be noticed after its ball
+    // went in)
+    var drops = pocketWatch.events.filter(function (e) { return e.at > a.restAt; }).slice(-POCKET_SEND_MAX);
+    shotTrack.last = { shot: isShot, moved: moved, beganAt: a.beganAt, aimAt: a.aimAt, endedAt: a.lastBusyAt, shooter: a.shooter, pockets: drops.map(function (e) { return { pocket: e.pocket, at: e.at }; }) };
+    send({ type: "shot", phase: "end", shot: isShot, moved: moved, beganAgo: now - a.beganAt, aimAgo: a.aimAt ? now - a.aimAt : null, endAgo: now - a.lastBusyAt, shooter: a.shooter || null,
+      pocketAgo: drops.map(function (e) { return now - e.at; }).reverse(), ts: now });
     if (isShot) logActivity("Shot" + (a.shooter ? " (" + a.shooter + ")" : "") + ": " + Math.round((a.lastBusyAt - (a.aimAt || a.beganAt)) / 1000) + " s" + (moved !== null ? " (the balls moved)" : ""));
   }
+  // someone down on a shot: bent over the table, or a cue over the cloth
+  function shotAiming() { return effectiveStance() === "bent" || (cueDetectionActive() && cueTrack.present); }
   function runShotPass(motion, now) {
     sendShotWatch(now, true);
     if (!isFinite(motion)) return; // (no earlier picture to compare with yet)
-    var aiming = effectiveStance() === "bent" || (cueDetectionActive() && cueTrack.present);
+    var aiming = shotAiming();
     var busy = motion >= BALL_STILL_DIFF_THRESHOLD || aiming;
     var a = shotTrack.active;
     if (!a) {
-      if (!busy) { shotTrack.rest = ballPrevMotionFrame; return; }
-      shotTrack.active = { beganAt: now, aimAt: aiming ? now : null, lastBusyAt: now, rest: shotTrack.rest, shooter: aiming ? shotShooterName() : null };
+      if (!busy) { shotTrack.rest = ballPrevMotionFrame; shotTrack.restAt = now; return; }
+      shotTrack.active = { beganAt: now, aimAt: aiming ? now : null, lastBusyAt: now, rest: shotTrack.rest, restAt: Math.max(shotTrack.restAt, now - 5000), shooter: aiming ? shotShooterName() : null };
       shotTrack.still = 0;
       send({ type: "shot", phase: "begin", aiming: aiming, ts: now });
       return;
@@ -4220,6 +4228,149 @@
     var motion = measureTableMotion(box);
     if (settings.ballTrackingEnabled) runBallPass(motion, box);
     runShotPass(motion, Date.now());
+    sendFraming(Date.now(), shotAiming());
+  }
+
+  // ---- The balls going into the pockets (a 🏆 winning shot's clip ends 2 s after) ----
+  // A table pass (every ~0.8 s) is far too slow to see a ball go in - it's
+  // in the pocket between two of them. So the few inches of cloth at each
+  // pocket get their own look on every frame (25 a second), against how
+  // they look empty: something ball-sized showing up there and then gone
+  // is a ball dropping in (or rolling off past the pocket); anything bigger
+  // - a hand, an arm, someone leaning over - isn't one. The times during a
+  // shot go with its end ("pocketAgo"); the recording page keeps them, and
+  // a winning shot's clip ends 2 s after the last one before the win was
+  // entered (js/lib/winning-shots.js).
+  var POCKET_WATCH_MS = 40;
+  var POCKET_CANVAS_W = 240;
+  var POCKET_ZONE_IN = 6;      // the cloth this close to a pocket's centre
+  var POCKET_BALLS_MAX = 3;    // bigger than this many balls there at once: not a ball
+  var POCKET_CHANGE = 60;      // a pixel unlike another by this much (red + green + blue) - by colour:
+                               // a dark sleeve over dim green cloth is about as bright as it
+  var POCKET_STILL_POLLS = 75;     // (3 s) something big lying still there: part of the empty look now
+  var POCKET_RESTING_POLLS = 750;  // (30 s) ...something ball-sized too (a ball left at a pocket is
+                                   // still seen dropping in if it's tapped in before then)
+  var POCKET_MERGE_MS = 500;   // two at one pocket this close together: one ball
+  var POCKET_KEEP_MS = 5 * 60000;
+  var POCKET_SEND_MAX = 40;
+  var pocketCanvas = document.createElement("canvas");
+  var pocketCtx = pocketCanvas.getContext("2d", { willReadFrequently: true });
+  var pocketWatch = { key: "", zones: [], w: 0, h: 0, primed: false, events: [] };
+  // each pocket's patch of the table's small picture: its pixels, and how
+  // many of them a ball changes there (a far pocket's ball is smaller)
+  function pocketZones(box) {
+    var key = [box.bx0, box.by0, box.bx1, box.by1, videoEl.videoWidth, videoEl.videoHeight, JSON.stringify(calibration.h)].join("|");
+    if (pocketWatch.key === key) return pocketWatch.zones;
+    var bw = box.bx1 - box.bx0, bh = box.by1 - box.by0;
+    var w = POCKET_CANVAS_W, h = Math.max(1, Math.round(w * bh / bw)), scale = w / bw;
+    var toCanvas = function (p) { return p ? { x: (p.x - box.bx0) * scale, y: (p.y - box.by0) * scale } : null; };
+    var centres = pocketCentersReal(), lists = centres.map(function () { return []; });
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var real = applyHomography(calibration.h, box.bx0 + (x + 0.5) / scale, box.by0 + (y + 0.5) / scale);
+        if (!real || real.x < -1 || real.y < -1 || real.x > box.xMax + 1 || real.y > box.yMax + 1) continue;
+        for (var k = 0; k < centres.length; k++) {
+          if (Math.hypot(real.x - centres[k][0], real.y - centres[k][1]) <= POCKET_ZONE_IN) { lists[k].push(y * w + x); break; }
+        }
+      }
+    }
+    pocketWatch.zones = centres.map(function (pc, k) {
+      // (a ball there: 2.25 in across, measured through the homography at that pocket)
+      var c = toCanvas(applyInverseHomography(box.invH, pc[0], pc[1]));
+      var t = toCanvas(applyInverseHomography(box.invH, pc[0] + (pc[0] < box.xMax / 2 ? 1 : -1), pc[1] + (pc[1] < box.yMax / 2 ? 1 : -1)));
+      var perIn = c && t ? Math.hypot(t.x - c.x, t.y - c.y) / Math.SQRT2 : 1;
+      var ball = Math.PI * Math.pow(1.125 * perIn, 2), min = Math.max(2, Math.round(0.4 * ball)), n = lists[k].length;
+      return { idx: lists[k], empty: new Float32Array(n * 3), last: new Float32Array(n * 3), min: min, max: Math.max(min + 4, Math.round(POCKET_BALLS_MAX * ball)), inside: false, peak: 0, still: 0 };
+    });
+    pocketCanvas.width = w; pocketCanvas.height = h;
+    pocketWatch.w = w; pocketWatch.h = h; pocketWatch.key = key; pocketWatch.primed = false;
+    return pocketWatch.zones;
+  }
+  function notePocket(k, now) {
+    var ev = pocketWatch.events, same = null;
+    for (var i = ev.length - 1; i >= 0 && now - ev[i].at < POCKET_MERGE_MS; i--) if (ev[i].pocket === k) { same = ev[i]; break; }
+    if (same) same.at = now;
+    else ev.push({ pocket: k, at: now });
+    while (ev.length && now - ev[0].at > POCKET_KEEP_MS) ev.shift();
+  }
+  function watchPockets() {
+    // (on even when nobody's seen near the table - a player the pose model misses still shoots;
+    // it's cheap: a small picture, a thousand-odd pixels looked at)
+    var now = Date.now(), box = calibration && !isViewer && currentStream && !stall.frozen ? calibratedTableBoxVideo() : null;
+    if (!box) { pocketWatch.primed = false; return; }
+    var zones = pocketZones(box), data;
+    try {
+      pocketCtx.drawImage(videoEl, box.bx0, box.by0, box.bx1 - box.bx0, box.by1 - box.by0, 0, 0, pocketWatch.w, pocketWatch.h);
+      data = pocketCtx.getImageData(0, 0, pocketWatch.w, pocketWatch.h).data;
+    } catch (e) { pocketWatch.primed = false; return; }
+    var primed = pocketWatch.primed;
+    for (var k = 0; k < zones.length; k++) {
+      // (foreign: unlike the empty look; moved: unlike the last look)
+      var z = zones[k], foreign = 0, moved = 0, j;
+      for (j = 0; j < z.idx.length; j++) {
+        var p = z.idx[j] * 4, q = j * 3, r = data[p], g = data[p + 1], b = data[p + 2];
+        if (!primed) { z.empty[q] = r; z.empty[q + 1] = g; z.empty[q + 2] = b; }
+        else {
+          if (Math.abs(r - z.empty[q]) + Math.abs(g - z.empty[q + 1]) + Math.abs(b - z.empty[q + 2]) >= POCKET_CHANGE) foreign++;
+          if (Math.abs(r - z.last[q]) + Math.abs(g - z.last[q + 1]) + Math.abs(b - z.last[q + 2]) >= POCKET_CHANGE) moved++;
+        }
+        z.last[q] = r; z.last[q + 1] = g; z.last[q + 2] = b;
+      }
+      if (!primed) continue;
+      if (foreign < z.min) {
+        // empty again: what was there was a ball if it was never bigger than a few
+        if (z.inside && z.peak <= z.max) notePocket(k, now);
+        z.inside = false;
+        for (j = 0; j < z.empty.length; j++) z.empty[j] += (z.last[j] - z.empty[j]) * 0.05; // (the light drifts)
+        continue;
+      }
+      if (!z.inside) { z.inside = true; z.peak = 0; z.still = 0; }
+      z.peak = Math.max(z.peak, foreign);
+      z.still = moved < z.min ? z.still + 1 : 0;
+      if (z.still >= (z.peak > z.max ? POCKET_STILL_POLLS : POCKET_RESTING_POLLS)) { z.empty.set(z.last); z.inside = false; }
+    }
+    pocketWatch.primed = true;
+  }
+  setInterval(watchPockets, POCKET_WATCH_MS);
+
+  // ---- Where the table and the shooter are (the recording's 🎥 Follow the shooter) ----
+  // The table's box and, while someone's down on a shot, theirs - as
+  // fractions of the camera's own picture (before this page's zoom and
+  // half turn), so the recording page, the same camera with a crop of its
+  // own, can find them in its picture and take the shooter in. Sent with
+  // the table passes ("framing", see docs/camera-protocol.md).
+  var FRAMING_EVERY_MS = 500;
+  var lastFramingAt = 0;
+  var framingPose = null; // who this tick picked as shooting (the cue's holder first) - a pose
+  function viewToCamera(x, y) {
+    var u = x / (videoEl.videoWidth || 1), v = y / (videoEl.videoHeight || 1), z = viewInEffect.zoom || 1;
+    if (viewInEffect.flip) { u = 1 - u; v = 1 - v; }
+    return [0.5 + (u - 0.5) / z, 0.5 + (v - 0.5) / z];
+  }
+  // [left, top, right, bottom] of these video points, in the camera's own picture (0 to 1)
+  function cameraBox(points) {
+    var us = [], vs = [], r = function (n) { return Math.round(Math.max(0, Math.min(1, n)) * 1000) / 1000; };
+    points.forEach(function (p) { var c = viewToCamera(p.x, p.y); us.push(c[0]); vs.push(c[1]); });
+    return [r(Math.min.apply(null, us)), r(Math.min.apply(null, vs)), r(Math.max.apply(null, us)), r(Math.max.apply(null, vs))];
+  }
+  // a person's outline from their pose: the head above the eyes, the feet
+  // below the ankles, a little room at the sides - two corners, video px
+  function personOutline(keypoints) {
+    var pts = (keypoints || []).filter(function (k) { return (k.score || 0) >= 0.25; });
+    if (pts.length < 4) return null;
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    pts.forEach(function (k) { x0 = Math.min(x0, k.x); y0 = Math.min(y0, k.y); x1 = Math.max(x1, k.x); y1 = Math.max(y1, k.y); });
+    var size = Math.max(x1 - x0, y1 - y0);
+    return [{ x: x0 - 0.08 * size, y: y0 - 0.15 * size }, { x: x1 + 0.08 * size, y: y1 + 0.06 * size }];
+  }
+  function sendFraming(now, aiming) {
+    if (now - lastFramingAt < FRAMING_EVERY_MS) return;
+    var box = calibratedTableBoxVideo(), track = currentStream && currentStream.getVideoTracks()[0];
+    if (!box || !track) return;
+    lastFramingAt = now;
+    var s = track.getSettings ? track.getSettings() : {}, outline = aiming && framingPose ? personOutline(framingPose.keypoints) : null;
+    send({ type: "framing", table: cameraBox(box.cornersPx), shooter: outline ? cameraBox(outline) : null, aiming: !!aiming,
+      camera: track.label || "", aspect: s.width && s.height ? Math.round(s.width / s.height * 1000) / 1000 : null, ts: now });
   }
 
   function runBallPass(motionIn, boxIn) {
@@ -5368,7 +5519,12 @@
     muteTrack: function () { var t = currentStream && currentStream.getVideoTracks()[0]; if (t) t.dispatchEvent(new Event("mute")); },
     // at the table? (feetAtTable for a pose's feet) / who'd be picked
     atTable: function (pose) { var peek = quickStancePeek(pose.keypoints); return peek ? feetAtTable(peek.ankleMid) : null; },
-    selectActive: function (poses) { return selectActivePose(poses); }
+    selectActive: function (poses) { return selectActivePose(poses); },
+    // the balls into the pockets / a person's box as the framing has it (tests)
+    pocketEvents: function () { return pocketWatch.events.slice(); },
+    pocketZoneSizes: function () { return pocketWatch.zones.map(function (z) { return { pixels: z.idx.length, min: z.min, max: z.max, inside: z.inside, peak: z.peak }; }); },
+    lastShot: function () { return shotTrack.last; },
+    framingOf: function (keypoints) { var o = personOutline(keypoints); return o ? cameraBox(o) : null; }
   };
 
   // ---- Multi-person selection (MultiPose returns up to 6 people) ----
@@ -9771,6 +9927,8 @@
           }
         }
         if (pose) refreshPersonFelt(Date.now());
+        // (a cue over the cloth and nobody holding it in view: the shooter isn't the one picked)
+        framingPose = cueCtx && !cueTrack.holder ? null : pose;
         var analysis = pose ? analyzePose(pose.keypoints) : null;
         if (analysis) analysis.trackId = pose.id;
         noteAppearance(analysis, pose ? pose.keypoints : null, Date.now());

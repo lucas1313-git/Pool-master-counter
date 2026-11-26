@@ -10,7 +10,8 @@
 //   (2026-11-16: "the winning shot names all say 1-0, use the race score ... I need to have the
 //   time in the clips") "winning shot Luc vs Bob-8-Ball-3-2-<date>-<time>", "...Bob vs
 //   Luc-8-Ball-3-3-...", "...Luc vs Bob-8-Ball-4-3-...", each cut into Clips/ under that name, 30 s
-//   long (25 s before the win to 5 s after); the game before the recording not among them; the
+//   long (25 s before the win to 5 s after - Bob's, whose ball the camera saw go in at 82 s: 30 s
+//   ending 2 s after that); the game before the recording not among them; the
 //   first one already there under its old name ("...-8-Ball-1-0", its clip cut): named again, its
 //   clip renamed with it, not made twice;
 // - green: their rows' names and ⬇ links, their marks on the recording's timeline; the legend;
@@ -58,6 +59,10 @@ const GREEN = "rgb(79, 209, 139)";
     parts.push({ n, file, startedAt: s0 + (n - 1) * 90000, endedAt: s0 + n * 90000 });
   }
   fs.writeFileSync(path.join(ROOT, id, "session.json"), JSON.stringify({ id, startedAt: s0, endedAt: s0 + 180000, mime: "video/mp4", ext: "mp4", parts }));
+  // the camera's shots while it recorded (record.html keeps them - 2026-11-26: "when the ball goes in
+  // + 2 seconds"): Bob's winning shot - down on it 70 s in, the ball in at 82 s, all still at 86 s
+  // (the win entered at 100 s); none seen for the other two
+  fs.writeFileSync(path.join(ROOT, id, "shots.json"), JSON.stringify([{ beganAt: s0 + 69000, aimAt: s0 + 70000, endedAt: s0 + 86000, shot: true, moved: 30, shooter: "", pockets: [s0 + 82000] }]));
   // ...and one 10 minutes earlier with no game in it
   const e0 = s0 - 1200000, emptyId = folderId(e0);
   fs.mkdirSync(path.join(ROOT, emptyId));
@@ -121,9 +126,10 @@ const GREEN = "rgb(79, 209, 139)";
     const want = ["winning shot Luc vs Bob-8-Ball-3-2-", "winning shot Bob vs Luc-8-Ball-3-3-", "winning shot Luc vs Bob-8-Ball-4-3-"].map((n, i) => n + stamp(wins[i]));
     check("three winning shots, with the race score and the time, the game before the recording not among them: " + cues.map((c) => c.name).join(" | "), JSON.stringify(cues.map((c) => c.name)) === JSON.stringify(want) && cues.map((c) => c.position).join(" ") === "3-2 3-3 4-3", cues);
     check("the one made before: named again (not made twice), its clip renamed with it", hadOld && cues[0].id === old.id && cues[0].clip === want[0] + ".mp4" && !fs.existsSync(oldClip) && fs.existsSync(path.join(ROOT, "Clips", want[0] + ".mp4")), { hadOld, first: cues[0], oldStill: fs.existsSync(oldClip) });
-    check("each from 25 s before its win to 5 s after, in this recording", cues.length === 3 && cues.every((c, i) => c.winAt === wins[i] && c.startedAt === wins[i] - 25000 && c.endedAt === wins[i] + 5000 && c.session === id && c.clip === want[i] + ".mp4"), cues);
+    check("each from 25 s before its win to 5 s after, in this recording - Bob's: 30 s ending 2 s after the camera saw its ball go in (82 s in)", cues.length === 3 && cues.every((c, i) => c.winAt === wins[i] && c.session === id && c.clip === want[i] + ".mp4" &&
+      (i === 1 ? c.startedAt === s0 + 54000 && c.endedAt === s0 + 84000 && c.ballInAt === s0 + 82000 : c.startedAt === wins[i] - 25000 && c.endedAt === wins[i] + 5000)), cues);
     const lengths = want.map((n) => { const f = path.join(ROOT, "Clips", n + ".mp4"); return fs.existsSync(f) ? +execFileSync(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]).toString().trim() : null; });
-    check("cut into Clips/ under their names, 30 s each (" + lengths.map((x) => x && x.toFixed(1)).join(", ") + " s - the second across the two files)", lengths.every((x) => x !== null && Math.abs(x - 30) <= 1.5), lengths);
+    check("cut into Clips/ under their names, 30 s each (" + lengths.map((x) => x && x.toFixed(1)).join(", ") + " s)", lengths.every((x) => x !== null && Math.abs(x - 30) <= 1.5), lengths);
 
     await sleep(300);
     const look = await page.evaluate((sid) => {
@@ -168,7 +174,7 @@ const GREEN = "rgb(79, 209, 139)";
     const reelLen = fs.existsSync(reelFile) ? +execFileSync(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", reelFile]).toString().trim() : null;
     check("🎞 \"" + made + "\" - " + reelName + ", " + (reelLen && reelLen.toFixed(1)) + " s", /^🎞 One video: 4 clips, 1:35, each with its caption - downloaded, and kept in .+Highlights \(.+\.mp4\)\.$/.test(made) && reelLen !== null && Math.abs(reelLen - 95) <= 3, { made, reelName, reelLen });
     const spans = reelBody ? reelBody.clips.map((c) => [c.from - s0, c.to - s0]) : null;
-    check("the four in the order they happened, with the sound, each with its caption picture: " + JSON.stringify(spans), reelBody && reelBody.sound === true && JSON.stringify(spans) === JSON.stringify([[15000, 45000], [75000, 105000], [145000, 175000], [150000, 155000]].sort((a, b) => a[0] - b[0])) && reelBody.clips.every((c) => /^data:image\/png;base64,/.test(c.bug)), spans);
+    check("the four in the order they happened, with the sound, each with its caption picture: " + JSON.stringify(spans), reelBody && reelBody.sound === true && JSON.stringify(spans) === JSON.stringify([[15000, 45000], [54000, 84000], [145000, 175000], [150000, 155000]].sort((a, b) => a[0] - b[0])) && reelBody.clips.every((c) => /^data:image\/png;base64,/.test(c.bug)), spans);
     const drawn = await page.evaluate(() => window.__drawn);
     const time = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     const wantDrawn = ["Luc  3 – 2  Bob", "8-Ball · Race to 4 · " + time(wins[0]), "Bob  3 – 3  Luc", "8-Ball · Race to 4 · " + time(wins[1]), "Luc  4 – 3  Bob", "8-Ball · Race to 4 · " + time(wins[2]), "Luc  3 – 3  Bob", "8-Ball · Race to 4 · " + time(s0 + 150000)];

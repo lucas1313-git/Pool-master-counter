@@ -8,6 +8,8 @@
 //                                start and end time), the crop it was made with
 //     part-001.mp4, part-002...  the video, a new part every few minutes, so
 //                                each one is quick to open and to jump around in
+//     shots.json                 the camera's shots while it recorded (the balls
+//                                into the pockets - where a winning shot's clip ends)
 //   cues.json                    every cue (a marked moment), all recordings
 //   Clips/                       the cues cut out as their own videos
 //
@@ -21,6 +23,8 @@
 //   POST   /api/rec/:id/part/:n/end          { startedAt, endedAt }
 //   POST   /api/rec/:id/stop                 { endedAt }
 //   POST   /api/rec/:id/pause, /resume        ⏸ paused / ▶ going on - the same recording ({ at })
+//   POST   /api/rec/:id/shots                a shot the camera saw end (its balls into the pockets)
+//   GET    /api/rec/:id/shots                the recording's shots -> { shots }
 //   GET    /api/rec/sessions                 every recording, newest first
 //   DELETE /api/rec/sessions/:id             to the Trash, with its cues (not while it records;
 //                                            exported clips are kept)
@@ -522,6 +526,33 @@ function attachRecorderRoutes(app) {
     });
   });
 
+  // The camera's shots during a recording (record.html sends each one as it ends: when it began,
+  // when the player got down on it, when everything was still again, the balls that went into a
+  // pocket and when) - what a 🏆 winning shot's clip ends by (js/lib/winning-shots.js ballIn):
+  // shots.json in the recording's folder
+  var MAX_SHOTS = 20000;
+  app.post("/api/rec/:id/shots", function (req, res) {
+    readBody(req, function (b) {
+      var x = loadSession(req.params.id);
+      if (!x || !b) return sendJson(res, 404, { error: "no such recording" });
+      var t = function (v) { v = Number(v); return isFinite(v) && v > 0 ? v : null; };
+      var shot = { beganAt: t(b.beganAt), aimAt: t(b.aimAt), endedAt: t(b.endedAt), shot: !!b.shot, moved: typeof b.moved === "number" && isFinite(b.moved) ? b.moved : null,
+        shooter: String(b.shooter || "").slice(0, 80), pockets: (Array.isArray(b.pockets) ? b.pockets : []).map(t).filter(Boolean).slice(0, 40) };
+      if (!shot.endedAt) return sendJson(res, 400, { error: "no end" });
+      var file = path.join(x.dir, "shots.json"), list = readJson(file, []);
+      if (!Array.isArray(list)) list = [];
+      list.push(shot);
+      writeJson(file, list.slice(-MAX_SHOTS));
+      sendJson(res, 200, { ok: true });
+    });
+  });
+  app.get("/api/rec/:id/shots", function (req, res) {
+    var x = loadSession(req.params.id);
+    if (!x) return sendJson(res, 404, { error: "no such recording" });
+    var list = readJson(path.join(x.dir, "shots.json"), []);
+    sendJson(res, 200, { shots: Array.isArray(list) ? list : [] });
+  });
+
   app.get("/api/rec/sessions", function (req, res) {
     var list = [];
     try {
@@ -575,7 +606,8 @@ function attachRecorderRoutes(app) {
   // (kind: "game" - a game mark, the moment a game started; none - a cue)
   // (keep: 📌 kept for good - its clip cut, never cleaned up, not deleted with its recording)
   // (kind: "win" - 🏆 a game's winning shot, winAt the moment the win was entered - js/cue-viewer.js)
-  var CUE_FIELDS = ["name", "kind", "keep", "winAt", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter"];
+  // (ballInAt: when the ball that won it went in, as the camera saw it - the clip ends 2 s after)
+  var CUE_FIELDS = ["name", "kind", "keep", "winAt", "player", "opponent", "matchup", "gameType", "gameLabel", "position", "note", "startedAt", "markedAt", "endedAt", "duration", "source", "session", "customName", "shotAt", "shotEndedAt", "cameraShooter", "ballInAt"];
   function pickCue(b, into) {
     CUE_FIELDS.forEach(function (k) {
       if (b[k] === undefined) return;

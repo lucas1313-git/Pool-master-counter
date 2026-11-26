@@ -35459,7 +35459,16 @@
     var now = Date.now(), at = function (ago) { return typeof ago === "number" && isFinite(ago) ? now - ago : null; };
     try {
       recorderChannel.postMessage({ type: "shot", id: m.phase + ":" + (m.ts || now), phase: m.phase, ok: m.ok !== false, why: m.why || null, shot: !!m.shot, moved: typeof m.moved === "number" ? m.moved : null,
-        at: now, beganAt: at(m.beganAgo), aimAt: at(m.aimAgo), endedAt: at(m.endAgo), shooter: m.shooter || null });
+        at: now, beganAt: at(m.beganAgo), aimAt: at(m.aimAgo), endedAt: at(m.endAgo), shooter: m.shooter || null,
+        pockets: Array.isArray(m.pocketAgo) ? m.pocketAgo.map(at).filter(function (t) { return t !== null; }) : [] });
+    } catch (e) {}
+  }
+  // where the table and the shooter are in the camera's picture (its "framing"): on to the
+  // recording page's 🎥 Follow the shooter
+  function recorderFraming(m) {
+    if (!recorderChannel || !m) return;
+    try {
+      recorderChannel.postMessage({ type: "framing", table: m.table || null, shooter: m.shooter || null, aiming: !!m.aiming, camera: m.camera || "", aspect: m.aspect || null, at: Date.now() });
     } catch (e) {}
   }
 
@@ -44800,6 +44809,8 @@
       window.PMCCameraBridge.reportCueEvent(msg);
     } else if (msg.type === "shot") {
       window.PMCCameraBridge.reportShot(msg);
+    } else if (msg.type === "framing") {
+      window.PMCCameraBridge.reportFraming(msg);
     } else if (msg.type === "camera-settings-state") {
       window.PMCCameraBridge.reportCameraSettings(msg.settings);
     } else if (msg.type === "camera-status") {
@@ -46750,6 +46761,7 @@
     },
     // the camera's shots -> the recording page (its 🎯 Auto cue)
     reportShot: function (msg) { recorderShot(msg); noteTableShot(msg); },
+    reportFraming: function (msg) { recorderFraming(msg); },
     isAnyOverlayOpen: isAnyOverlayOpen,
     getSelectedPlayerId: function () {
       return keypadSelectedPlayerId;

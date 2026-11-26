@@ -391,7 +391,16 @@ function createCameraRelay(WebSocket) {
           var phase = msg.phase === "begin" || msg.phase === "end" || msg.phase === "watch" ? msg.phase : null;
           if (!phase) return;
           broadcastToListeners({ type: "shot", phase: phase, shot: !!msg.shot, moved: typeof msg.moved === "number" ? msg.moved : null, aiming: !!msg.aiming, ok: msg.ok !== false, why: typeof msg.why === "string" ? msg.why.slice(0, 80) : null, busy: !!msg.busy,
-            beganAgo: ago(msg.beganAgo), aimAgo: ago(msg.aimAgo), endAgo: ago(msg.endAgo), shooter: typeof msg.shooter === "string" ? msg.shooter.slice(0, 80) : null, ts: msg.ts });
+            beganAgo: ago(msg.beganAgo), aimAgo: ago(msg.aimAgo), endAgo: ago(msg.endAgo), shooter: typeof msg.shooter === "string" ? msg.shooter.slice(0, 80) : null,
+            pocketAgo: Array.isArray(msg.pocketAgo) ? msg.pocketAgo.slice(0, 40).map(ago).filter(function (v) { return v !== null; }) : [], ts: msg.ts });
+          return;
+        }
+        // Where the table and the shooter are (the recording's 🎥 Follow the shooter): boxes
+        // [left, top, right, bottom] as fractions of the camera's picture. Fields copied explicitly.
+        if (msg.type === "framing" && ws.role === "camera") {
+          var box = function (b) { return Array.isArray(b) && b.length === 4 && b.every(function (v) { return typeof v === "number" && isFinite(v) && v >= 0 && v <= 1; }) ? b.slice() : null; };
+          broadcastToListeners({ type: "framing", table: box(msg.table), shooter: box(msg.shooter), aiming: !!msg.aiming, camera: typeof msg.camera === "string" ? msg.camera.slice(0, 120) : "",
+            aspect: typeof msg.aspect === "number" && isFinite(msg.aspect) && msg.aspect > 0 ? msg.aspect : null, ts: msg.ts });
           return;
         }
 

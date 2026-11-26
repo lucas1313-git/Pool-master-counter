@@ -108,3 +108,39 @@ test("its clip: 25 s before the win to 5 s after, inside the recording", () => {
   assert.deepEqual(W.clipSpan(100000, 90000, 102000), { startedAt: 90000, endedAt: 102000 });
   assert.equal(W.AFTER_MS + W.BEFORE_MS, 30000);
 });
+
+// 2026-11-26, the user: "stop the cue about 2 seconds after the last shot finishes ... when the ball
+// goes in + 2 seconds" - the camera's shots during the recording (record.html keeps them)
+test("its clip with the camera's shots: 30 s ending 2 s after the ball went in", () => {
+  const win = 200000;
+  // the winning shot: down on it at 150 s, a ball in at 158 s and the last at 161 s, all still at 166 s;
+  // the win entered at 200 s; a shot before it, and the racking after the win
+  const shots = [
+    { beganAt: 100000, aimAt: 101000, endedAt: 112000, shot: true, pockets: [108000] },
+    { beganAt: 149000, aimAt: 150000, endedAt: 166000, shot: true, pockets: [158000, 161000] },
+    { beganAt: 210000, aimAt: null, endedAt: 260000, shot: true, pockets: [215000, 230000] }
+  ];
+  assert.deepEqual(W.clipSpan(win, 0, 400000, shots), { startedAt: 133000, endedAt: 163000, ballInAt: 161000, how: "pocket" });
+  // no ball seen going in: 2 s after everything was still again
+  const still = [{ beganAt: 149000, aimAt: 150000, endedAt: 166000, shot: true, pockets: [] }];
+  assert.deepEqual(W.clipSpan(win, 0, 400000, still), { startedAt: 138000, endedAt: 168000, ballInAt: 166000, how: "still" });
+  // ...but not still before the win was entered (someone racking straight away): as before
+  const busy = [{ beganAt: 149000, aimAt: 150000, endedAt: 230000, shot: true, pockets: [] }];
+  assert.deepEqual(W.clipSpan(win, 0, 400000, busy), { startedAt: 175000, endedAt: 205000 });
+  // a ball into a pocket after the win was entered (the racking) isn't the one
+  const late = [{ beganAt: 149000, aimAt: 150000, endedAt: 230000, shot: true, pockets: [161000, 215000] }];
+  assert.equal(W.clipSpan(win, 0, 400000, late).ballInAt, 161000);
+  // the last shot more than 3 minutes before the win, or no shots: as before
+  assert.deepEqual(W.clipSpan(win, 0, 400000, [{ beganAt: 10000, aimAt: 10000, endedAt: 15000, shot: true, pockets: [12000] }]), { startedAt: 175000, endedAt: 205000 });
+  assert.deepEqual(W.clipSpan(win, 0, 400000, []), { startedAt: 175000, endedAt: 205000 });
+  assert.deepEqual(W.clipSpan(win, 0, 400000), { startedAt: 175000, endedAt: 205000 });
+  // someone leaning over the table (not a shot, no ball in) isn't the winning shot - the one before it is
+  const lean = shots.slice(0, 2).concat([{ beganAt: 180000, aimAt: null, endedAt: 184000, shot: false, pockets: [] }]);
+  assert.equal(W.clipSpan(win, 0, 400000, lean).ballInAt, 161000);
+  // inside the recording
+  assert.deepEqual(W.clipSpan(win, 140000, 162000, shots), { startedAt: 140000, endedAt: 162000, ballInAt: 161000, how: "pocket" });
+  // the game before won at 170 s: the shot at 150 s was that game's (the camera missed this one's) - as before
+  assert.deepEqual(W.clipSpan(win, 0, 400000, shots, 170000), { startedAt: 175000, endedAt: 205000 });
+  // ...won at 120 s: the shot at 150 s is this one's
+  assert.equal(W.clipSpan(win, 0, 400000, shots, 120000).ballInAt, 161000);
+});

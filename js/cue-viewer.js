@@ -730,8 +730,9 @@
       var base = String(c.name || "").replace(/ \(\d+\)$/, ""), score = String(c.position || "");
       return c.source === "winning shot" && base.indexOf("winning shot ") === 0 && !!score && base.slice(-(score.length + 1)) === "-" + score;
     }
-    // 🏆 every game won during recording `id`: a cue each (25 s before the win was entered to 5 s
-    // after), cut into the Clips folder - the ones already made kept, not made twice
+    // 🏆 every game won during recording `id`: a cue each (30 s ending 2 s after the ball that won
+    // it went in, as the camera saw it - else 25 s before the win was entered to 5 s after), cut
+    // into the Clips folder - the ones already made kept, not made twice
     var winsBusy = false;
     function winningShots(id) {
       var s = sessions.filter(function (x) { return x.id === id; })[0], W = window.PMCLib && window.PMCLib.winningShots;
@@ -747,7 +748,10 @@
         status(text);
         return refresh();
       };
-      scoreboardGames().then(function (src) {
+      // (the camera's shots while it recorded: each clip ends 2 s after the ball that won it went in)
+      var shotsOf = api("/api/rec/" + encodeURIComponent(s.id) + "/shots").then(function (r) { return r.shots || []; }).catch(function () { return []; });
+      Promise.all([scoreboardGames(), shotsOf]).then(function (got) {
+        var src = got[0], shots = got[1];
         // (a win in a ⏸ pause, or before the first file: not in the video)
         var wins = W.between(src, sp.start, sp.end).filter(function (w) { var at = locate(w.at, s.id); return at && at.session.id === s.id; });
         if (!wins.length) return done(tr("rec.winNone", "🏆 No game was won on this computer's scoreboard while this recording ran."));
@@ -778,9 +782,11 @@
             var name = w.name, n = 2;
             while (taken[name]) name = w.name + " (" + n++ + ")";
             taken[name] = true;
-            var span = W.clipSpan(w.at, sp.start, sp.end), who = [w.winners].concat(w.losers).map(function (names) { return names.join(" & "); });
+            // (its shot after the game before was won - not a shot of that one's, the camera having missed this one's)
+            var before = wins.filter(function (x) { return x.at < w.at; }).pop();
+            var span = W.clipSpan(w.at, sp.start, sp.end, shots, before ? before.at : null), who = [w.winners].concat(w.losers).map(function (names) { return names.join(" & "); });
             var c = { kind: "win", winAt: w.at, name: name, customName: true, startedAt: span.startedAt, markedAt: w.at, endedAt: span.endedAt, duration: span.endedAt - span.startedAt,
-              player: w.winners.join("+"), opponent: w.losers.map(function (names) { return names.join("+"); }).join("+"), matchup: who.join(" v "), gameType: w.gameType, gameLabel: w.game, position: w.score, source: "winning shot", session: s.id };
+              player: w.winners.join("+"), opponent: w.losers.map(function (names) { return names.join("+"); }).join("+"), matchup: who.join(" v "), gameType: w.gameType, gameLabel: w.game, position: w.score, source: "winning shot", session: s.id, ballInAt: span.ballInAt || null };
             return api("/api/rec/cues", c).then(function (savedCue) { cues.unshift(savedCue); made.push(savedCue); });
           });
         }, Promise.resolve()); }).then(function () {
