@@ -775,9 +775,14 @@
         var taken = {};
         cues.forEach(function (c) { taken[c.name] = true; });
         var made = [];
-        // ones made before their names had the race score and the time ("...-8-Ball-1-0"): named
-        // again, their clips with them - a name changed by hand stays
-        var stale = wins.filter(function (w) { var c = theCue(w); return c && oldWinName(c) && c.name !== w.name; }), renamed = 0;
+        // ones made before their names had the race score and the time ("...-8-Ball-1-0") - or
+        // with a score since put right ("...-1-0-<time>": a team race's, counted per pair since
+        // 2026-11-26): named again, their clips with them - a name changed by hand stays
+        var scoreFixed = function (c, w) {
+          var base = String(c.name || "").replace(/ \(\d+\)$/, "");
+          return !!c.position && c.position !== w.score && base === W.shotName(Object.assign({}, w, { score: c.position }));
+        };
+        var stale = wins.filter(function (w) { var c = theCue(w); return c && (oldWinName(c) || scoreFixed(c, w)) && c.name !== w.name; }), renamed = 0;
         var said = function (text) { return renamed ? tr("rec.winRenamed", "🏆 {{n}} winning shots named again, with the race score and the time.", { n: renamed }) + " " + text : text; };
         return stale.reduce(function (chain, w) {
           return chain.then(function () {

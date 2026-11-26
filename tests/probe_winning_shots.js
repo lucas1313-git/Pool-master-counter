@@ -17,7 +17,9 @@
 // - green: their rows' names and ⬇ links, their marks on the recording's timeline; the legend;
 // - then the list is that day's winning shots, all of them, in the order won ("🏆 <day>: the day's 3
 //   winning shots..."); ✕ Show every cue: every cue again (14 hand cues besides);
-// - pressed again: nothing made twice ("already in the list ..., and in .../Clips");
+// - pressed again: nothing made twice ("already in the list ..., and in .../Clips"); one named with a
+//   score since put right ("...-1-0-<time>" - a team race now counted per pair): named again, its
+//   clip with it; one named by hand: kept;
 // - the recording page's short list (compact): its newest 12 of 17 cues, "Show all 17" - none of
 //   them a winning shot; 🏆 there: the day's 3 winning shots, all of them (2026-11-16, the user saw
 //   only the last race's 5 of 31); ☑ All checks those 3;
@@ -171,6 +173,21 @@ const GREEN = "rgb(79, 209, 139)";
     const again = await press(id);
     const count = (await (await fetch(BASE + "api/rec/cues")).json()).cues.filter((c) => c.kind === "win").length;
     check("pressed again: \"" + again + "\", still " + count, /^🏆 This recording's 3 winning shots are already in the list \(in green\), and in .+\/Clips\.$/.test(again) && count === 3, again);
+
+    // one named with a score since put right ("...-1-0-<time>" - 2026-11-26, a team race now counted
+    // per pair), one named by hand: the first named again, its clip with it; the other kept
+    const patch = (c, body) => fetch(BASE + "api/rec/cues/" + c.id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+    const wrongName = "winning shot Luc vs Bob-8-Ball-1-0-" + stamp(wins[2]);
+    await patch(cues[2], { name: wrongName, position: "1-0", clipFollows: true });
+    await patch(cues[1], { name: "Bob's great shot", position: "1-0", clipFollows: true });
+    await page.reload({ waitUntil: "networkidle2" });
+    await sleep(1000);
+    const fixedSaid = await press(id);
+    const after = (await (await fetch(BASE + "api/rec/cues")).json()).cues.filter((c) => c.kind === "win").sort((a, b) => a.winAt - b.winAt);
+    check("a winning shot named with a score since put right: named again (\"" + fixedSaid + "\") - " + after.map((c) => c.name + " [" + c.position + "]").join(" | ") + "; one named by hand kept",
+      /^🏆 1 winning shots named again, with the race score and the time\. /.test(fixedSaid) && after[2].name === want[2] && after[2].position === "4-3" && fs.existsSync(path.join(ROOT, "Clips", want[2] + ".mp4")) && !fs.existsSync(path.join(ROOT, "Clips", wrongName + ".mp4")) && after[1].name === "Bob's great shot", { fixedSaid, after });
+    await patch(cues[1], { name: want[1], position: "3-3", clipFollows: true });
+    await press(id); // (the day's list again)
 
     // 🎞 One video: the 3 winning shots (☑ All on the day's list) and Luc's cue (hand 1)
     await page.evaluate(() => document.querySelector(".cv-pick-all").click());
