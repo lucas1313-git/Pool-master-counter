@@ -231,13 +231,14 @@
   // before till [x] seconds before the click": { startMs, stopMs - before the win was entered, a
   // minus number: after it }) - and, the ball that won it gone in (shots: the camera's, notBefore:
   // the game before's win - see ballIn; rule.ballIn false: not looked for), as long a clip ending
-  // 2 s after it
+  // 2 s after it - or rule.tailMs after it (2026-11-28, the user: "2 s after the last shot ... I want
+  // to be able to change the 2 into what I want")
   // -> { startedAt, endedAt, ballInAt, how } (ballInAt / how: only when the ball's moment was found)
   function clipSpan(at, from, to, shots, notBefore, rule) {
     var r = rule || {}, startMs = typeof r.startMs === "number" ? r.startMs : BEFORE_MS, stopMs = typeof r.stopMs === "number" ? r.stopMs : -AFTER_MS;
-    var b = r.ballIn === false ? null : ballIn(at, shots, notBefore);
+    var b = r.ballIn === false ? null : ballIn(at, shots, notBefore), tailMs = typeof r.tailMs === "number" ? r.tailMs : BALL_TAIL_MS;
     if (!b) return { startedAt: Math.max(from, at - startMs), endedAt: Math.min(to, at - stopMs) };
-    var end = Math.min(to, b.at + BALL_TAIL_MS);
+    var end = Math.min(to, b.at + tailMs);
     return { startedAt: Math.max(from, end - (startMs - stopMs)), endedAt: end, ballInAt: b.at, how: b.how };
   }
 

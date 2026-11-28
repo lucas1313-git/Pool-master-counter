@@ -283,12 +283,13 @@ const GREEN = "rgb(79, 209, 139)";
     // before till [x] seconds before the click")
     const winOpts = () => page.evaluate(() => {
       const r = document.querySelector(".cv-win-opts"), v = (c) => r.querySelector(c);
-      return { from: v(".cv-win-from").value, to: v(".cv-win-to").value, when: v(".cv-win-when").value, ball: v(".cv-win-shot").checked, hand: v(".cv-win-hand").checked, text: r.textContent.replace(/\s+/g, " ").trim(), kept: localStorage.getItem("pmc-win-clip") };
+      return { from: v(".cv-win-from").value, to: v(".cv-win-to").value, tail: v(".cv-win-tail").value, when: v(".cv-win-when").value, ball: v(".cv-win-shot").checked, hand: v(".cv-win-hand").checked, text: r.textContent.replace(/\s+/g, " ").trim(), kept: localStorage.getItem("pmc-win-clip") };
     });
     const setWin = (o) => page.evaluate((o) => {
       const r = document.querySelector(".cv-win-opts");
       if ("from" in o) r.querySelector(".cv-win-from").value = o.from;
       if ("to" in o) r.querySelector(".cv-win-to").value = o.to;
+      if ("tail" in o) r.querySelector(".cv-win-tail").value = o.tail;
       if ("when" in o) r.querySelector(".cv-win-when").value = o.when;
       if ("ball" in o) r.querySelector(o.ball ? ".cv-win-shot" : ".cv-win-hand").checked = true;
       r.querySelector(".cv-win-from").dispatchEvent(new Event("change", { bubbles: true }));
@@ -296,7 +297,7 @@ const GREEN = "rgb(79, 209, 139)";
     const winCues = async () => (await (await fetch(BASE + "api/rec/cues")).json()).cues.filter((c) => c.kind === "win").sort((a, b) => a.winAt - b.winAt);
     const clipLen = (c) => { const f = c.clip && path.join(ROOT, "Clips", c.clip); return f && fs.existsSync(f) ? +execFileSync(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]).toString().trim() : null; };
     let w = await winOpts();
-    check("🏆 its start and stop, above the recordings: \"" + w.text + "\" - 25 s before; stop: the last shot ◉ (by hand: 5 s after)", w.from === "25" && w.to === "5" && w.when === "after" && w.ball && !w.hand && w.text.replace(/\s/g, "") === "🏆Winningshots:StartsbeforeStop:📷2safterthelastshot(thecamera's)✋byhand:sbeforeafterthewinisentered", w);
+    check("🏆 its start and stop, above the recordings: \"" + w.text + "\" - 25 s before; stop: 2 s after the last shot ◉ (by hand: 5 s after)", w.from === "25" && w.to === "5" && w.tail === "2" && w.when === "after" && w.ball && !w.hand && w.text.replace(/\s/g, "") === "🏆Winningshots:StartsbeforeStop:📷safterthelastshot(thecamera's)✋byhand:sbeforeafterthewinisentered", w);
     // the first moved by hand (its start 5 s later) - kept; start 30 s before, stop 5 s before
     await patch(cues[0], { startedAt: wins[0] - 20000, duration: 25000 });
     await setWin({ from: "30", to: "5", when: "before" });
@@ -305,10 +306,17 @@ const GREEN = "rgb(79, 209, 139)";
     let spanned = await winCues();
     const at = (c) => [c.startedAt - s0, c.endedAt - s0];
     check("start 30 s before, stop 5 s before (kept " + w.kept + "), 🏆 again: \"" + recut + "\" - " + JSON.stringify(spanned.map(at)) + ": the one moved by hand kept, Bob's 25 s ending 2 s after its ball (82 s in)",
-      JSON.stringify(JSON.parse(w.kept || "{}")) === JSON.stringify({ from: 30, to: 5, after: false, ball: true }) && /^🏆 2 winning shots cut again, with the new start and stop\. 🏆 3 winning shots - green in the list, and in .+Clips\.$/.test(recut) &&
+      JSON.stringify(JSON.parse(w.kept || "{}")) === JSON.stringify({ from: 30, to: 5, after: false, ball: true, tail: 2 }) && /^🏆 2 winning shots cut again, with the new start and stop\. 🏆 3 winning shots - green in the list, and in .+Clips\.$/.test(recut) &&
       JSON.stringify(spanned.map(at)) === JSON.stringify([[wins[0] - 20000 - s0, wins[0] + 5000 - s0], [59000, 84000], [wins[2] - 30000 - s0, wins[2] - 5000 - s0]]) && spanned[2].autoStart === spanned[2].startedAt && spanned[2].autoEnd === spanned[2].endedAt, { recut, spanned });
     let lens = spanned.map(clipLen);
     check("...their clips cut again: " + lens.map((x) => x && x.toFixed(1)).join(", ") + " s", lens[1] !== null && Math.abs(lens[1] - 25) <= 1.5 && lens[2] !== null && Math.abs(lens[2] - 25) <= 1.5 && spanned.every((c) => c.clip === c.name + ".mp4"), { lens, spanned });
+    // 4 s after the last shot, not 2 (2026-11-28, the user: "I want to be able to change the 2 into what I want")
+    await setWin({ tail: "4" });
+    const recutTail = await press(id);
+    spanned = await winCues();
+    lens = spanned.map(clipLen);
+    check("4 s after the last shot: \"" + recutTail + "\" - Bob's " + JSON.stringify(at(spanned[1])) + " (its ball 82 s in), " + (lens[1] && lens[1].toFixed(1)) + " s",
+      /^🏆 1 winning shots cut again, with the new start and stop\. /.test(recutTail) && JSON.stringify(at(spanned[1])) === JSON.stringify([61000, 86000]) && lens[1] !== null && Math.abs(lens[1] - 25) <= 1.5, { recutTail, spanned, lens });
     await setWin({ ball: false });
     const recut2 = await press(id);
     spanned = await winCues();
@@ -318,7 +326,7 @@ const GREEN = "rgb(79, 209, 139)";
     await page.reload({ waitUntil: "networkidle0" });
     await sleep(800);
     w = await winOpts();
-    check("...still so after a reload: " + JSON.stringify({ from: w.from, to: w.to, when: w.when, ball: w.ball }), w.from === "30" && w.to === "5" && w.when === "before" && !w.ball && w.hand, w);
+    check("...still so after a reload: " + JSON.stringify({ from: w.from, to: w.to, tail: w.tail, when: w.when, ball: w.ball }), w.from === "30" && w.to === "5" && w.tail === "4" && w.when === "before" && !w.ball && w.hand, w);
     const recut3 = await press(id);
     check("🏆 again, nothing changed: \"" + recut3 + "\"", /^🏆 This recording's 3 winning shots are already in the list/.test(recut3), recut3);
 

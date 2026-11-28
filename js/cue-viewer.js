@@ -232,7 +232,8 @@
         '<span>' + esc(tr("rec.winButton", "🏆 Winning shots")) + ':</span>' +
         '<label>' + esc(tr("rec.winStart", "Start")) + ' <input type="number" class="cv-win-from" min="2" max="600" step="1"> ' + esc(tr("rec.winSecsBefore", "s before")) + '</label>' +
         '<span>' + esc(tr("rec.winStop", "Stop")) + ':</span>' +
-        '<label title="' + esc(tr("rec.winBallTitle", "When the camera page watched the table while it recorded: each clip ends 2 s after the ball that won the game went in, as long a clip as the numbers make - without it, by hand")) + '"><input type="radio" class="cv-win-shot" name="cv-win-end-' + mountN + '"> ' + esc(tr("rec.winBall", "📷 2 s after the last shot (the camera's)")) + '</label>' +
+        '<label title="' + esc(tr("rec.winBallTitle", "When the camera page watched the table while it recorded: each clip ends this many seconds after the ball that won the game went in, as long a clip as the numbers make - without it, by hand")) + '"><input type="radio" class="cv-win-shot" name="cv-win-end-' + mountN + '"> ' + esc(tr("rec.winBallLead", "📷")) +
+        ' <input type="number" class="cv-win-tail" min="0" max="30" step="0.5"> ' + esc(tr("rec.winBallAfter", "s after the last shot (the camera's)")) + '</label>' +
         '<label><input type="radio" class="cv-win-hand" name="cv-win-end-' + mountN + '"> ' + esc(tr("rec.winByHand", "✋ by hand:")) + ' <input type="number" class="cv-win-to" min="0" max="120" step="1"> ' + esc(tr("rec.secondsUnit", "s")) +
         ' <select class="cv-win-when"><option value="before">' + esc(tr("rec.winBefore", "before")) + '</option><option value="after">' + esc(tr("rec.winAfter", "after")) + '</option></select> ' + esc(tr("rec.winEntered", "the win is entered")) + '</label></div>' +
         '<div class="cv-sess dim">Loading...</div></div>' +
@@ -764,34 +765,37 @@
     // before till [x] seconds before the click"): the start, s before the win was entered on the
     // scoreboard; the stop, s before it or after it (25 s before to 5 s after, as before) - or, ball
     // ("i need to be able to set either the last shot of set it by hand"): the last shot's ball
-    // going in, when the camera saw it (2 s after - as long a clip; not seen: by hand).
-    var WIN_KEY = "pmc-win-clip", winOpts = { from: 25, to: 5, after: true, ball: true };
+    // going in, when the camera saw it (2 s after - as long a clip; not seen: by hand); tail: how
+    // long after it ("I want to be able to change the 2 into what I want" - 2026-11-28).
+    var WIN_KEY = "pmc-win-clip", winOpts = { from: 25, to: 5, after: true, ball: true, tail: 2 };
     try { Object.assign(winOpts, JSON.parse(localStorage.getItem(WIN_KEY) || "{}")); } catch (e) {}
     function tidyWinOpts() {
       winOpts.from = clampNum(winOpts.from, 2, 600, 25);
       winOpts.after = winOpts.after !== false;
       winOpts.to = clampNum(winOpts.to, 0, winOpts.after ? 120 : winOpts.from - 1, 5);
       winOpts.ball = winOpts.ball !== false;
+      winOpts.tail = clampNum(winOpts.tail, 0, 30, 2);
     }
-    function winRule() { tidyWinOpts(); return { startMs: winOpts.from * 1000, stopMs: (winOpts.after ? -winOpts.to : winOpts.to) * 1000, ballIn: winOpts.ball }; }
+    function winRule() { tidyWinOpts(); return { startMs: winOpts.from * 1000, stopMs: (winOpts.after ? -winOpts.to : winOpts.to) * 1000, ballIn: winOpts.ball, tailMs: winOpts.tail * 1000 }; }
     if (opts.sessions) {
       var renderWinOpts = function () {
         tidyWinOpts();
         q(".cv-win-from").value = winOpts.from;
         q(".cv-win-to").value = winOpts.to;
         q(".cv-win-when").value = winOpts.after ? "after" : "before";
+        q(".cv-win-tail").value = winOpts.tail;
         q(".cv-win-shot").checked = winOpts.ball;
         q(".cv-win-hand").checked = !winOpts.ball;
       };
       q(".cv-win-opts").addEventListener("change", function () {
-        winOpts = { from: q(".cv-win-from").value, to: q(".cv-win-to").value, after: q(".cv-win-when").value === "after", ball: q(".cv-win-shot").checked };
+        winOpts = { from: q(".cv-win-from").value, to: q(".cv-win-to").value, after: q(".cv-win-when").value === "after", ball: q(".cv-win-shot").checked, tail: q(".cv-win-tail").value };
         renderWinOpts();
         try { localStorage.setItem(WIN_KEY, JSON.stringify(winOpts)); } catch (e) {}
       });
       renderWinOpts();
     }
     // 🏆 every game won during recording `id`: a cue each (from the start to the stop chosen - see
-    // winOpts - or as long a clip ending 2 s after the ball that won it went in, as the camera saw
+    // winOpts - or as long a clip ending the seconds chosen after the ball that won it went in, as the camera saw
     // it), cut into the Clips folder - the ones already made kept, not made twice; made with other
     // numbers (and not moved by hand since): cut again with these
     var winsBusy = false;

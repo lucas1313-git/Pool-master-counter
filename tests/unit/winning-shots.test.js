@@ -237,4 +237,6 @@ test("its clip with the start and stop chosen: before (or after) the win was ent
   assert.deepEqual(W.clipSpan(200000, 0, 400000, shots, null, { startMs: 30000, stopMs: 5000 }), { startedAt: 138000, endedAt: 163000, ballInAt: 161000, how: "pocket" });
   // ...not looked for (ballIn: false): the numbers
   assert.deepEqual(W.clipSpan(200000, 0, 400000, shots, null, { startMs: 30000, stopMs: 5000, ballIn: false }), { startedAt: 170000, endedAt: 195000 });
+  // 2026-11-28, the user: "2 s after the last shot ... I want to be able to change the 2": 4 s after it
+  assert.deepEqual(W.clipSpan(200000, 0, 400000, shots, null, { startMs: 30000, stopMs: 5000, tailMs: 4000 }), { startedAt: 140000, endedAt: 165000, ballInAt: 161000, how: "pocket" });
 });
