@@ -12,6 +12,10 @@
 // and the dark fading off it as it starts (2026-11-26, the user: "make sure that the transition
 // from the score card goes straight to the next clip") - after the last clip, all to black. Its
 // fade (in, and off the next clip) as long as asked (opts.fade - 0: none, the card just there).
+// How far it's got (opts.onProgress - 2026-11-28, the user: "is it possible to have also a progress
+// bar for the job?"): { clip (the one being made, from 1), clips, done, total (seconds of video),
+// joining (the last step), elapsed (ms) } - as each clip starts and ends, and every second while
+// ffmpeg makes one (its -progress file).
 // rec: the recorder's own helpers { ffmpeg, runFfmpeg, piecesFor, root }.
 "use strict";
 var fs = require("fs");
@@ -101,9 +105,19 @@ function buildReel(rec, opts, cb) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     cb(err, result);
   }
+  // (the seconds the video will be, the clips done so far - made or left out - and the one being made)
+  var plan = clips.reduce(function (t, c) { return t + planned(c); }, 0), madeSecs = 0, began = Date.now();
+  function planned(c) { return (c.to - c.from) / 1000 + (c.card && c.card.length ? c.cardSecs || 3 : 0); }
+  function told(now, joining) {
+    if (typeof opts.onProgress !== "function") return;
+    var got = joining ? plan : Math.min(plan, madeSecs + (now || 0));
+    try { opts.onProgress({ clip: Math.min(i, clips.length), clips: clips.length, done: Math.round(got * 10) / 10, total: Math.round(plan * 10) / 10, joining: !!joining, elapsed: Date.now() - began }); } catch (e) {}
+  }
   (function next() {
+    told();
     if (i === clips.length) {
       if (!segs.length) return done(new Error("no recording covers those moments"));
+      told(0, true);
       var name = reelFileName(opts.name), out = path.join(outDir, name);
       var listFile = path.join(tmpDir, "reel.txt");
       fs.writeFileSync(listFile, segs.map(function (f) { return "file '" + f.replace(/'/g, "'\\''") + "'"; }).join("\n"));
@@ -112,11 +126,12 @@ function buildReel(rec, opts, cb) {
       });
     }
     var clip = clips[i], n = i, card = clip.card && clip.card.length ? clip.card : null, cardSecs = card ? clip.cardSecs || 3 : 0;
-    var cardOut = carry, end = n === clips.length - 1, f = card ? Math.min(fade, cardSecs / 2) : 0;
+    var cardOut = carry, end = n === clips.length - 1, f = card ? Math.min(fade, cardSecs / 2) : 0, mySecs = planned(clip);
     i++;
+    told();
     // (a score card: the recording after the clip too, under it)
     clipSource(rec, card ? { from: clip.from, to: clip.to + cardSecs * 1000 } : clip, tmpDir, n, function (err, src) {
-      if (err) { skipped.push(n); return next(); }
+      if (err) { skipped.push(n); madeSecs += mySecs; return next(); }
       hasAudio(rec, src.file, function (audio) {
         var seg = path.join(tmpDir, "seg-" + n + ".mp4");
         // (the card from where the clip ends; all of it: the clip and the card)
@@ -221,7 +236,16 @@ function buildReel(rec, opts, cb) {
         if (sound) args.push("-map", "[a]", "-c:a", "aac", "-b:a", "128k");
         else args.push("-an");
         args.push("-t", num(total), "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-r", "30", "-g", "60", "-pix_fmt", "yuv420p", seg);
-        rec.runFfmpeg(args, function (err2) {
+        // (how far ffmpeg is in this one, every second)
+        var progFile = path.join(tmpDir, "progress-" + n + ".txt");
+        var watch = setInterval(function () {
+          var t = 0;
+          try { var m = String(fs.readFileSync(progFile)).match(/out_time_us=\d+/g); if (m) t = Number(m[m.length - 1].split("=")[1]) / 1e6; } catch (e) {}
+          told(Math.min(mySecs, total > 0 ? t / total * mySecs : 0));
+        }, 1000);
+        rec.runFfmpeg(["-progress", progFile].concat(args), function (err2) {
+          clearInterval(watch);
+          madeSecs += mySecs;
           if (err2) { skipped.push(n); return next(); }
           segs.push(seg);
           seconds += total;

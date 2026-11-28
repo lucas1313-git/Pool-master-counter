@@ -665,14 +665,26 @@ function attachRecorderRoutes(app) {
   });
   // ✨ Tonight's highlights (P35): the clips the app picked, cut and joined
   // into one reel with their score bugs - server/reel.js
+  // (job: the page's name for it - how far it's got: GET /api/rec/reel/progress/:job, kept a minute after)
+  var reelJobs = {};
   app.post("/api/rec/reel", function (req, res) {
     readBody(req, function (body) {
       if (!body || !Array.isArray(body.clips)) return sendJson(res, 400, { error: "no clips" });
+      var job = /^[A-Za-z0-9_-]{1,40}$/.test(String(body.job || "")) ? String(body.job) : null;
       buildHighlightReel(body, function (err, r) {
+        if (job) {
+          reelJobs[job] = Object.assign({}, reelJobs[job], { finished: true });
+          setTimeout(function () { delete reelJobs[job]; }, 60000);
+        }
         if (err) return sendJson(res, 500, { error: err.message });
         sendJson(res, 200, { file: r.file, seconds: r.seconds, clips: r.clips, skipped: r.skipped, folder: path.dirname(r.path) });
-      });
+      }, job ? function (p) { reelJobs[job] = p; } : null);
     }, MAX_REEL_JSON);
+  });
+  app.get("/api/rec/reel/progress/:job", function (req, res) {
+    var p = reelJobs[req.params.job];
+    if (!p) return sendJson(res, 404, { error: "no such job" });
+    sendJson(res, 200, p);
   });
   app.get("/api/rec/highlights/:name", function (req, res) {
     var name = req.params.name;
@@ -690,7 +702,8 @@ function attachRecorderRoutes(app) {
 // after it), cardSecs, roll (its old score rolling into the new - server/reel.js), qroll (the
 // players' Q-Scores, the same way: [{ strip, x, y, w, h }]) }], aspect,
 // sound, name, fade (a card's, in and off - s) }
-function buildHighlightReel(body, cb) {
+// (onProgress: how far it's got - see server/reel.js)
+function buildHighlightReel(body, cb, onProgress) {
   var pngOf = function (v) {
     var m = /^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/.exec(String(v || ""));
     return m ? Buffer.from(m[1], "base64") : null;
@@ -713,7 +726,8 @@ function buildHighlightReel(body, cb) {
     sound: body.sound === true,
     size: Number(body.size) || 1080,
     fade: body.fade === undefined ? undefined : Number(body.fade),
-    name: String(body.name || "Highlights").slice(0, 100)
+    name: String(body.name || "Highlights").slice(0, 100),
+    onProgress: onProgress || null
   }, cb);
 }
 

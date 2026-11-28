@@ -62,7 +62,7 @@ const loudness = (f, t, d) => {
   const m = /mean_volume: (-?[\d.]+) dB/.exec(String(r.stderr));
   return m ? Number(m[1]) : -91;
 };
-const build = (body) => new Promise((ok) => recorder._buildHighlightReel(body, (err, r) => ok({ err, r })));
+const build = (body, onProgress) => new Promise((ok) => recorder._buildHighlightReel(body, (err, r) => ok({ err, r }), onProgress));
 
 (async () => {
   try {
@@ -94,7 +94,13 @@ const build = (body) => new Promise((ok) => recorder._buildHighlightReel(body, (
     ff(["-f", "lavfi", "-i", "color=c=yellow:s=800x400", "-frames:v", "1", cardFile]);
     const card = "data:image/png;base64," + fs.readFileSync(cardFile).toString("base64");
     const carded = clips.map((c, i) => (i === 1 ? Object.assign({ card, cardSecs: 3 }, c) : c)).concat([{ from: t0 + 26000, to: t0 + 30000, bug, card, cardSecs: 2 }]);
-    ({ err, r } = await build({ clips: carded, aspect: "16:9", sound: true, name: "With cards" }));
+    // (how far it's got, for the page's progress bar - 2026-11-28)
+    const told = [];
+    ({ err, r } = await build({ clips: carded, aspect: "16:9", sound: true, name: "With cards" }, (p) => told.push(p)));
+    const dones = told.map((p) => p.done), last = told[told.length - 1] || {};
+    check("...its progress told as it went (" + told.length + " times): " + JSON.stringify(told.map((p) => p.clip + ":" + p.done + (p.joining ? "j" : ""))) + " of " + (told[0] && told[0].total) + " s",
+      told.length >= 9 && told.every((p) => p.total === 19 && p.clips === 4 && p.elapsed >= 0) && dones.every((d, k) => k === 0 || d >= dones[k - 1]) && told[0].done === 0 &&
+      [1, 2, 3, 4].every((n) => told.some((p) => p.clip === n)) && last.joining === true && last.done === 19, told);
     const out3 = r && path.join(root, "Highlights", r.file);
     const info3 = out3 && fs.existsSync(out3) ? probe(out3) : null;
     const dur3 = info3 ? Number(info3.format.duration) : 0;

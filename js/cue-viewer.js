@@ -76,6 +76,11 @@
     ".cv button.primary { background: var(--accent, #e8b923); color: #1a0a0a; border-color: var(--accent, #e8b923); font-weight: 800; }",
     ".cv button:disabled { opacity: 0.45; cursor: default; }",
     ".cv .cv-status { color: var(--text-dim, #c9a2a2); font-size: 0.9rem; min-height: 1.2em; margin: 4px 2px; }",
+    // (🎞 One video being made: the words bigger, a bar under them - see showMaking)
+    ".cv .cv-status.making { color: var(--text, #f6efe9); font-size: 1.35rem; font-weight: 700; margin: 10px 2px; }",
+    ".cv .cv-prog { height: 16px; background: #120606; border: 1px solid var(--border, #4a1e1e); border-radius: 9px; overflow: hidden; margin: 8px 0 6px; }",
+    ".cv .cv-prog-bar { height: 100%; width: 0; background: var(--accent, #e8b923); border-radius: 9px; transition: width 0.9s linear; }",
+    ".cv .cv-prog-sub { font-size: 1rem; font-weight: 600; color: var(--text-dim, #c9a2a2); }",
     ".cv .cv-dirty { color: #ff8be0; font-weight: 700; }",
     ".cv table { width: 100%; border-collapse: collapse; margin-top: 10px; }",
     ".cv td { padding: 6px 4px; border-bottom: 1px solid var(--border, #4a1e1e); vertical-align: middle; }",
@@ -250,7 +255,24 @@
     var refreshTimer = null;
     var sure = null; // { what: "cue" | "session", id, until } - the 🗑 asking "Delete?"; a second click deletes
 
-    function status(text) { q(".cv-status").textContent = text || ""; }
+    function status(text) { var el = q(".cv-status"); el.classList.remove("making"); el.textContent = text || ""; }
+    // 🎞 how far One video has got (2026-11-28, the user: "the text "Making one video of 22 clips
+    // (7:23) - a few minutes" should be bigger and is it possible to have also a progress bar for
+    // the job?"): the words bigger, a bar under them, the clip it's on and the time left - p: the
+    // server's { clip, clips, done, total, joining, elapsed } (null: not started yet)
+    function showMaking(text, p) {
+      var el = q(".cv-status"), pct = p && p.total > 0 ? Math.max(0, Math.min(100, Math.round(p.done / p.total * 100))) : 0;
+      if (p && p.joining) pct = 100;
+      var sub = !p ? tr("rec.oneStarting", "Getting the clips ready...") : p.joining ? tr("rec.oneJoining", "Joining them into one video...") : tr("rec.oneProgress", "Clip {{i}} of {{n}} · {{pct}}%", { i: p.clip, n: p.clips, pct: pct });
+      var left = p && !p.joining && p.done > 0 && p.elapsed > 5000 && pct >= 3 ? p.elapsed * (p.total - p.done) / p.done : null;
+      if (left !== null) sub += " · " + (left < 60000 ? tr("rec.oneLeftSoon", "less than a minute left") : tr("rec.oneLeftMin", "about {{n}} min left", { n: Math.round(left / 60000) }));
+      el.classList.add("making");
+      if (!el.querySelector(".cv-prog")) el.innerHTML = '<div class="cv-prog-text"></div><div class="cv-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="cv-prog-bar"></div></div><div class="cv-prog-sub"></div>';
+      el.querySelector(".cv-prog-text").textContent = text;
+      el.querySelector(".cv-prog").setAttribute("aria-valuenow", pct);
+      el.querySelector(".cv-prog-bar").style.width = pct + "%";
+      el.querySelector(".cv-prog-sub").textContent = sub;
+    }
 
     // ---- the recordings: a moment (wall-clock ms) -> which file, how far in ----
     function partsOf(s) { return (s.parts || []).slice().sort(function (a, b) { return a.n - b.n; }); }
@@ -1118,12 +1140,19 @@
       };
     }
     // a cue's caption { top, bottom }, from the scoreboard's games (src)
-    function captionFor(c, src) {
+    function captionFor(c, src, carded) {
       var W = window.PMCLib.winningShots, at = c.kind === "win" && c.winAt ? c.winAt : c.startedAt;
       var time = clockOf(at), raceTo = raceToText;
-      // 🏆 a winning shot: the score once it was won
+      // 🏆 a winning shot: the score once it was won - its score card after it (carded), the score
+      // before it, the card rolling it on (2026-11-28, the user: "if the shot is winning the 3th
+      // game against 0 the caption should show 2 - 0 if we also have the score board showing,
+      // however if it not showing (not selected) it should show 3-0 as it is now"; a points game:
+      // the points after - the ones before aren't kept, its card doesn't roll)
       var w = winOf(c, src);
-      if (w) return { top: sidesText(w.sides), bottom: [w.game, raceTo(w.raceTo), time].filter(Boolean).join(" · ") };
+      if (w) {
+        var v = w.sides[0].value, sides = carded && !w.points && typeof v === "number" && v >= 1 ? [Object.assign({}, w.sides[0], { value: v - 1 })].concat(w.sides.slice(1)) : w.sides;
+        return { top: sidesText(sides), bottom: [w.game, raceTo(w.raceTo), time].filter(Boolean).join(" · ") };
+      }
       // a cue: who's on it, and the race as it stood then
       var who = c.player ? [c.player].concat(c.opponent ? [c.opponent] : []) : String(c.matchup || "").split(/-vs-| v /).filter(Boolean);
       var race = W.scoreAt(src, at), points = !race || race.unit === "points" || race.unit === "balls";
@@ -1145,14 +1174,18 @@
       oneBusy = true;
       renderGroup();
       var secs = list.reduce(function (t, c) { return t + (c.endedAt - c.startedAt) / 1000; }, 0);
-      status(tr("rec.oneMaking", "🎞 Making one video of {{n}} clips ({{len}}) - a few minutes...", { n: list.length, len: len(secs * 1000) }));
+      var making = tr("rec.oneMaking", "🎞 Making one video of {{n}} clips ({{len}}) - a few minutes...", { n: list.length, len: len(secs * 1000) });
+      showMaking(making, null);
+      // (how far it's got: asked every second - job, its name for the server)
+      var job = "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), poll = null;
+      var stopPoll = function () { if (poll) clearInterval(poll); poll = null; };
       var first = W.stamp(list[0].startedAt), last = W.stamp(list[list.length - 1].startedAt);
       var name = (list.every(function (c) { return c.kind === "win"; }) ? "Winning shots " : "Cues ") + first.slice(0, 10) + " " + first.slice(11, 16) + "-" + last.slice(11, 16);
       var w = B.width("16:9", 1920), cw = B.cardWidth("16:9", 1920);
       scoreboardGames().then(function (src) {
         var body = { clips: list.map(function (c) {
           var clip = { from: c.startedAt, to: c.endedAt }, won = oneOpts.cards ? winOf(c, src) : null;
-          if (oneOpts.captions) clip.bug = B.png(captionFor(c, src), w);
+          if (oneOpts.captions) clip.bug = B.png(captionFor(c, src, !!won), w);
           if (won) {
             var parts = B.cardParts(cardFor(won), cw);
             clip.card = parts.card;
@@ -1161,15 +1194,20 @@
             clip.cardSecs = oneOpts.cardSecs + (won.wonRace ? RACE_WON_MORE : 0);
           }
           return clip;
-        }), aspect: "16:9", sound: true, name: name, fade: oneOpts.fade };
+        }), aspect: "16:9", sound: true, name: name, fade: oneOpts.fade, job: job };
+        poll = setInterval(function () {
+          api("/api/rec/reel/progress/" + job).then(function (p) { if (poll && !p.finished) showMaking(making, p); }).catch(function () {});
+        }, 1000);
         return api("/api/rec/reel", body);
       }).then(function (r) {
+        stopPoll();
         oneBusy = false;
         renderGroup();
         downloadFrom("/api/rec/highlights/" + encodeURIComponent(r.file), r.file);
         status(tr("rec.oneDone", "🎞 One video: {{n}} clips, {{len}} - downloaded, and kept in {{folder}} ({{file}}).", { n: r.clips, len: len(r.seconds * 1000), folder: r.folder, file: r.file }) +
           (r.skipped && r.skipped.length ? " " + tr("rec.oneSkipped", "{{n}} left out - no recording covers them.", { n: r.skipped.length }) : ""));
       }).catch(function (err) {
+        stopPoll();
         oneBusy = false;
         renderGroup();
         status(tr("rec.oneFailed", "🎞 Couldn't make the video: {{error}}", { error: err.message }));

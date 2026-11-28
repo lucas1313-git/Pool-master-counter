@@ -203,20 +203,36 @@ const GREEN = "rgb(79, 209, 139)";
     page.on("request", (r) => { if (/\/api\/rec\/reel$/.test(r.url())) reelBody = JSON.parse(r.postData()); });
     await page.evaluate(() => { window.__drawn = []; document.querySelector('.cv-group [data-g="one"]').click(); });
     let made = "";
-    for (let i = 0; i < 480; i++) { made = await page.evaluate(() => document.querySelector(".cv-status").textContent); if (!/Making/.test(made)) break; await sleep(250); }
+    // (while it's made: the words bigger, a bar going across, the clip it's on - 2026-11-28)
+    const seen = [];
+    for (let i = 0; i < 480; i++) {
+      const st = await page.evaluate(() => { const el = document.querySelector(".cv-status"), bar = el.querySelector(".cv-prog-bar"), sub = el.querySelector(".cv-prog-sub"), txt = el.querySelector(".cv-prog-text");
+        return { text: el.textContent, making: el.classList.contains("making"), size: parseFloat(getComputedStyle(el).fontSize), bar: bar ? parseFloat(bar.style.width) : null, sub: sub && sub.textContent, words: txt && txt.textContent }; });
+      made = st.text;
+      if (!/Making/.test(made)) break;
+      seen.push(st);
+      await sleep(250);
+    }
+    const bars = seen.map((x) => x.bar).filter((x) => x !== null), subs = seen.map((x) => x.sub);
+    check("making it: \"" + (seen[0] && seen[0].words) + "\", " + (seen[0] && seen[0].size) + " px (was 14.4), the bar " + JSON.stringify(bars.filter((b, k) => k === 0 || b !== bars[k - 1])) + "%, " + JSON.stringify(subs.filter((t, k) => k === 0 || t !== subs[k - 1]).slice(0, 12)),
+      seen.length > 4 && seen.every((x) => x.making && x.size >= 21 && /^🎞 Making one video of 4 clips \(1:35\) - a few minutes\.\.\.$/.test(x.words)) && bars.every((b, k) => k === 0 || b >= bars[k - 1]) && bars[bars.length - 1] >= 80 &&
+      subs.some((t) => /^Clip [1-4] of 4 · \d+%/.test(t)) && subs.some((t) => /min left|less than a minute left/.test(t)), { seen: seen.slice(-8), n: seen.length });
     const reelName = "Cues " + stamp(wins[0] - 25000).slice(0, 10) + " " + stamp(wins[0] - 25000).slice(11, 16) + "-" + stamp(s0 + 150000).slice(11, 16) + ".mp4";
     const reelFile = path.join(ROOT, "Highlights", reelName);
     const reelLen = fs.existsSync(reelFile) ? +execFileSync(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", reelFile]).toString().trim() : null;
+    const doneLook = await page.evaluate(() => ({ making: document.querySelector(".cv-status").classList.contains("making"), bar: !!document.querySelector(".cv-status .cv-prog") }));
+    check("...done: the bar gone, the words as before", !doneLook.making && !doneLook.bar, doneLook);
     check("🎞 \"" + made + "\" - " + reelName + ", " + (reelLen && reelLen.toFixed(1)) + " s (95 s of clips, 3 + 3 + 5 s of score cards)", /^🎞 One video: 4 clips, 1:46 - downloaded, and kept in .+Highlights \(.+\.mp4\)\.$/.test(made) && reelLen !== null && Math.abs(reelLen - 106) <= 3, { made, reelName, reelLen });
     const spans = reelBody ? reelBody.clips.map((c) => [c.from - s0, c.to - s0]) : null;
     check("the four in the order they happened, with the sound, each with its caption picture: " + JSON.stringify(spans), reelBody && reelBody.sound === true && JSON.stringify(spans) === JSON.stringify([[15000, 45000], [54000, 84000], [145000, 175000], [150000, 155000]].sort((a, b) => a[0] - b[0])) && reelBody.clips.every((c) => /^data:image\/png;base64,/.test(c.bug)), spans);
     const drawn = await page.evaluate(() => window.__drawn);
     const time = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    // (each caption, the card after it: the score before the win - the card rolls it on, 2026-11-28)
     // (each card: "<winner> won!" on top, without the winner's number - it rolls in, old over new;
     // each side's Q-Score under its panel - its strip: the old number, the new and the change)
-    const wantDrawn = ["Luc  3 – 2  Bob", "8-Ball · Race to 4 · " + time(wins[0]), "Luc won!", "8-Ball · Race to 4", "Luc", "Bob", "2", "Luc", "Rating", "Bob", "Rating", time(wins[0]), "412", "420", "+8", "458", "450", "−8", "2", "3",
-      "Bob  3 – 3  Luc", "8-Ball · Race to 4 · " + time(wins[1]), "Bob won!", "8-Ball · Race to 4", "Bob", "Luc", "3", "Bob", "Rating", "Luc", "Rating", time(wins[1]), "450", "456", "+6", "420", "414", "−6", "2", "3",
-      "Luc  4 – 3  Bob", "8-Ball · Race to 4 · " + time(wins[2]), "🎉🏆🎉", "Congratulations!", "Luc won the tournament with 4 wins! (race-to 4)", "8-Ball · Race to 4 wins", "Luc", "Bob", "3", "Luc", "Rating", "Bob", "Rating", time(wins[2]), "414", "422", "+8", "456", "448", "−8", "3", "4",
+    const wantDrawn = ["Luc  2 – 2  Bob", "8-Ball · Race to 4 · " + time(wins[0]), "Luc won!", "8-Ball · Race to 4", "Luc", "Bob", "2", "Luc", "Rating", "Bob", "Rating", time(wins[0]), "412", "420", "+8", "458", "450", "−8", "2", "3",
+      "Bob  2 – 3  Luc", "8-Ball · Race to 4 · " + time(wins[1]), "Bob won!", "8-Ball · Race to 4", "Bob", "Luc", "3", "Bob", "Rating", "Luc", "Rating", time(wins[1]), "450", "456", "+6", "420", "414", "−6", "2", "3",
+      "Luc  3 – 3  Bob", "8-Ball · Race to 4 · " + time(wins[2]), "🎉🏆🎉", "Congratulations!", "Luc won the tournament with 4 wins! (race-to 4)", "8-Ball · Race to 4 wins", "Luc", "Bob", "3", "Luc", "Rating", "Bob", "Rating", time(wins[2]), "414", "422", "+8", "456", "448", "−8", "3", "4",
       "Luc  3 – 3  Bob", "8-Ball · Race to 4 · " + time(s0 + 150000)];
     check("the captions: who plays who, the race score, the game, the race to, the time; each winning shot's score card - the score after it, the race won: the race-won screen's words - " + JSON.stringify(drawn), JSON.stringify(drawn) === JSON.stringify(wantDrawn), { drawn, wantDrawn });
     const reelBodyFirst = reelBody;
@@ -268,15 +284,18 @@ const GREEN = "rgb(79, 209, 139)";
     o = await opts();
     const got2 = reelBody && { bugs: reelBody.clips.filter((c) => c.bug).length, q: reelBody.clips.filter((c) => c.qroll).length, cards: reelBody.clips.map((c) => (c.card ? c.cardSecs : 0)), fade: reelBody.fade };
     check("captions off, Q-Scores off, fade 1, on screen 2: no caption pictures, no Q-Score, cards of 2, 2 and 4 s (the race won: 2 s more), fade 1 - " + JSON.stringify(got2) + "; kept " + o.kept + "; \"" + made2 + "\"", got2 && got2.bugs === 0 && got2.q === 0 && JSON.stringify(got2.cards) === JSON.stringify([2, 2, 4, 0]) && got2.fade === 1 && JSON.stringify(JSON.parse(o.kept || "{}")) === JSON.stringify({ cards: true, captions: false, qscores: false, fade: 1, cardSecs: 2 }) && /^🎞 One video: 4 clips, 1:43 - /.test(made2), { got2, o, made2 });
-    await setOpts({ cards: false });
+    await setOpts({ cards: false, captions: true });
     o = await opts();
+    await page.evaluate(() => { window.__drawn = []; });
     const made3 = await oneAgain();
     const got3 = reelBody && { bugs: reelBody.clips.filter((c) => c.bug).length, cards: reelBody.clips.filter((c) => c.card).length };
-    check("score cards off: their fade and time greyed (" + o.greyed + "), no card, no caption - " + JSON.stringify(got3) + "; \"" + made3 + "\"", o.greyed && !o.cards && got3 && got3.bugs === 0 && got3.cards === 0 && /^🎞 One video: 4 clips, 1:35 - /.test(made3), { o, got3, made3 });
+    const drawn3 = (await page.evaluate(() => window.__drawn)).filter((t) => / – /.test(t));
+    check("score cards off: their fade and time greyed (" + o.greyed + "), no card - " + JSON.stringify(got3) + "; the captions with the score after each win (no card to roll it on): " + JSON.stringify(drawn3) + "; \"" + made3 + "\"",
+      o.greyed && !o.cards && got3 && got3.bugs === 4 && got3.cards === 0 && JSON.stringify(drawn3) === JSON.stringify(["Luc  3 – 2  Bob", "Bob  3 – 3  Luc", "Luc  4 – 3  Bob", "Luc  3 – 3  Bob"]) && /^🎞 One video: 4 clips, 1:35 - /.test(made3), { o, got3, drawn3, made3 });
     await page.reload({ waitUntil: "networkidle0" });
     await sleep(800);
     o = await opts();
-    check("...still so after a reload: " + JSON.stringify({ cards: o.cards, captions: o.captions, q: o.q, fade: o.fade, secs: o.secs }), !o.cards && !o.captions && !o.q && o.fade === "1" && o.secs === "2" && o.greyed, o);
+    check("...still so after a reload: " + JSON.stringify({ cards: o.cards, captions: o.captions, q: o.q, fade: o.fade, secs: o.secs }), !o.cards && o.captions && !o.q && o.fade === "1" && o.secs === "2" && o.greyed, o);
 
     // 🏆 the start and stop (2026-11-26, the user: "i want to be able to control how long before I
     // click on the winner score the winning cue will stop ... from the start that is [x] seconds
